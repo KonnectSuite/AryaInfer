@@ -58,6 +58,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tempfile
 import textwrap
 import time
 import urllib.error
@@ -5136,6 +5137,19 @@ def repoint_config(cfg_file: Path, old: Path, new: Path) -> None:
         write_config(cfg_file, new_cfg)
 
 
+def in_temp_dir(p) -> bool:
+    """Whether a path is inside the system temporary folder.
+
+    A test or a throwaway run uses one, and model files must never be moved into it: a --data-dir pointing at %TEMP%
+    once moved this host's 320 GB model library into Temp, where a cleanup would have taken it (2026-11-02)."""
+    try:
+        t = Path(tempfile.gettempdir()).resolve()
+        p = Path(p).resolve()
+    except (OSError, RuntimeError):
+        return False
+    return p == t or t in p.parents
+
+
 def data_folder(requested: str | None) -> tuple:
     """(the data folder, folders on other drives that still hold model files).  Moves the model files of this folder
     and of earlier AryaStrata folders on the same drive into the data folder, and points their configs there."""
@@ -5154,6 +5168,12 @@ def data_folder(requested: str | None) -> tuple:
     if settings.get("data_dir") and Path(settings["data_dir"]) != dest:
         sources.append(Path(settings["data_dir"]))
     sources += [f / "PolyStrata-data" for f in list(sources) if (f / "PolyStrata-data") != dest]
+    # a temporary destination never takes the model files: the folder that already holds them stays the data folder
+    if in_temp_dir(dest):
+        holders = [f for f in sources if f != dest and has_data(f)]
+        if holders:
+            warn(f"{dest} is a temporary folder: the model files stay in {holders[0]}")
+            return holders[0], []
     seen = set()
     for folder in sources:
         key = os.path.normcase(str(folder))

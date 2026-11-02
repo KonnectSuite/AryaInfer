@@ -114,7 +114,8 @@ class Config(unittest.TestCase):
         self.tmp = Path(__import__("tempfile").mkdtemp(prefix="qwen38-setup-"))
         self.saved = {k: getattr(setup, k) for k in (
             "pip_install", "get_llama_cpp", "get_poly_prebuilt", "build_engine_poly", "build_engine_poly_hip",
-            "engine_lib_dirs", "write_run_script", "offer_tray", "start", "write_setup_config", "download")}
+            "engine_lib_dirs", "write_run_script", "offer_tray", "start", "write_setup_config", "download",
+            "data_folder")}
 
     def tearDown(self):
         for k, v in self.saved.items():
@@ -138,6 +139,9 @@ class Config(unittest.TestCase):
         def _no_download(*x, **k):
             raise AssertionError("this test must not download anything")
         setup.download = _no_download
+        # never the real one: the data folder's move logic relocated this host's whole model library into a temp
+        # directory once, so the test keeps the folder it is given and moves nothing
+        setup.data_folder = lambda requested=None: (Path(requested) if requested else self.tmp / "data", [])
         setup.get_llama_cpp = lambda *x, **k: setup.ROOT / "third_party" / "llama.cpp"
         setup.get_poly_prebuilt = lambda *x, **k: None
         setup.build_engine_poly = lambda *x, **k: setup.ROOT / "build"
