@@ -1079,6 +1079,8 @@ void usage() {
                  "  --lookup N             guess what followed an earlier repeat of the last N or more tokens\n"
                  "                         (default 3, 0 = never)\n"
                  "  --no-draft             do not run the block that guesses ahead\n"
+                 "  --draft-window N       the block that guesses ahead reads only the last N tokens of context\n"
+                 "                         (0, the default: all of it; the guesses are about what comes next)\n"
                  "  --report-drafts        name the acceptance at each guess position in the statistics (a guess at\n"
                  "                         position 0 is the first one after the token the model wrote)\n"
                  "  --spec-width block     the guesses' width from the block's own probabilities (the default), or\n"
@@ -1213,6 +1215,7 @@ int main(int argc, char** argv) {
         else if (a == "--window") o.window = std::atoi(val());
         else if (a == "--lookup") lookup = std::atoi(val());
         else if (a == "--no-draft") o.draft = false;
+        else if (a == "--draft-window") o.draft_window = std::atoi(val());
         else if (a == "--report-drafts") o.report_drafts = true;
         else if (a == "--spec-width") {
             const std::string how = val();

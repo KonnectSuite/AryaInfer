@@ -407,3 +407,25 @@ when the block is confident, and on exactly those rounds the second guess is acc
 measured rule's uniform exploration measures 0.64.  Unconditional acceptance is the wrong statistic for a policy that
 selects its rounds on confidence; the next version has to keep acceptance per confidence bucket, so that a guess the
 block calls likely is weighed by what guesses like it did.
+
+## The draft block's window (Phase 2, opt-in)
+
+`--draft-window N` has the block that guesses ahead read only the last N tokens of context; the target's verification
+is untouched.  The block proposes the next few tokens, and at a long context the cache beyond them is most of what
+asking it costs.
+
+Measured 2026-11-02, Q3 IQ3_XXS, q4_0 cache, 256 new tokens, same prompts:
+
+| context | default (all of it) | window 2048 | window 8192 |
+| --- | --- | --- | --- |
+| 32K | 65.5 tok/s | 68.1 tok/s | - |
+| 64K | 64.1 and 61.3 tok/s (two runs) | 66.3 tok/s | 66.6 tok/s |
+| 128K | 60.7 tok/s | 57.9 tok/s | 62.4 tok/s |
+
+Acceptance at 128K, by guess position: default .838 .817 .761 .800; window 2048 .835 .789 .644 .600; window 8192
+.877 .797 .698 .696.  So 2048 saves the draft's reads but loses more in acceptance than it saves, while 8192 keeps
+most of the acceptance and reads an eighth of the cache.
+
+The differences are small: the same default 64K run measured 64.1 and 61.3 tok/s, so this host's round-to-round
+variance is about 4%.  The window stays off (0) until a repeated measurement shows it plainly; when it is turned on,
+8192 is the value to use.
