@@ -2166,6 +2166,56 @@ __global__ void likeliest_kernel(const float* __restrict__ x, int n, Likeliest* 
     out->prob = 1.0f / sum;
 }
 
+// The k likeliest of x[0..n): the largest, then the largest left when that one is taken, and so on, each with the
+// probability the softmax above gives it.  One block, a thread every blockDim.x-th value; the whole vocabulary is
+// read once a value per selection.
+__global__ void k_likeliest_kernel(const float* __restrict__ x, int n, Likeliest* __restrict__ out, int k) {
+    __shared__ float part[32];
+    __shared__ float pick_v[1024];
+    __shared__ int pick_i[1024];
+    __shared__ int chosen[8];
+    float m = -INFINITY;
+    for (int i = threadIdx.x; i < n; i += blockDim.x) m = fmaxf(m, x[i]);
+    m = block_max(m, part);
+    for (int j = 0; j < k; ++j) {
+        float bv = -INFINITY;
+        int bi = n;
+        for (int i = threadIdx.x; i < n; i += blockDim.x) {
+            const float v = x[i];
+            if (v < bv) continue;
+            bool taken = false;
+            for (int c = 0; c < j && !taken; ++c)
+                if (chosen[c] == i) taken = true;
+            if (!taken && (v > bv || (v == bv && i < bi))) {
+                bv = v;
+                bi = i;
+            }
+        }
+        pick_v[threadIdx.x] = bv;
+        pick_i[threadIdx.x] = bi;
+        __syncthreads();
+        if (threadIdx.x == 0) {
+            float wv = -INFINITY;
+            int wi = n;
+            for (int t = 0; t < int(blockDim.x); ++t)
+                if (pick_v[t] > wv || (pick_v[t] == wv && pick_i[t] < wi)) {
+                    wv = pick_v[t];
+                    wi = pick_i[t];
+                }
+            chosen[j] = wi;
+            out[j].token = wi;
+            out[j].prob = 0.0f;
+        }
+        __syncthreads();
+    }
+    float sum = 0.0f;
+    for (int i = threadIdx.x; i < n; i += blockDim.x)
+        if (x[i] > m - 20.0f) sum += expf(x[i] - m);
+    sum = block_sum(sum, part);
+    if (threadIdx.x == 0)
+        for (int j = 0; j < k; ++j) out[j].prob = expf(x[out[j].token] - m) / sum;
+}
+
 __global__ void mul_sigmoid_kernel(float* __restrict__ acc, const float* __restrict__ g, int n, int g_stride,
                                    bool one_gate) {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -3992,6 +4042,10 @@ void softcap(float* x, size_t n, float cap, void* stream) {
 
 void likeliest(const float* logits, int n, Likeliest* out, void* stream) {
     likeliest_kernel<<<1, 1024, 0, cs(stream)>>>(logits, n, out);
+}
+
+void k_likeliest(const float* logits, int n, int k, Likeliest* out, void* stream) {
+    k_likeliest_kernel<<<1, 1024, 0, cs(stream)>>>(logits, n, out, std::clamp(k, 1, 8));
 }
 
 void mul_sigmoid(float* acc, const float* g, int n, int rows, int g_stride, bool one_gate, void* stream) {

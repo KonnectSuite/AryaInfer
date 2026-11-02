@@ -1962,6 +1962,7 @@ void Engine::alloc() {
     if (draft_) {
         hn_ = state_ + rec_n_;
         h_guess_ = (Likeliest*) hmalloc(sizeof(Likeliest), "pinned memory");   // likeliest() writes it
+        h_topk_ = (Likeliest*) hmalloc(8 * sizeof(Likeliest), "pinned memory");   // k_likeliest() writes it
     }
     if (block_guess_) h_block_ = (Likeliest*) hmalloc((size_t) opt_.window * sizeof(Likeliest), "pinned memory");
     // window(): the state after tokens of it, for keep(), and every token's logits
@@ -3728,7 +3729,7 @@ void Engine::draft_rows(const int32_t* tokens, int first, int n) {
 void Engine::draft_step(int32_t token, int i) {
     Layer& L = layers_[(size_t) n_layer_];
     float* own = hn_ + n_embd_;   // the block's output, which stands in for the model's from the second guess on
-    float* x = draft_input(&token, pos_ + i, i == 0 ? hn_ : own, 1);
+    float* x = draft_input(&token, pos_ + i, tree_in_ ? tree_in_ : (i == 0 ? hn_ : own), 1);
     block_attend(pos_ + i, 1);
     axpy(ao_, 1.f, x, n_embd_, true, st_);
     rms_norm(x, fp(L.ffn_norm), xn_, n_embd_, 1, rms_eps_, st_);
@@ -3789,12 +3790,63 @@ int32_t Engine::draft(int32_t token, int i, float* prob) {
     // where the block is unsure, four times what the block takes.
     likeliest(logits_, draft_rows(), h_guess_, st_);
     ck(cudaStreamSynchronize(cs(st_)), "draft");
+    if (opt_.check_topk) {   // --check-topk: k_likeliest's first is likeliest's, and the rest are in order
+        k_likeliest(logits_, draft_rows(), 8, h_topk_, st_);
+        ck(cudaStreamSynchronize(cs(st_)), "draft top-k");
+        if (h_topk_[0].token != h_guess_->token)
+            throw std::runtime_error("k_likeliest disagrees with likeliest");
+        static bool said = false;
+        if (!said) {
+            said = true;
+            std::fprintf(stderr, "strata-poly: k_likeliest agrees: %d %.4f, then", (int) h_topk_[0].token,
+                         h_topk_[0].prob);
+            for (int j = 1; j < 8; ++j) std::fprintf(stderr, " %d %.4f", (int) h_topk_[j].token, h_topk_[j].prob);
+            std::fprintf(stderr, "\n");
+            draft_topk(token, 0, nullptr, nullptr, 8, h_topk_);   // the tree's own path to the same place
+            if (h_topk_[0].token != h_guess_->token) throw std::runtime_error("draft_topk disagrees with draft");
+            std::fprintf(stderr, "strata-poly: draft_topk agrees: %d %.4f\n", (int) h_topk_[0].token, h_topk_[0].prob);
+        }
+    }
     if (i == 0) {
         ahead_pos_ = pos_;
         ahead_tok_ = token;
     }
     *prob = h_guess_->prob;
     return h_guess_->token;
+}
+
+// The block's k likeliest at a tree node: `depth` places into the window, from the parent's hidden output (null at the
+// root, which takes the model's last), the node's own output copied to node_hidden.  Drafting depth first, the block's
+// ancestors lie at their depths, so its causal attention is exactly the tree's mask, and a sibling reuses its depth's
+// row - its subtree is drafted while it is there.
+int Engine::draft_topk(int32_t token, int depth, const float* parent_hidden, float* node_hidden, int k, Likeliest* out) {
+    if (next_) return next_->draft_topk(token, depth, parent_hidden, node_hidden, k, out);
+    OnCard here(device_, split_);
+    if (!draft_) throw std::logic_error("draft_topk: this model has no block that guesses ahead");
+    if (token < 0 || token >= n_vocab_) throw std::runtime_error("a token id is outside the vocabulary");
+    if (depth < 0 || pos_ + depth >= opt_.max_context)
+        throw std::logic_error("draft_topk: the position is outside the context");
+    cover(pos_ + depth + 1);
+    ck(cudaStreamSynchronize(cs(st_)), "draft");
+    tree_in_ = parent_hidden;
+    try {
+        draft_step(token, depth);
+    } catch (...) {
+        tree_in_ = nullptr;
+        throw;
+    }
+    tree_in_ = nullptr;
+    k_likeliest(logits_, draft_rows(), k, out, st_);
+    if (node_hidden)
+        ck(cudaMemcpyAsync(node_hidden, hn_ + n_embd_, (size_t) n_embd_ * sizeof(float), cudaMemcpyDeviceToDevice,
+                           cs(st_)),
+           "draft node");
+    ck(cudaStreamSynchronize(cs(st_)), "draft top-k");
+    if (depth == 0) {
+        ahead_pos_ = pos_;
+        ahead_tok_ = token;
+    }
+    return k;
 }
 
 int most_likely(const float* logits, int n) {

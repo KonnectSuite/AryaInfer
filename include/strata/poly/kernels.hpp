@@ -323,6 +323,9 @@ struct Likeliest {
     float prob;
 };
 void likeliest(const float* logits, int n, Likeliest* out, void* stream);
+/// The k likeliest of `logits`, in order, each with the probability a softmax over the vocabulary gives it.  A
+/// tree's branch points come from here: the draft block's first choices, not only the one.
+void k_likeliest(const float* logits, int n, int k, Likeliest* out, void* stream);
 /// acc[r][i] *= sigmoid(g[r][i]) for `rows` groups of n values; group r's gates start r * g_stride floats into g.
 /// With one_gate a group has one gate for all its values.
 void mul_sigmoid(float* acc, const float* g, int n, int rows, int g_stride, bool one_gate, void* stream);

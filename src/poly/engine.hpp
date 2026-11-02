@@ -80,6 +80,7 @@ struct Options {
                                   ///< 0: 8, or 4 where every guess keeps a copy of the recurrent state
     bool draft = true;            ///< run the block that guesses ahead, when there is one and window is above 1
     bool report_drafts = false;   ///< --report-drafts: name the acceptance at each guess position in the statistics
+    bool check_topk = false;      ///< --check-topk: the draft block's k likeliest, against the one likeliest (a test)
     bool spec_measured = false;   ///< --spec-width measured: the window's width from the measured acceptance (Guesses)
     int draft_window = 0;         ///< --draft-window: the block that guesses ahead reads only the last this many tokens
                                   ///< of context (0: all of it)
@@ -285,6 +286,11 @@ public:
     /// the block, since load.  Two or more in one read are back-to-back refills of its pinned input rows.
     int64_t read_draft_calls_for_test() const { return next_ ? next_->read_draft_calls_for_test() : read_draft_calls_; }
     int32_t draft(int32_t token, int i, float* prob);
+    /// The block's k likeliest at `token`, `depth` places into the window, from the parent node's hidden output (null at
+    /// the root, which takes the model's last), the node's own output written to `node_hidden` when given.  A tree
+    /// drafts depth first, so the block's rows of the ancestors lie at their depths and its causal attention is the
+    /// tree's mask.
+    int draft_topk(int32_t token, int depth, const float* parent_hidden, float* node_hidden, int k, Likeliest* out);
     /// Whether a call since the last time this was asked recorded launches for replaying, which takes far longer
     /// than the call does afterwards: its time says nothing of the calls to come.
     bool took_record() {
@@ -702,9 +708,11 @@ protected:
     // the last token of the sequence, and the outputs of the tokens of the call under way follow it.
     float* hn_ = nullptr;
     Likeliest* h_guess_ = nullptr;   ///< a guess and its probability, pinned
+    Likeliest* h_topk_ = nullptr;    ///< the block's k likeliest, pinned
     int32_t win_tok_[8] = {};           ///< the window's tokens, for keep()
     int64_t ahead_pos_ = -1;            ///< draft() has left the block's row of this position as its token leaves it,
     int32_t ahead_tok_ = 0;             ///< which is this one
+    const float* tree_in_ = nullptr;    ///< draft_topk(): the node's parent's hidden output, where it has one
     float* snap_ = nullptr;      ///< window(): the recurrent state after tokens of it (snap_tokens()), rec_n_ apart
     int snap_places_ = 0;        ///< how many states it holds
     float* snap_at_ = nullptr;   ///< where the call under way leaves the first of its states
