@@ -81,6 +81,9 @@ struct Options {
     bool draft = true;            ///< run the block that guesses ahead, when there is one and window is above 1
     bool report_drafts = false;   ///< --report-drafts: name the acceptance at each guess position in the statistics
     bool check_topk = false;      ///< --check-topk: the draft block's k likeliest, against the one likeliest (a test)
+    bool check_tree = false;      ///< --check-tree: a tree shaped as a chain, against window() (a test)
+    int tree_k = 0;               ///< --tree K,D: the children a row, and the tree's depth (0: no tree)
+    int tree_depth = 0;
     bool spec_measured = false;   ///< --spec-width measured: the window's width from the measured acceptance (Guesses)
     int draft_window = 0;         ///< --draft-window: the block that guesses ahead reads only the last this many tokens
                                   ///< of context (0: all of it)
@@ -268,6 +271,16 @@ public:
     const float* logits_of(int i) const { return next_ ? next_->logits_of(i) : h_wlogits_ + (size_t) i * n_vocab_; }
     void keep(int n);
 
+    /// A window of a tree's guesses: `parent[i]` is the row's parent in the window (before it; -1 at the root) and
+    /// `depth[i]` the place in the sequence its token stands at.  A row sees the committed rows, itself and its
+    /// ancestors, never a sibling.  logits_of(i) is what follows the i-th row's token; the accepted path is committed
+    /// with keep_tree().
+    void window_tree(const int32_t* tokens, int n, const int32_t* depth, const int32_t* parent);
+    void keep_tree(const int32_t* tokens, int n);
+    /// The rotary positions a tree's window takes, once: a model's own row-by-row places (nothing for a model whose
+    /// positions count up).
+    virtual void tree_axes(int, const int32_t*) {}
+
     /// Some files carry a block that guesses ahead: one layer that takes a token and the model's output for the
     /// token before it, and gives what the model would likely say after the token.  drafts(): it is there and runs.
     /// draft(token, 0, &p) takes the token at pos(), picked and not fed yet, and returns the guess at the one after
@@ -291,6 +304,9 @@ public:
     /// drafts depth first, so the block's rows of the ancestors lie at their depths and its causal attention is the
     /// tree's mask.
     int draft_topk(int32_t token, int depth, const float* parent_hidden, float* node_hidden, int k, Likeliest* out);
+    /// A tree's rows from the block, depth first: the root (the known token), its k children, and each child's k
+    /// children when the tree is two deep.  Returns the rows; a parent always comes before its children.
+    int draft_tree(int32_t root, int k, int depth, int32_t* tokens, int32_t* depths, int32_t* parents, float* probs);
     /// Whether a call since the last time this was asked recorded launches for replaying, which takes far longer
     /// than the call does afterwards: its time says nothing of the calls to come.
     bool took_record() {
@@ -710,9 +726,19 @@ protected:
     Likeliest* h_guess_ = nullptr;   ///< a guess and its probability, pinned
     Likeliest* h_topk_ = nullptr;    ///< the block's k likeliest, pinned
     int32_t win_tok_[8] = {};           ///< the window's tokens, for keep()
+    bool tree_ = false;                 ///< the call is a tree's window (window_tree()): rows by depth, a mask
+    int tree_n_ = 0;                    ///< its rows
+    int32_t tree_depth_[16] = {};       ///< each row's place in the sequence
+    int32_t tree_parent_[16] = {};      ///< each row's parent, -1 at the root
+    uint32_t tree_mask_h_[16] = {};     ///< each row's bits: the rows it sees (bit j is row j)
+    uint32_t* tree_mask_ = nullptr;     ///< the mask above, on the card
+    int32_t tree_check_tok_[16] = {};   ///< --check-tree: the tree pass's top token at each row
+    bool tree_check_pending_ = false;   ///< --check-tree: a chain-shaped tree ran, and the window is being checked
+    double tree_time_[4] = {};          ///< window_tree(): ms in the GDN rows, the attention rows, the dense FFN, all
     int64_t ahead_pos_ = -1;            ///< draft() has left the block's row of this position as its token leaves it,
     int32_t ahead_tok_ = 0;             ///< which is this one
     const float* tree_in_ = nullptr;    ///< draft_topk(): the node's parent's hidden output, where it has one
+    float* tree_h_ = nullptr;           ///< draft_tree(): each row's block output (the hidden its children are drafted from)
     float* snap_ = nullptr;      ///< window(): the recurrent state after tokens of it (snap_tokens()), rec_n_ apart
     int snap_places_ = 0;        ///< how many states it holds
     float* snap_at_ = nullptr;   ///< where the call under way leaves the first of its states

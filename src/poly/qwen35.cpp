@@ -172,6 +172,10 @@ int Qwen35::widest() const { return std::max(d_inner_, n_head_ * head_dim_); }
 
 // The attention layers' caches, and each recurrent layer's convolution and delta-rule state in state_.
 void Qwen35::alloc_caches() {
+    if (!tree_state_) {
+        const size_t per = (size_t) 3 * conv_dim_ + (size_t) v_heads_ * s_dim_ * s_dim_;
+        tree_state_ = (float*) dmalloc(16 * per * sizeof(float), "the tree's recurrent state");
+    }
     const bool q4v = opt_.kv_format == KvFmt::kQ4_0;
     if ((opt_.kv_format == KvFmt::kQ8_0 || q4v) && !axes_) {
         const size_t codes = (size_t) n_kv_ * head_dim_ / (q4v ? 2 : 1);
@@ -385,6 +389,13 @@ void Qwen35::load_card_rows(const uint8_t* src, int64_t from, int64_t count, int
 // The gated delta net.  One projection gives the queries, keys and values, which a convolution over the last
 // four tokens mixes; another gives the gate of the output.
 void Qwen35::gdn(Block& B, int n) {
+    // STRATA_TREE_GDN=0 runs a tree's rows through the sequential state instead (a timing and test aid; correct only
+    // for a tree that is a chain)
+    static const bool tree_gdn = std::getenv("STRATA_TREE_GDN") == nullptr || std::atoi(std::getenv("STRATA_TREE_GDN")) != 0;
+    if (tree_gdn && tree_ && n == tree_n_) {   // a tree's rows: a state for each, from its parent's
+        gdn_tree(B, n);
+        return;
+    }
     lin(B.wqkv, xn_, proj_, n, xq_);
     lin(B.wz, xn_, z_, n, xq_);
     lin(B.alpha, xn_, alpha_, n, xq_);
@@ -408,6 +419,38 @@ void Qwen35::gdn(Block& B, int n) {
                  rms_eps_, st_, snap_bits_ ? snap_at_ + (B.s - state_) : nullptr, rec_n_, snap_bits_);
     }
     lin(B.wo, gated_, ao_, n);
+}
+
+// gdn() for a tree's window: each row's convolution and delta-rule state starts as its parent's (the root's as the
+// layer's committed state, which is left alone), and the row's own token advances it.  The rows are in the order
+// window_tree() took them, so a parent is always before its children.
+void Qwen35::gdn_tree(Block& B, int n) {
+    const auto t0 = std::chrono::steady_clock::now();
+    lin(B.wqkv, xn_, proj_, n, xq_);
+    lin(B.wz, xn_, z_, n, xq_);
+    lin(B.alpha, xn_, alpha_, n, xq_);
+    lin(B.beta, xn_, beta_, n, xq_);
+    const size_t conv_n = (size_t) 3 * conv_dim_;
+    const size_t s_n = (size_t) v_heads_ * s_dim_ * s_dim_;
+    float* convs = tree_state_;
+    float* states = tree_state_ + 16 * conv_n;
+    for (int i = 0; i < n; ++i) {
+        float* cf = convs + (size_t) i * conv_n;
+        float* sf = states + (size_t) i * s_n;
+        const int par = tree_parent_[i];
+        ck(cudaMemcpyAsync(sf, par < 0 ? B.s : states + (size_t) par * s_n, s_n * sizeof(float),
+                           cudaMemcpyDeviceToDevice, cs(st_)),
+           "tree state");
+        ck(cudaMemcpyAsync(cf, par < 0 ? B.past : convs + (size_t) par * conv_n, conv_n * sizeof(float),
+                           cudaMemcpyDeviceToDevice, cs(st_)),
+           "tree conv");
+        conv4_silu(proj_ + (size_t) i * conv_dim_, cf, fp(B.conv), qkv_ + (size_t) i * conv_dim_, conv_dim_, 1, st_);
+        gdn_step(qkv_ + (size_t) i * conv_dim_, alpha_ + (size_t) i * v_heads_, beta_ + (size_t) i * v_heads_,
+                 fp(B.dt), fp(B.a), sf, z_ + (size_t) i * d_inner_, fp(B.o_norm), gated_ + (size_t) i * d_inner_,
+                 s_dim_, v_heads_, k_heads_, 1, rms_eps_, st_);
+    }
+    lin(B.wo, gated_, ao_, n);
+    tree_time_[0] += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 
 // gdn() for a block of guesses (Engine::guess_block()): the block's tokens see each other and the state is only
@@ -444,7 +487,27 @@ void Qwen35::turn_of(int64_t row, int32_t* thw) const {
 
 // The rotary positions of n rows from row `pos`.  Rows of text alone count up from *first, and the result is
 // null.  With a picture's rows among them the result is the positions of each row on the three axes, on the card.
+// The rotary positions of a tree's window: each row at pos() + its depth, on all three axes.  Built once for the
+// pass: building them per layer cost a wait per layer, and the card drained at each.
+void Qwen35::tree_axes(int n, const int32_t* depths) {
+    if ((size_t) n * 3 > h_axes_.size()) throw std::logic_error("tree_axes: more rows than the scratch holds");
+    for (int t = 0; t < n; ++t) {
+        const int32_t p = (int32_t) (pos_ + depths[t]);
+        h_axes_[(size_t) t * 3] = h_axes_[(size_t) t * 3 + 1] = h_axes_[(size_t) t * 3 + 2] = p;
+    }
+    ck(cudaStreamSynchronize(cs(st_)), "tree positions");
+    ck(cudaMemcpyAsync(axes_, h_axes_.data(), (size_t) n * 3 * sizeof(int32_t), cudaMemcpyHostToDevice, cs(st_)),
+       "tree positions");
+    axes_pos_ = pos_;
+    axes_n_ = n;
+    axes_set_ = images_set_;
+}
+
 const int32_t* Qwen35::turns(int64_t pos, int n, int64_t* first) {
+    if (tree_ && n == tree_n_) {   // window_tree() built the tree's rows' places once for the whole pass
+        *first = pos;
+        return axes_;
+    }
     int32_t thw[3];
     turn_of(pos, thw);
     *first = thw[0];
@@ -511,6 +574,27 @@ int64_t Qwen35::turn(int64_t row) const {
 
 void Qwen35::attn(Block& B, int64_t pos, int n) {
     if (rows_of_) return attn_rows(B, n);
+    if (tree_ && n == tree_n_) {   // a tree's rows: their own cache rows, their ancestors' only
+        const auto t0 = std::chrono::steady_clock::now();
+        int64_t first;
+        const int32_t* axes = turns(pos, n, &first);
+        const long long* at = recording_ ? at_ : nullptr;
+        lin(B.wq, xn_, qg_, n, xq_);
+        head_norm_rope(qg_, 2 * head_dim_, fp(B.q_norm), q_, head_dim_, n_head_, n_rot_, theta_scale_, first, n, rms_eps_,
+                       st_, nullptr, axes, sections_, at ? at + 1 : nullptr);
+        attn_store(B, pos, n);
+        const float scale = 1.f / std::sqrt((float) head_dim_);
+        const bool q8 = opt_.kv_format == KvFmt::kQ8_0;
+        const bool q4 = opt_.kv_format == KvFmt::kQ4_0;
+        attend(q_, (q8 || q4) ? nullptr : B.keys, (q8 || q4) ? nullptr : B.vals, pos, n, score_, chunk_, att_, head_dim_,
+               n_head_, n_kv_, scale, st_, 0, 0, false, at, at ? room(n) : 0, /*score_floats*/ 0,
+               (q8 || q4) ? Kvq8{B.k_codes, B.k_scales} : Kvq8{}, (q8 || q4) ? Kvq8{B.v_codes, B.v_scales} : Kvq8{},
+               nullptr, q4 ? 2 : 1, tree_mask_, pos);
+        mul_sigmoid(att_, qg_ + head_dim_, head_dim_, n * n_head_, 2 * head_dim_, false, st_);
+        lin(B.wo, att_, ao_, n);
+        tree_time_[1] += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        return;
+    }
     int64_t first;
     const int32_t* axes = turns(pos, n, &first);
     const long long* at = recording_ ? at_ : nullptr;
@@ -733,10 +817,13 @@ bool Qwen35::route_card(int, int n, int32_t* ids, float* w) {
 
 // A dense FFN: gate, up, SwiGLU, down (Flint's dense_ffn()), landing in fo_ for layer_head's residual add.
 void Qwen35::dense_ffn(Block& B, int il, int n) {
+    const bool time = tree_;   // the timing is window_tree()'s; the default path reads no clock
+    const auto t0 = time ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     lin(B.ffn_gate, xn_, g_, n, xq_);
     lin(B.ffn_up, xn_, u_, n, xq_);
     swiglu_clamp(g_, u_, h_, n * n_ff_, clamp_shexp_[(size_t) il], st_);
     lin(B.ffn_down, h_, fo_, n);
+    if (time) tree_time_[2] += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 
 // A dense file's block: its one FFN, where the MoE sequence would route to experts the file does not have.

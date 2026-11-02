@@ -1352,22 +1352,31 @@ attn_score_reg_kernel(const float* __restrict__ q, const half* __restrict__ kcac
 // a block of the group's queries side by side (per: the group's heads).
 __global__ void attn_softmax_kernel(float* score, int n_keys, long long pos, int first, int tokens, int window,
                                     long long last, const long long* __restrict__ at, float* __restrict__ wt,
-                                    int per, const float* __restrict__ sinks) {
+                                    int per, const float* __restrict__ sinks, const uint32_t* __restrict__ wmask,
+                                    long long wpos) {
     __shared__ float part[8];
     const long long p = (at ? *at : pos) + first;
     last = attn_last(p, tokens, last);
     long long lo, lo0;
     const int span = attn_span(p, tokens, window, last, &lo0);
     const int n = attn_rows(p + blockIdx.y, window, last, &lo), own = int(lo - lo0);
+    // a window of a tree's guesses (wmask): the row's own ancestors and itself, and none of its siblings
+    const uint32_t bits = wmask ? wmask[blockIdx.y] : 0u;
     float* all = score + (size_t(blockIdx.y) * gridDim.x + blockIdx.x) * n_keys;
     float* row = all + own;   // the token's rows of the span
     float mx = -INFINITY;
-    for (int j = threadIdx.x; j < n; j += blockDim.x) mx = fmaxf(mx, row[j]);
+    for (int j = threadIdx.x; j < n; j += blockDim.x) {
+        const long long key = lo + j;
+        if (wmask && key >= wpos && !((bits >> int(key - wpos)) & 1u)) continue;
+        mx = fmaxf(mx, row[j]);
+    }
     mx = block_max(mx, part);
     if (sinks) mx = fmaxf(mx, sinks[blockIdx.x]);
     float sum = 0.0f;
     for (int j = threadIdx.x; j < n; j += blockDim.x) {
-        row[j] = expf(row[j] - mx);
+        const long long key = lo + j;
+        const bool keep = !wmask || key < wpos || ((bits >> int(key - wpos)) & 1u);
+        row[j] = keep ? expf(row[j] - mx) : 0.0f;
         sum += row[j];
     }
     sum = block_sum(sum, part);
@@ -3119,7 +3128,7 @@ void head_norm_rope(const float* x, int x_stride, const float* w, float* y, int 
 void attend(const float* q, const uint16_t* kcache, const uint16_t* vcache, int64_t pos, int rows, float* score,
             int chunk, float* out, int dim, int n_head, int kv_heads, float scale, void* stream, int window,
             int ring, bool whole, const long long* at, int room, size_t score_floats, Kvq8 kq8, Kvq8 vq8,
-            const float* sinks, int kvmode) {
+            const float* sinks, int kvmode, const uint32_t* wmask, int64_t wpos) {
     if (at && (room < 1 || (whole && rows > chunk)))
         throw std::invalid_argument("attend: a position on the card needs its room, and with `whole` one launch");
     if (dim % SCORE_VALUES || uintptr_t(q) % (SCORE_VALUES * sizeof(float)) || uintptr_t(kcache) % (SCORE_VALUES * 2))
@@ -3201,7 +3210,7 @@ void attend(const float* q, const uint16_t* kcache, const uint16_t* vcache, int6
         float* wt = kvmode != 2 && per >= 4 && size_t(kv_heads) * blocks * VALUE_QUERIES <= size_t(chunk - c) * n_head
                         ? score + size_t(c) * n_head * keys : nullptr;
         attn_softmax_kernel<<<dim3(n_head, c), 256, 0, cs(stream)>>>(score, keys, (long long) pos, first, c, window,
-                                                                    last, at, wt, per, sinks);
+                                                                    last, at, wt, per, sinks, wmask, wpos);
         // Two blocks of queries a launch block read the values half as often, where the launch still has
         // blocks for most of the card's 36 multiprocessors: for Qwen3.6's two tokens they are half as many and
         // slower, for three or four tokens and for Gemma 4's full layers faster.
@@ -3702,7 +3711,8 @@ void attend_int8(const float* q, KvInt8 q8, KvInt8 k, KvInt8 v, int64_t pos, int
         }
         // the weights in place: attn_value_int8_kernel reads them from the scores' buffer, so no transposed copy
         attn_softmax_kernel<<<dim3(n_head, c), 256, 0, cs(stream)>>>(score, keys, (long long) pos, first, c,
-                                                                     window, last, at, nullptr, per, nullptr);
+                                                                     window, last, at, nullptr, per, nullptr,
+                                                                     nullptr, 0);
         {
             const int dims = grid(dim, VALUE_DIMS), blocks = grid(c * per, VALUE_QUERIES);
             attn_value_int8_kernel<<<dim3(kv_heads * dims, blocks), VALUE_DIMS * VALUE_SHARES, 0, cs(stream)>>>(
@@ -3784,7 +3794,8 @@ void attend_int8_mixed(const float* q, KvInt8 q8, KvInt8 k, const uint16_t* v_h,
         }
         // the weights in place: attn_value_kernel reads them from the scores' buffer, so no transposed copy
         attn_softmax_kernel<<<dim3(n_head, c), 256, 0, cs(stream)>>>(score, keys, (long long) pos, first, c,
-                                                                     window, last, at, nullptr, per, nullptr);
+                                                                     window, last, at, nullptr, per, nullptr,
+                                                                     nullptr, 0);
         {
             const int dims = grid(dim, VALUE_DIMS), blocks = grid(c * per, VALUE_QUERIES);
             attn_value_kernel<<<dim3(kv_heads * dims, blocks), VALUE_DIMS * VALUE_SHARES, 0, cs(stream)>>>(

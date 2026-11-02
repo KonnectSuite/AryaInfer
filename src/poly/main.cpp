@@ -345,16 +345,17 @@ struct Session {
     int most;                             // the tokens of a window at most; 1: no guesses
     bool look;                            // guess from repeats
     bool report = false;                  // --report-drafts: the statistics name the acceptance at each guess
+    int tree_k = 0, tree_depth = 0;       // --tree K,D: the guesses verified as a tree (0: a chain)
     strata::spec::SuffixDrafter repeats;
     strata::spec::DraftPolicy policy;
     Guesses guesses;                      // whether the block is asked in a round, and for how many (guesses.hpp)
     int piece_calls = kPiece;             // generate()'s pieces when it is given `between`
 
     Session(Engine& e, std::vector<int32_t> eos_ids, const CacheFlags& f, int lookup, bool report_drafts = false,
-            bool spec_measured = false)
+            bool spec_measured = false, int tree_k = 0, int tree_depth = 0)
         : engine(e), eos(std::move(eos_ids)), flags(f), kept(e, with_floor(f)), report(report_drafts),
           most(lookup > 0 || e.drafts() ? std::min<int>(e.max_window(), strata::spec::DraftPolicy::kMaxT) : 1),
-          look(lookup > 0 && most > 1),
+          look(lookup > 0 && most > 1), tree_k(tree_k), tree_depth(tree_depth),
           repeats(std::max(lookup, 3), 64, (size_t) e.max_context() + 4096), policy(most) {
         guesses.measure_widths(spec_measured);
     }
@@ -497,6 +498,58 @@ struct Session {
                 // t goes into the model now, and with it guesses at what follows when there are any that pay
                 const Clock::time_point round = Clock::now();
                 const bool room = engine.pos() + most <= engine.max_context();
+                if (tree_k > 0 && engine.drafts() && room) {
+                    // the tree: one verify pass over the root, its children and their children; the picked token
+                    // follows a branch while a node's token is what the model would say next
+                    int32_t tok[16], dep[16], par[16];
+                    float pr[16];
+                    const Clock::time_point t_draft = Clock::now();
+                    const int tn = engine.draft_tree(t, tree_k, tree_depth, tok, dep, par, pr);
+                    const double draft_ms = ms_since(t_draft);
+                    const Clock::time_point t_ver = Clock::now();
+                    engine.window_tree(tok, tn, dep, par);
+                    const double ver_ms = ms_since(t_ver);
+                    int32_t path[16];
+                    path[0] = t;
+                    int have = 1, row = 0;
+                    int32_t nxt = pick(engine.logits_of(0));
+                    int at = -1;
+                    for (int i = 1; i < tn; ++i)
+                        if (par[i] == 0 && tok[i] == nxt) {
+                            at = i;
+                            break;
+                        }
+                    bool more = true;
+                    while (at >= 0) {
+                        path[have] = tok[at];
+                        if (!(more = show(tok[at]))) break;
+                        ++have;
+                        row = at;
+                        nxt = pick(engine.logits_of(row));
+                        at = -1;
+                        for (int i = 1; i < tn; ++i)
+                            if (par[i] == row && tok[i] == nxt) {
+                                at = i;
+                                break;
+                            }
+                    }
+                    engine.keep_tree(path, have);
+                    kept.read(path, have);
+                    if (report) {
+                        std::fprintf(stderr, "strata tree: %d rows, %d committed, draft %.1f ms, verify %.1f ms, "
+                                             "round %.1f ms\n",
+                                     tn, have, draft_ms, ver_ms, ms_since(round));
+                    }
+                    r.guessed += tn - 1;
+                    r.guessed_right += have - 1 + (more ? 0 : 1);
+                    for (int j = 0; j + 1 < have && j < 8; ++j) {
+                        ++r.drafted_pos[j];
+                        ++r.accepted_pos[j];
+                    }
+                    t = nxt;
+                    if (!more) break;
+                    continue;
+                }
                 const int offered = look && room ? repeats.propose(most - 1, w + 1) : 0;
                 const int match = repeats.last_match();
                 const int widest = match >= kCopyMatch ? most : std::min(most, block_window);   // this round's window
@@ -1082,6 +1135,9 @@ void usage() {
                  "  --draft-window N       the block that guesses ahead reads only the last N tokens of context\n"
                  "                         (0, the default: all of it; the guesses are about what comes next)\n"
                  "  --check-topk           check the draft block's k likeliest against its likeliest, once (a test)\n"
+                 "  --check-tree           check a tree shaped as a chain against the window, once (a test)\n"
+                 "  --tree K,D             guesses as a tree: K children a row (1-2) and D deep (1-2), verified in one\n"
+                 "                         pass; off by default, and a tree of 2,2 is 7 rows\n"
                  "  --report-drafts        name the acceptance at each guess position in the statistics (a guess at\n"
                  "                         position 0 is the first one after the token the model wrote)\n"
                  "  --spec-width block     the guesses' width from the block's own probabilities (the default), or\n"
@@ -1217,6 +1273,17 @@ int main(int argc, char** argv) {
         else if (a == "--lookup") lookup = std::atoi(val());
         else if (a == "--no-draft") o.draft = false;
         else if (a == "--check-topk") o.check_topk = true;
+        else if (a == "--check-tree") o.check_tree = true;
+        else if (a == "--tree") {
+            const std::string v = val();
+            const size_t comma = v.find(',');
+            o.tree_k = std::atoi(v.c_str());
+            o.tree_depth = comma == std::string::npos ? 2 : std::atoi(v.c_str() + comma + 1);
+            if (o.tree_k < 1 || o.tree_k > 2 || o.tree_depth < 1 || o.tree_depth > 2) {
+                std::fprintf(stderr, "--tree takes K,D with K 1-2 (children a row) and D 1-2 (depth)\n");
+                std::exit(2);
+            }
+        }
         else if (a == "--draft-window") o.draft_window = std::atoi(val());
         else if (a == "--report-drafts") o.report_drafts = true;
         else if (a == "--spec-width") {
@@ -1344,7 +1411,7 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "strata-poly: conversation cache off: not enough free RAM to park conversations "
                                      "(--conversation-cache-mib N asks for one anyway)\n");
         }
-        Session ss(engine, eos, cache, lookup, o.report_drafts, o.spec_measured);
+        Session ss(engine, eos, cache, lookup, o.report_drafts, o.spec_measured, o.tree_k, o.tree_depth);
         int rc = 0;
         if (want_serve) {
             rc = serve(ss);

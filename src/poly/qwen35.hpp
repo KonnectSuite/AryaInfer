@@ -76,6 +76,8 @@ private:
     };
 
     void gdn(Block& B, int n);
+    void gdn_tree(Block& B, int n);
+    void tree_axes(int n, const int32_t* depths) override;
     void dense_ffn(Block& B, int il, int n);
     void draft_ffn(Layer& L, int il, int n) override;
     void gdn_block_pass(Block& B, int n);
@@ -108,6 +110,7 @@ private:
     int chunk_ = 1;   ///< tokens the attention takes at a time
 
     // device scratch
+    float* tree_state_ = nullptr;   ///< a tree's rows: each row's convolution taps, then each row's delta-rule state
     float *proj_ = nullptr, *qkv_ = nullptr, *z_ = nullptr, *alpha_ = nullptr, *beta_ = nullptr, *gated_ = nullptr;
     float *qg_ = nullptr, *q_ = nullptr, *kraw_ = nullptr, *k_ = nullptr, *v_ = nullptr, *att_ = nullptr,
           *score_ = nullptr, *sg_ = nullptr;

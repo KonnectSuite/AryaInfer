@@ -271,7 +271,8 @@ struct Kvq4 {
 void attend(const float* q, const uint16_t* kcache, const uint16_t* vcache, int64_t pos, int rows, float* score,
             int chunk, float* out, int dim, int n_head, int kv_heads, float scale, void* stream, int window = 0,
             int ring = 0, bool whole = false, const long long* at = nullptr, int room = 0, size_t score_floats = 0,
-            Kvq8 kq8 = {}, Kvq8 vq8 = {}, const float* sinks = nullptr, int kvmode = 1);
+            Kvq8 kq8 = {}, Kvq8 vq8 = {}, const float* sinks = nullptr, int kvmode = 1,
+            const uint32_t* wmask = nullptr, int64_t wpos = 0);
 /// The floats of score that attend()'s blocks of rows take for calls of up to chunk tokens attending up to max_rows
 /// rows (score_floats): with that much a model's every call takes them.
 size_t attend_split_floats(int chunk, int n_head, int max_rows, int dim);

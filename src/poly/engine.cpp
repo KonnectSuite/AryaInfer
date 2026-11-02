@@ -1965,6 +1965,7 @@ void Engine::alloc() {
         h_topk_ = (Likeliest*) hmalloc(8 * sizeof(Likeliest), "pinned memory");   // k_likeliest() writes it
     }
     if (block_guess_) h_block_ = (Likeliest*) hmalloc((size_t) opt_.window * sizeof(Likeliest), "pinned memory");
+    tree_mask_ = (uint32_t*) dmalloc(16 * sizeof(uint32_t), "the tree's mask");
     // window(): the state after tokens of it, for keep(), and every token's logits
     snap_places_ = snaps_spread() ? std::min(opt_.window - 1, kSnapPlaces) : opt_.window - 1;
     if (snap_places_ > 0)
@@ -3583,6 +3584,23 @@ void Engine::window(const int32_t* tokens, int t) {
     if (t < 1 || t > opt_.window) throw std::logic_error("a window takes 1 to max_window() tokens");
     OnCard here(device_, split_);
     end_read();
+    // --check-tree: a tree shaped as a chain has to give the chain's own answers (a test; the first window of an answer)
+    if (opt_.check_tree && !tree_check_pending_ && !next_ && t >= 2 && t <= 16) {
+        int32_t depth[16], parent[16];
+        for (int i = 0; i < t; ++i) {
+            depth[i] = i;
+            parent[i] = i - 1;
+        }
+        window_tree(tokens, t, depth, parent);
+        for (int i = 0; i < t; ++i) {
+            const float* row = h_wlogits_ + (size_t) i * n_vocab_;
+            int arg = 0;
+            for (int j = 1; j < n_vocab_; ++j)
+                if (row[j] > row[arg]) arg = j;
+            tree_check_tok_[i] = arg;
+        }
+        tree_check_pending_ = true;
+    }
     // the two ways are a choice only with experts on the CPU; a call that records launches says nothing of them
     const bool timed = t > 1 && !all_cached();
     const bool recorded = std::exchange(recorded_, false);
@@ -3619,6 +3637,17 @@ void Engine::window(const int32_t* tokens, int t) {
     ck(cudaMemcpyAsync(h_wlogits_, wlogits_, (size_t) t * n_vocab_ * sizeof(float), cudaMemcpyDeviceToHost, cs(st_)),
        "logits");
     ck(cudaStreamSynchronize(cs(st_)), "window");
+    if (tree_check_pending_) {   // --check-tree: this window against the tree shaped as a chain
+        tree_check_pending_ = false;
+        for (int i = 0; i < t; ++i) {
+            const float* row = h_wlogits_ + (size_t) i * n_vocab_;
+            int arg = 0;
+            for (int j = 1; j < n_vocab_; ++j)
+                if (row[j] > row[arg]) arg = j;
+            if (arg != tree_check_tok_[i]) throw std::runtime_error("window_tree disagrees with window");
+        }
+        std::fprintf(stderr, "strata-poly: window_tree agrees with window on %d rows\n", t);
+    }
     if (timed && !recorded_ && !freeze_experts_) took_way(t, ms_since(t0));
     recorded_ = recorded_ || recorded;
     win_ = t;
@@ -3674,6 +3703,85 @@ void Engine::keep(int n) {
     }
     if (draft_) draft_rows(win_tok_, ahead_pos_ == pos_ && win_tok_[0] == ahead_tok_ ? 1 : 0, n);
     if (next_) next_->keep(n);
+    pos_ += n;
+    stats_.tokens += n;
+    win_ = 0;
+}
+
+// A window of a tree's guesses.  A row's token stands at `pos() + depth[i]` in the sequence, but its cache row is its
+// own (the i-th of the window): what a row attends to is its ancestors, which the mask says.  The recurrent layers
+// keep a state for each row, so the committed state is not touched; keep_tree() commits the accepted path by
+// running it, from that state, through the layers the way window() and keep() do.
+void Engine::window_tree(const int32_t* tokens, int n, const int32_t* depth, const int32_t* parent) {
+    if (next_) throw std::logic_error("window_tree: one card only");
+    if (n < 2 || n > 16 || n > opt_.window) throw std::logic_error("window_tree takes 2 to min(16, max_window()) rows");
+    if (pos_ + n > opt_.max_context)
+        throw std::runtime_error("the context is full (" + std::to_string(opt_.max_context) + " tokens)");
+    OnCard here(device_, split_);
+    end_read();
+    for (int i = 0; i < n; ++i) {
+        if (depth[i] < 0 || depth[i] >= n) throw std::logic_error("window_tree: a depth outside the window");
+        if (i == 0) {
+            if (parent[i] != -1) throw std::logic_error("window_tree: the root has no parent");
+            tree_mask_h_[i] = 1u << i;
+        } else {
+            if (parent[i] < 0 || parent[i] >= i) throw std::logic_error("window_tree: a parent after its child");
+            tree_mask_h_[i] = (1u << i) | tree_mask_h_[parent[i]];
+        }
+        tree_depth_[i] = depth[i];
+        tree_parent_[i] = parent[i];
+    }
+    tree_n_ = n;
+    tree_ = true;
+    for (double& v : tree_time_) v = 0.0;
+    ck(cudaMemcpyAsync(tree_mask_, tree_mask_h_, (size_t) n * sizeof(uint32_t), cudaMemcpyHostToDevice, cs(st_)),
+       "tree mask");
+    tree_axes(n, depth);
+    // the layers' recorded launches, as window() has them: the mask and the rows' places are on the card, so a graph
+    // replays with this round's mask.  A tree's rows are not a batch to split in halves.
+    const bool recorded = std::exchange(recorded_, false);
+    windowed_ = true;
+    halves_ = 0;
+    snap_bits_ = 0;
+    snap_at_ = nullptr;
+    try {
+        run(tokens, n);
+    } catch (...) {
+        windowed_ = false;
+        tree_ = false;
+        recorded_ = recorded_ || recorded;
+        throw;
+    }
+    windowed_ = false;
+    tree_ = false;
+    recorded_ = recorded_ || recorded;
+    float* h = draft_ ? hn_ + n_embd_ : xn_;
+    output_rows(0, n, h);
+    lin(output_, h, wlogits_, n);
+    finish_logits(wlogits_, n);
+    ck(cudaMemcpyAsync(h_wlogits_, wlogits_, (size_t) n * n_vocab_ * sizeof(float), cudaMemcpyDeviceToHost, cs(st_)),
+       "logits");
+    ck(cudaStreamSynchronize(cs(st_)), "window tree");
+    if (opt_.report_drafts)
+        std::fprintf(stderr,
+                     "strata tree parts: gdn %.1f, attention %.1f, ffn %.1f ms (the waits are before each, not in)\n",
+                     tree_time_[0], tree_time_[1], tree_time_[2]);
+    win_ = n;
+}
+
+// The accepted path of a tree: its tokens go through the layers from the state as it was before the window (the tree
+// kept its rows' states apart), and the position moves past them.  The draft block's rows for them are written too,
+// as keep() leaves them, so the next round's guesses have the block's own attention as their context.
+void Engine::keep_tree(const int32_t* tokens, int n) {
+    if (next_) throw std::logic_error("keep_tree: one card only");
+    if (n < 1 || n > win_) throw std::logic_error("keep_tree takes 1 to the tree's rows");
+    OnCard here(device_, split_);
+    end_read();
+    run(tokens, n);
+    if (draft_) {
+        output_rows(0, n, hn_ + n_embd_);
+        draft_rows(tokens, 0, n);
+    }
     pos_ += n;
     stats_.tokens += n;
     win_ = 0;
@@ -3847,6 +3955,31 @@ int Engine::draft_topk(int32_t token, int depth, const float* parent_hidden, flo
         ahead_tok_ = token;
     }
     return k;
+}
+
+// A tree's rows from the block: the root's k likeliest, then each child's k, the children drafted depth first so the
+// block's own rows of the ancestors are where its causal attention reads them.  The rows are the window's order.
+int Engine::draft_tree(int32_t root, int k, int depth, int32_t* tokens, int32_t* depths, int32_t* parents,
+                       float* probs) {
+    if (!draft_) throw std::logic_error("draft_tree: this model has no block that guesses ahead");
+    if (k < 1 || k > 2 || depth < 1 || depth > 2)
+        throw std::logic_error("draft_tree: 1-2 children a row and 1-2 deep (a window of 16 rows at most)");
+    if (!tree_h_) tree_h_ = (float*) dmalloc(16 * (size_t) n_embd_ * sizeof(float), "the tree's hidden");
+    tokens[0] = root, depths[0] = 0, parents[0] = -1, probs[0] = 1.f;
+    draft_topk(root, 0, nullptr, tree_h_, k, h_topk_);
+    Likeliest kids[4] = {h_topk_[0], h_topk_[1], h_topk_[2], h_topk_[3]};
+    int n = 1;
+    for (int c = 0; c < k; ++c) {
+        const int row = n++;
+        tokens[row] = kids[c].token, depths[row] = 1, parents[row] = 0, probs[row] = kids[c].prob;
+        if (depth < 2) continue;
+        draft_topk(tokens[row], 1, tree_h_, tree_h_ + (size_t) row * n_embd_, k, h_topk_);
+        for (int g = 0; g < k; ++g) {
+            tokens[n] = h_topk_[g].token, depths[n] = 2, parents[n] = row, probs[n] = h_topk_[g].prob;
+            ++n;
+        }
+    }
+    return n;
 }
 
 int most_likely(const float* logits, int n) {

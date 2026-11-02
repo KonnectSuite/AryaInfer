@@ -429,3 +429,41 @@ most of the acceptance and reads an eighth of the cache.
 The differences are small: the same default 64K run measured 64.1 and 61.3 tok/s, so this host's round-to-round
 variance is about 4%.  The window stays off (0) until a repeated measurement shows it plainly; when it is turned on,
 8192 is the value to use.
+
+## The tree (Phase 3, opt-in): built, exact, and not faster yet
+
+`--tree K,D` guesses as a tree: K children a row (1-2) and D deep (1-2).  The block drafts it depth first, so its own
+causal attention is the tree's mask (a sibling reuses its depth's row after its subtree's logits are taken).  The
+target verifies every row in one pass: each row has its own cache row, stands at `pos() + depth` for the rotary
+embedding, and sees the committed rows, itself and its ancestors, never a sibling.  The 48 gated delta net layers keep
+a state for each row (from its parent's, the root's from the committed state), so the committed state is never touched;
+`keep_tree()` commits the accepted path by replaying it, and rewrites the draft block's rows for it.
+
+Correctness, which has to hold before anything else:
+
+- a chain-shaped tree (`--check-tree`) gives the window's own top token at every row;
+- `--check-topk` has the k likeliest head agreeing with the top-1, and the tree's own drafting path landing on the
+  same guess;
+- a real tree (`--tree 2,2`) generated the same 24 greedy tokens as the chain on the test prompt.
+
+Speed, 2026-11-02, Q3 IQ3_XXS, q4_0 cache, 8K prompt, 128 new tokens:
+
+| setting | decode | tokens/round | verify a round |
+| --- | --- | --- | --- |
+| chain (default) | 72.4 tok/s | 3.12 | ~39 ms |
+| tree 2,2 (7 rows) | 22.7 tok/s | 2.61 | 65 ms |
+| tree 2,1 (3 rows) | 28.8 tok/s | 2.30 | 38 ms |
+
+The verify's cost is the gated delta net, per row: each row copies its parent's 3 MB state in every one of the 48 GDN
+layers, and the recurrence runs a kernel a row.  The masked attention is 1-2 ms of it, and recording the layers'
+launches (the graph replay) took the verify from 75 to 65 ms.  The tree's own drafting is not the cost (8-22 ms for
+7 rows against the chain's 3-5 ms for 3 guesses).
+
+So the tree stays off by default: with the state copies it costs more than the tokens it adds.  To make it pay, two
+kernels would need writing, in this order:
+
+1. the GDN recurrence for a tree's rows as one kernel over a state table (a parent index per row, no copies) - the
+   per-row copies are what the measurements attribute the time to;
+2. the ancestor mask in the `fdec` decode-attention kernel, so a tree's rows verify at the chain's kernel speed.
+
+Until those exist the chain is the default and the benchmarks above are the case against turning the tree on.
