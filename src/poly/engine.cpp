@@ -944,10 +944,13 @@ float Engine::shape_f(const char* key) const {
 
 // What every architecture's file says of the model: its layers, its width, its vocabulary and its experts.
 //
+// require_moe false (a dense model: Qwen35 with dense_ffn_ set) reads no expert keys and gets zero experts:
+// n_expert_ = n_used_ = n_ff_exp_ = 0, and no layer ever sets Layer::moe, so the expert machinery stays off.
+//
 // The block that guesses a second token after the model's own is one more block after the model's.  It is the
 // model's and not a file's: a file that leaves it out can take it from another file of the model (draft_model).
 // One converter gives the block a token table or an output matrix of its own, which this engine does not run.
-void Engine::load_shape() {
+void Engine::load_shape(bool require_moe) {
     const MetaValue* nextn = meta_in(*gg_, "nextn_predict_layers");
     n_layer_ = shape_i("block_count") - (nextn ? (int) nextn->u : 0);
     if (opt_.draft && opt_.window != 1) {
@@ -968,9 +971,9 @@ void Engine::load_shape() {
     const TensorInfo* te = gg_->find("token_embd.weight");
     n_vocab_ = vocab ? (int) vocab->u : te && te->shape.size() == 2 ? (int) te->shape[1] : 0;
     rms_eps_ = shape_f("attention.layer_norm_rms_epsilon");
-    n_expert_ = shape_i("expert_count");
-    n_used_ = shape_i("expert_used_count");
-    n_ff_exp_ = shape_i("expert_feed_forward_length");
+    n_expert_ = require_moe ? shape_i("expert_count") : 0;
+    n_used_ = require_moe ? shape_i("expert_used_count") : 0;
+    n_ff_exp_ = require_moe ? shape_i("expert_feed_forward_length") : 0;
     const MetaValue* shexp = meta_in(*gg_, "expert_shared_feed_forward_length");
     n_ff_shexp_ = shexp ? (int) shexp->u : n_ff_exp_;
 
@@ -978,10 +981,10 @@ void Engine::load_shape() {
         if (!ok) throw std::runtime_error(std::string("unsupported model: ") + what);
     };
     need(n_layer_ > 0 && n_embd_ > 0 && n_embd_ % 32 == 0 && n_vocab_ > 0, "bad block_count or embedding_length");
-    need(n_used_ >= 1 && n_used_ <= kMaxUsed && n_used_ <= n_expert_, "bad expert_used_count");
+    if (require_moe) need(n_used_ >= 1 && n_used_ <= kMaxUsed && n_used_ <= n_expert_, "bad expert_used_count");
 
     // a block from another file must be this model's: a pruned model's has fewer experts to choose among
-    if (block_ && block_ != gg_.get()) {
+    if (require_moe && block_ && block_ != gg_.get()) {
         const TensorInfo* gate = tensor(n_layer_, "ffn_gate_inp.weight");
         if (!gate || gate->shape.size() != 2 || (int64_t) gate->shape[0] != n_embd_ ||
             (int64_t) gate->shape[1] != n_expert_)
@@ -1063,9 +1066,18 @@ std::unique_ptr<Engine> Engine::open(const Options& o) {
     const std::string name = arch ? arch->s : std::string();
     // Clover is a qwen35moe model trained to also guess a block of tokens at once (Qwen35)
     const bool qwen35 = name == "qwen35moe" || name == "clover_moe";
-    if (o.kv_format == KvFmt::kQ8_0 && !qwen35 && name != "kolibri1")
+    // Qwen3.8 27B is Qwen35's model with one dense FFN where the routed experts are (llama.cpp's "qwen35"): the
+    // same layers, the same draft block, and no router anywhere in the file. Qwen35 runs it; load_shape() is told
+    // to expect no experts, and every MoE hook stays off because no layer sets Layer::moe.
+    const bool dense = name == "qwen35";
+    if (o.kv_format == KvFmt::kQ8_0 && !qwen35 && !dense && name != "kolibri1")
         throw std::runtime_error("--kv q8_0 is supported for qwen35moe and kolibri1 models in v1; this is a '" + name +
                                  "' model");
+    // q4_0 is the dense model's so far: its cache arithmetic lives in Qwen35's flash-attention and flash-decode
+    // kernels, and the dense run is what has been measured.
+    if (o.kv_format == KvFmt::kQ4_0 && !dense)
+        throw std::runtime_error("--kv q4_0 is supported for a dense qwen35 model (Qwen3.8 27B) in v1; this is a '" +
+                                 name + "' model");
     // int8 and int8k are Gemma 4's: their readers are not the arithmetic q8_0's are, so a model takes one
     // family or the other rather than a choice between them.
     if (name != "gemma4" && (o.kv_format == KvFmt::kInt8 || o.kv_format == KvFmt::kInt8K))
@@ -1076,7 +1088,7 @@ std::unique_ptr<Engine> Engine::open(const Options& o) {
         throw std::runtime_error("--cache-bias is supported for qwen35moe models; this is a '" + name + "' model");
     const auto make = [&]() -> std::unique_ptr<Engine> {
         if (name == "glm5-next" || name == "glm5next") return std::make_unique<Glm5Next>();   // Unsloth: no hyphen
-        if (qwen35) return std::make_unique<Qwen35>();
+        if (qwen35 || dense) return std::make_unique<Qwen35>();
         if (name == "gemma4") return std::make_unique<Gemma4>();
         if (name == "deepseek4") return std::make_unique<DeepSeek4>();
         if (name == "lfm2moe") return std::make_unique<Lfm2Moe>();
@@ -1997,6 +2009,12 @@ void Engine::alloc() {
         one_expert = std::max(one_expert, L.gu_step + L.d_bytes);
     }
     if (tiles) mmq_ = std::make_unique<Mmq>();
+    // A model with no routed experts has no layer to set the flag above, yet its prompt batches multiply the same
+    // kind of matrices (Qwen3.8 27B's dense FFN and attention).  Without MMQ lin() takes every one of them as eight
+    // tokens a launch of native_mmvq, which reads the matrix again for each launch: about 130 times a 1,024-token
+    // batch.  A hybrid model (kolibri1: dense FFN, experts outside VRAM) keeps the old path, so nothing changes for
+    // any file that ran before.
+    if (!mmq_ && n_moe_ == 0 && n_expert_ == 0) mmq_ = std::make_unique<Mmq>();
 
     shared_scratch();   // the first pass only counts
     assign_scratch();
@@ -2286,6 +2304,15 @@ int Engine::card_rows() const { return block_guess_ ? std::max(kSumRows, opt_.wi
 void Engine::moe_router(const Layer& L, int n) {
     router_scores(L, n);
     copy2(rl_, h_rl_, n * n_expert_, xn_, h_x_, n * n_embd_, st_);
+}
+
+// The draft block's FFN where the file has a router: the MoE sequence draft_step() has run for it all along.
+void Engine::draft_ffn(Layer& L, int il, int n) {
+    moe_router(L, n);
+    ck(cudaEventRecord((cudaEvent_t) ev_, cs(st_)), "router");
+    moe_shared(L, il, n);
+    tok_ = nullptr;   // a guess's row has no token of the sequence
+    if (moe(L, il, n)) moe_add(n);
 }
 
 // One token's router scores with Options::cache_bias added to the ones of the experts in VRAM.
@@ -3706,11 +3733,7 @@ void Engine::draft_step(int32_t token, int i) {
     axpy(ao_, 1.f, x, n_embd_, true, st_);
     rms_norm(x, fp(L.ffn_norm), xn_, n_embd_, 1, rms_eps_, st_);
     kernels::native_quantize_q8_1(xn_, xq_, n_embd_, 1, st_);
-    moe_router(L, 1);
-    ck(cudaEventRecord((cudaEvent_t) ev_, cs(st_)), "router");
-    moe_shared(L, n_layer_, 1);
-    tok_ = nullptr;   // a guess's row has no token of the sequence
-    if (moe(L, n_layer_, 1)) moe_add(1);
+    draft_ffn(L, n_layer_, 1);
     axpy(fo_, 1.f, x, n_embd_, true, st_);
     rms_norm(x, fp(d_head_), own, n_embd_, 1, rms_eps_, st_);
     Dev head = output_;   // the matrix's first rows are the common tokens'

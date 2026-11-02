@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 BACKENDS = {
     "glm5-next": "glm5-next", "glm5next": "glm5-next",
     "qwen35moe": "qwen35moe",
+    "qwen35": "qwen35",            # Qwen3.8 27B: the same model with dense FFNs (Qwen35, no router)
     "clover_moe": "clover_moe",
     "gemma4": "gemma4",
     "deepseek4": "deepseek4",

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AryaStrata</title>
+<title>AryaCode</title>
 <link rel="icon" href="web/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="web/tokens.css">
 <link rel="stylesheet" href="web/components.css">
@@ -19,7 +19,7 @@
 </head>
 <body>
 <header class="st-header">
-  <span class="st-header__brand">AryaStrata</span>
+  <span class="st-header__brand"><img class="st-header__mark" src="web/brand-mark.svg" alt="AryaCode mark">AryaCode</span>
   <nav class="st-tabs" role="tablist" aria-label="Views">
     <button class="st-tab" role="tab" id="tab-btn-chat" aria-controls="view-chat" aria-selected="true" data-tab="chat">
       <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-chat"/></svg>Chat</button>
@@ -45,11 +45,13 @@
     <div class="chat-scroll" id="chat-scroll">
       <div class="chat" id="chat">
         <div class="chat-empty" id="chat-empty">
+          <img class="chat-empty__hero" src="web/companion-greeting.webp" alt="The Arya companion">
           <div class="chat-empty__title">Ask anything</div>
           <div class="chat-empty__sub" id="chat-empty-sub">The model runs on this PC. Nothing leaves it.</div>
         </div>
       </div>
     </div>
+    <img class="companion-corner" id="companion-corner" src="web/companion-idle.webp" data-state="idle" alt="The Arya companion">
     <div class="composer-wrap">
       <form class="st-composer" id="composer">
         <div class="attachments" id="attachments" hidden></div>
@@ -101,6 +103,7 @@
     <div class="monitor">
       <div class="st-card state-card">
         <div class="state-card__head">
+          <img class="companion-badge" id="monitor-companion" src="web/companion-idle.webp" data-state="idle" alt="The Arya companion">
           <span class="card-title">Model state</span>
           <span class="badges" id="state-badges">
             <span class="st-badge" data-s="idle">Idle</span>
@@ -201,7 +204,8 @@
       </div>
       <div class="st-card">
         <span class="card-title">Credits and host findings</span>
-        <p class="muted">AryaStrata is a fork of <a href="https://github.com/VecSzn/PolyStrata" target="_blank" rel="noopener noreferrer">PolyStrata</a>,
+        <p class="muted">The interface, wordmark, fonts and colors come from the AryaCode brand kit.
+          AryaStrata is a fork of <a href="https://github.com/VecSzn/PolyStrata" target="_blank" rel="noopener noreferrer">PolyStrata</a>,
           which is a fork of <a href="https://github.com/Niko1221/Strata" target="_blank" rel="noopener noreferrer">Niko1221â€™s original Strata</a>.
           Thanks to both projects and their contributors.</p>
         <p class="muted">Configured for our i9-14900KF, RTX 4070 Ti SUPER 16 GB, 64 GB RAM, Windows 11 host.
@@ -235,7 +239,7 @@
       <div class="st-card cfg-card" id="cfg-card" hidden>
         <div class="req-head"><span class="card-title">Model settings</span><span class="muted small" id="cfg-file"></span></div>
         <p class="muted small">Kept in the model's run config for every client. An empty field is the default. They
-          take effect the next time the model starts (close AryaStrata's window and start it again).</p>
+          take effect the next time the model starts (close AryaCode's window and start it again).</p>
         <form class="cfg-form" id="cfg-form"></form>
         <div class="cfg-actions"><button class="st-btn st-btn--primary" id="cfg-save" type="button">Save</button>
           <span class="muted small" id="cfg-msg" role="status"></span></div>

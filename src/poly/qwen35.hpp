@@ -53,6 +53,8 @@ private:
     struct Block {
         bool gdn = false;   ///< the gated delta net; else attention over the cache
         Dev wo;
+        // a dense file's FFN (dense_ffn_): one gate, up and down a layer, where the routed experts are
+        Dev ffn_gate, ffn_up, ffn_down;
         // gated delta net
         Dev wqkv, wz, conv, dt, a, alpha, beta, o_norm;
         // Clover's, for a block of tokens that see each other (gdn_block()): the convolution's taps over the next
@@ -74,6 +76,8 @@ private:
     };
 
     void gdn(Block& B, int n);
+    void dense_ffn(Block& B, int il, int n);
+    void draft_ffn(Layer& L, int il, int n) override;
     void gdn_block_pass(Block& B, int n);
     void attn(Block& B, int64_t pos, int n);
     void attn_block_pass(Block& B, int64_t pos, int n);
@@ -84,6 +88,9 @@ private:
 
     std::vector<Block> blocks_;   ///< one a layer of layers_
     bool clover_ = false;         ///< a Clover file (architecture clover_moe): text only, its ssm_a is A_log itself
+    bool dense_ffn_ = false;      ///< a dense file (architecture qwen35 - Qwen3.8 27B): the same model with one
+                                  ///< dense FFN where the routed experts are; load_shape(false), no layer sets
+                                  ///< Layer::moe, and layer_head's dense branch ends the layer itself
     int mask_ = -1;               ///< Clover's mask token, which its block of guesses is filled with; -1: no block
     float coreset_ = 0.f;         ///< Clover: a block's tokens choose among the experts of this share of its weight
                                   ///< (moe_block_coreset_top_p); 0: among all

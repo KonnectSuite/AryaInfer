@@ -28,6 +28,7 @@ a second machine, a Windows laptop whose card has 8 GB.
 | Qwen3.8-Flash-Next and fine-tunes | `qwen4exp` | `strata` | the packs setup builds | separate MTP model |
 | GLM 5.3 Flash | `glm5-next` | `strata-poly` | GSQ-RCO 3.0bit, REAP50-Q3_K_M, UD-IQ2_XXS | draft block |
 | Qwen3.6-35B-A3B | `qwen35moe` | `strata-poly` | Unsloth UD-Q3_K_M, UD-Q2_K_XL and UD-Q4_K_M, 12.6 to 22.7 GB | draft block in the file |
+| Qwen3.8 27B | `qwen35` | `strata-poly` | IQ3_XXS-mtp 10.4 GB, IQ2_S-mtp 9.6 GB | draft block in the file |
 | Ornith 1.5 35B-A3B | `qwen35moe` | `strata-poly` | APEX-MTP-I-Compact, I-Mini and I-Quality, 14.4 to 23.7 GB; 8-bit Q8_0 37.8 GB | draft block in the file |
 | Gemma 4 26B-A4B | `gemma4` | `strata-poly` | Unsloth UD-Q3_K_M, UD-Q2_K_XL and UD-Q4_K_M, 10.5 to 16.9 GB; 8-bit Q8_0 26.9 GB | its draft model, a file of 0.46 GB |
 | Tiel Coder 35B-A3B | `qwen35moe` | `strata-poly` | peculiar-ragdoll's UD-Q3_K_XL, UD-IQ3_XXS and UD-Q4_K_XL, 13.6 to 22.7 GB; 8-bit UD-Q8_K_XL 38.5 GB | draft block in the file |
@@ -1077,12 +1078,19 @@ token ids compared and the probabilities of the reference's five likeliest token
 | Qwen3.6-35B-A3B | 64, 64, 40, 64, 64 | 0.10 |
 | Ornith 1.5 | 8 of 60, 7, 64, 2, 64 | 0.37 |
 | Gemma 4 26B-A4B | 64, 64, 64, 64, 43 | 0.12 |
+| Qwen3.8 27B | 30, 33, 58, 4, 27 | 0.0031 |
 | Qwen3.6-35B-A3B UD-Q2_K_XL | 64, 46, 64, 64, 64 | 0.15 |
 | Qwen3.6-35B-A3B UD-Q4_K_M | 64, 64, 33, 64, 19 | 0.08 |
 | Ornith 1.5 APEX-I-Mini | 40 of 40, 64, 64, 13, 28 | 0.25 |
 | Ornith 1.5 APEX-I-Quality | 61 of 61, 7, 21, 22, 34 | 0.16 |
 | Gemma 4 26B-A4B UD-Q2_K_XL | 64, 53, 22, 50, 33 | 0.09 |
 | Gemma 4 26B-A4B UD-Q4_K_M | 64, 26, 52, 25, 64 | 0.15 |
+
+The Qwen3.8 27B row is `tools/qwen38_llama_compare.py` (2026-11-02, IQ3_XXS-mtp, this host): llama.cpp's own
+tokenization of the five prompts is ours to the id, its first step's five likeliest ids are ours within 0.0031
+(the order is exact on three of the five, the fifth likeliest being a tie), and the replies are the same up to the
+first near tie: 30 tokens then the reply's end on the first prompt (llama.cpp's sampler hides that token and stops,
+ours writes it and goes on), 58 on the colours, 27 on the haiku, 33 on pi, and all 4 of the short arithmetic answer.
 
 The first three rows are the sizes setup takes first, UD-Q3_K_M and APEX-I-Compact. With the build of
 2026-10-10 they were 64, 64, 40, 29 and 64 within 0.12, 60 of 60, 7, 56, 2 and 64 within 0.29, and five times

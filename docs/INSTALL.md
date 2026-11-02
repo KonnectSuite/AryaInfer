@@ -49,8 +49,10 @@ where it left off) and **starts the model**. Your browser opens the AryaStrata a
 
 **Next time**, just double-click `START-HERE.bat` again: it starts right away (30-90 s to load the model), nothing is
 downloaded twice. Close its window to stop the model. `SETUP.bat` (the same as `START-HERE.bat --setup`) installs
-another model or changes the settings. Starting AryaStrata from Task Scheduler at logon needs two task settings, or the
-start is 24x slower: [Running it at startup](DETAILS.md#running-it-at-startup-task-scheduler).
+another model or changes the settings. There is also a **tray icon**, with no console window at all: double-click
+`AryaStrata-Tray.vbs` (or let it start at sign-in) and start, stop, restart and switch the model from the
+notification area - [The tray icon](TRAY.md). Starting AryaStrata from Task Scheduler at logon needs two task
+settings, or the start is 24x slower: [Running it at startup](DETAILS.md#running-it-at-startup-task-scheduler).
 
 ## Linux
 

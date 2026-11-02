@@ -1,4 +1,4 @@
-// serve/web/app.js - the AryaStrata web app: Chat, Monitor, About. No framework, no network beyond this server.
+// serve/web/app.js - the AryaCode web app: Chat, Monitor, About. No framework, no network beyond this server.
 // The Monitor tab rebuilds PR #22's dashboard idea (code-martin) on the server's own /metrics.
 "use strict";
 
@@ -211,9 +211,30 @@ async function poll() {
   setTimeout(poll, 1000);
 }
 
+// Companion (the Arya mascot from the brand kit): a corner figure in the chat and a badge on the Monitor
+// state card. The src swaps to the kit's animated WebP per state, and to the supplied reduced-motion PNG
+// under prefers-reduced-motion. Files are flat under /web/ (companion-<state>.webp).
+const COMPANION_BY_PILL = {idle: "idle", reading: "researching", generating: "writing", queued: "waiting", error: "error"};
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+let companionFlash = null;
+function setCompanion(state) {
+  for (const el of [$("companion-corner"), $("monitor-companion")]) {
+    if (!el || el.dataset.state === state) continue;
+    el.dataset.state = state;
+    el.src = `web/companion-${state}${reducedMotion.matches ? "-reduced.png" : ".webp"}`;
+  }
+}
+function flashCompanionSuccess() {   // celebrate the finished answer, then back to what the pill says
+  clearTimeout(companionFlash);
+  setCompanion("success-celebrating");
+  companionFlash = setTimeout(() => setCompanion(COMPANION_BY_PILL[pillState()] || "idle"), 2200);
+}
+function pillState() { return $("pill").dataset.state; }
+
 function setPill(state, text) {
   $("pill").dataset.state = state === "error" ? "queued" : state;
   $("pill-text").textContent = text;
+  setCompanion(COMPANION_BY_PILL[state] || "idle");
 }
 
 function render(m) {
@@ -688,6 +709,7 @@ async function streamInto(m, el, signal) {
         const d = (j.choices && j.choices[0] && j.choices[0].delta) || {};
         const lastTool = m.tools && m.tools.length ? m.tools[m.tools.length - 1] : null;   // a new round after a tool
         if (d.reasoning_content) {
+          setCompanion("thinking");
           if (!firstAt) firstAt = performance.now();
           if (!thinkStart) thinkStart = performance.now();
           if (lastTool && m.reasoning && lastTool.rat === m.reasoning.length) m.reasoning += "\n\n";
@@ -726,6 +748,7 @@ async function streamInto(m, el, signal) {
   if (ran) m.meta = `${m.meta ? `${m.meta} · ` : ""}${ran} tool call${ran > 1 ? "s" : ""}`;
   if (m.limit) m.meta = `${m.meta || ""} · stopped at the limit of ${m.limit} tool rounds (mcp.max_rounds)`;
   updateAssistant(el, m, false);
+  if (!m.stopped && !m.error) flashCompanionSuccess();
 }
 
 // Regenerates the answer at messages[i]: keeps the previous one as a variant, discards any variants after
@@ -757,6 +780,7 @@ async function regenerateMessage(i) {
     m.swipeIndex = m.swipes.length - 1;
   } catch (e) {
     m.error = e.message || String(e);
+    setCompanion("error");
     toast("error", "Regeneration failed", m.error, 6000);
     Object.assign(m, keep);
     m.swipes[m.swipeIndex] = keep;
@@ -874,9 +898,11 @@ function onTool(m, x) {
   if (!t) { t = {id: x.id, name: x.name, at: m.text.length, rat: m.reasoning.length, state: "writing"}; m.tools.push(t); }
   if (x.event === "call") {
     Object.assign(t, {name: x.name, server: x.server, tool: x.tool, arguments: x.arguments, round: x.round, state: "running"});
+    setCompanion("running-testing");
   } else if (x.event === "result") {
     Object.assign(t, {result: x.text, ok: x.ok, chars: x.chars, truncated: x.truncated, ms: x.ms,
                       state: x.skipped ? "skipped" : x.ok ? "done" : "error"});
+    setCompanion("writing");
   }
 }
 function updateAssistant(el, m, streaming) {
@@ -1026,6 +1052,7 @@ async function send() {
     await streamInto(m, el, controller.signal);
   } catch (e) {
     m.error = e.message || String(e);
+    setCompanion("error");
     toast("error", "The request failed", m.error, 6000);
     updateAssistant(el, m, false);
   }

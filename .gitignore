@@ -34,6 +34,7 @@ td.log
 /mtp/
 /run-*.bat
 /run-*.sh
+/AryaStrata-Tray.vbs
 /strata-*.json
 /strata-*.json.bak
 /strata-*.log

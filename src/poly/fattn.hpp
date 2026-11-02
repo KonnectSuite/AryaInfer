@@ -31,6 +31,10 @@ bool fattn_q8(const float* q, Kvq8 kq8, Kvq8 vq8, int64_t pos, int n, float* out
 bool fattn_f16(const float* q, const uint16_t* keys, const uint16_t* vals, int64_t pos, int n, float* out, int dim,
                int n_head, int kv_heads, float scale, float* scratch, size_t scratch_floats, void* stream);
 
+/// fattn_q8() over a q4_0 cache (ggml's block_q4_0: 16 bytes of nibbles and a fp16 scale a 32-value block).
+bool fattn_q4(const float* q, Kvq4 kq4, Kvq4 vq4, int64_t pos, int n, float* out, int dim, int n_head, int kv_heads,
+              float scale, float* scratch, size_t scratch_floats, void* stream);
+
 /// This build has the decode kernel for this shape on the current card (Ampere or later), and a scratch of
 /// scratch_floats floats holds its splits for `rows` cache rows: fdec_q8() and fdec_f16() then take every call up to
 /// that many.
@@ -48,5 +52,9 @@ bool fdec_q8(const float* q, Kvq8 kq8, Kvq8 vq8, int64_t pos, int n, const long 
 bool fdec_f16(const float* q, const uint16_t* keys, const uint16_t* vals, int64_t pos, int n, const long long* at,
               int room, float* out, int dim, int n_head, int kv_heads, float scale, float* scratch,
               size_t scratch_floats, void* stream);
+
+/// fdec_q8() over a q4_0 cache: half a q8_0 row, the nibbles converted to the codes the tensor cores take.
+bool fdec_q4(const float* q, Kvq4 kq4, Kvq4 vq4, int64_t pos, int n, const long long* at, int room, float* out,
+             int dim, int n_head, int kv_heads, float scale, float* scratch, size_t scratch_floats, void* stream);
 
 }  // namespace strata::poly

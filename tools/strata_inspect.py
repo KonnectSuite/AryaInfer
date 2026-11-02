@@ -34,7 +34,8 @@ PREVIEW_ARCHS = {"qwen35moe": "Qwen3.6-35B-A3B"}         # model families AryaSt
 # (setup.py's POLY_GGUF_ARCHS lists the arch set; keep these values byte-identical to those titles so
 # resolve_custom_gguf can map a "family" verdict back to --family/--model)
 POLY_ARCHS = {"gemma4": "Gemma 4 26B-A4B", "glm5-next": "GLM 5.3 Flash", "glm5next": "GLM 5.3 Flash",
-              "deepseek4": "DeepSeek V4 Flash", "lfm2moe": "LFM2.5-24B-A2B", "flint": "Flint 40B-A2.5B"}
+              "deepseek4": "DeepSeek V4 Flash", "lfm2moe": "LFM2.5-24B-A2B", "flint": "Flint 40B-A2.5B",
+              "qwen35": "Qwen3.8 27B"}   # dense Qwen3.8 27B: llama.cpp's "qwen35" (setup.py's qwen38 family)
 
 # the files setup installs: (family, model, ModelScope repository, file name prefix) - for --fingerprints
 KNOWN = [

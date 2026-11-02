@@ -10,6 +10,9 @@ plus seed and steps) runs stable-diffusion.cpp's sd-cli for Qwen-Image-2.1-Turbo
 text engine uses (serve/images.py).
 Tools from MCP servers (serve/mcp.py, `"mcp_servers"` in the config or --mcp-config) are offered only to requests that
 ask for them with `"strata_mcp": true` - the web app does; other clients see exactly the API they always saw.
+The tray icon (serve/tray.py, serve/trayctl.py) starts the server with --control-token and stops it with
+POST /api/shutdown from loopback: Ctrl+C's own shutdown path, for a server that has no console window. Without
+--control-token that endpoint is not there, and the console start behaves exactly as it always did.
 Images (optional, when the config has a "vision" entry): OpenAI image_url parts and Anthropic image blocks (base64
 data, http(s) URLs or local file paths) go through `strata-vision` (the model's mmproj file) and reach the engine as
 embeddings (`GENI`).  JPEG/PNG/BMP/GIF go straight in; WebP, TIFF, AVIF, ... (agents like omp send WebP) are
@@ -3208,6 +3211,10 @@ class Service:
         self.slot_save_path = None                    # --slot-save-path: /slots/0?action=save|restore (off when None)
         self.embeddings = threading.local()           # the current request's image embeddings file (GENI)
         self.api_key = ""                              # when set, /v1/* needs it (Bearer or x-api-key)
+        # the tray icon's control path (opt-in, --control-token): POST /api/shutdown answers only with this token,
+        # only from loopback, and only when it is set - a server started the old way has no such endpoint at all
+        self.control_token = ""
+        self.stop_requested = False                     # set by that request; main() takes Ctrl+C's shutdown path
         # #458 (opt-in, the config's "effort_position": "end"): a non-default reasoning effort goes in a short system
         # turn before the answer instead of the top of the prompt, so switching it keeps the cached conversation
         self.effort_end = False
@@ -5930,7 +5937,7 @@ def make_handler(svc: Service):
         def do_GET(self):
             path = self.path.split("?")[0].rstrip("/")
             if path.startswith("/fonts/"):
-                # the web app's font (Outfit, OFL: serve/web/fonts); the page falls back to the system font
+                # the web app's fonts (Sora + JetBrains Mono, OFL: serve/web/fonts); the page falls back to the system font
                 name = path[len("/fonts/"):]
                 f = ROOT / "serve" / "web" / "fonts" / name
                 if "/" in name or "\\" in name or not name.endswith(".woff2") or not f.is_file():
@@ -5948,7 +5955,7 @@ def make_handler(svc: Service):
                 # the web app's own files (serve/web): styles, script, icon sprite - same origin, no CDN
                 name = path[len("/web/"):]
                 types = {".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8",
-                         ".svg": "image/svg+xml"}
+                         ".svg": "image/svg+xml", ".webp": "image/webp", ".png": "image/png"}
                 f = ROOT / "serve" / "web" / name
                 ext = os.path.splitext(name)[1]
                 if "/" in name or "\\" in name or ext not in types or not f.is_file():
@@ -6093,9 +6100,14 @@ def make_handler(svc: Service):
                 self._json(e.status, {"error": {"type": "invalid_request_error", "message": str(e)}})
 
         def _post(self):
+            path = self.path.split("?")[0].rstrip("/")   # issue #55: Claude Code posts /v1/messages?beta=true
+            if path == "/api/shutdown":
+                # the tray icon's graceful stop; 404 without --control-token.  Before the API key on purpose: the
+                # tray has its own per-run token, not the client-facing API key (its guards: loopback, JSON, token)
+                self._shutdown()
+                return
             if not self._authorized():
                 return
-            path = self.path.split("?")[0].rstrip("/")   # issue #55: Claude Code posts /v1/messages?beta=true
             if path.startswith("/v1/") and self._foreign_page():
                 return
             if path == "/settings":
@@ -6465,6 +6477,37 @@ def make_handler(svc: Service):
             origin = (self.headers.get("Origin") or "").rstrip("/")
             return bool(origin) and origin.split("://", 1)[-1] != self.headers.get("Host", "") and \
                 origin not in svc.trusted_origins
+
+        def _is_loopback(self) -> bool:
+            """The request came from this PC's own loopback address (the tray icon), not from the network."""
+            return (self.client_address[0] or "") in LOOPBACK_NAMES
+
+        def _shutdown(self) -> None:
+            """POST /api/shutdown: the tray icon's graceful stop - Ctrl+C's own path (the engine's QUIT, the vision
+            encoder, the MCP servers, the sessions saved), asked over HTTP because a hidden child has no console to
+            send Ctrl+C to.  It exists only when --control-token was given, only from loopback, only as JSON with no
+            foreign Origin (no web page shuts the model down), and only with that token."""
+            if not self._control_body():                       # drain it first: Windows sends a reset otherwise
+                return
+            if not svc.control_token:
+                self._json(404, {"error": {"message": "not found"}})     # as any unknown path: this server has none
+                return
+            if not self._is_loopback():
+                self._json(403, {"error": {"message": "/api/shutdown answers on loopback only"}})
+                return
+            if not self.headers.get("Content-Type", "").startswith("application/json"):
+                self._json(415, {"error": {"message": "send application/json"}})
+                return
+            if self._foreign_origin():
+                self._json(403, {"error": {"message": "/api/shutdown only from the tray (an Origin header means a "
+                                                       "web page sent it)"}})
+                return
+            if not hmac.compare_digest(self.headers.get("X-AryaStrata-Control", ""), svc.control_token):
+                self._json(401, {"error": {"message": "the tray token is missing or wrong"}})
+                return
+            svc.stop_requested = True                          # set first: a 200 must mean the stop is under way
+            print("[strata] the tray icon asked to stop the model", flush=True)
+            self._json(200, {"status": "stopping"})
 
         def _no_local_images(self, messages):
             """A web page of another origin must not have a file on this computer read as an image.  Without an
@@ -7567,6 +7610,11 @@ MODEL_CARD_SAMPLING = {
     # Qwen3.6-35B-A3B: the general-task sets (the card's precise-coding set is temperature 0.6, presence_penalty 0)
     "qwen35moe": {"thinking": {"temperature": 1.0, "top_p": 0.95, "top_k": 20, "presence_penalty": 1.5},
                   "instruct": {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "presence_penalty": 1.5}},
+    # Qwen3.8 27B, the dense qwen35: the card's precise-coding set for both states.  Measured on this host
+    # (2026-11-02, tools/qwen38_calibrate.py): 7 of 7 code probes and 3 of 3 answer-only probes on both files, no
+    # truncation and no repetition loop; the general 1.0 set lost one probe to a budget overrun.
+    "qwen35": {"thinking": {"temperature": 0.6, "top_p": 0.95, "top_k": 20},
+               "instruct": {"temperature": 0.6, "top_p": 0.95, "top_k": 20}},
 }
 
 
@@ -7623,6 +7671,9 @@ def main() -> int:
     ap.add_argument("--api-key", default=os.environ.get("STRATA_API_KEY", ""),
                     help="require this key on /v1/* (Authorization: Bearer ... or x-api-key); also $STRATA_API_KEY. "
                          "Several keys: separate them with commas (key1,key2), as llama.cpp does")
+    ap.add_argument("--control-token", default="",
+                    help="POST /api/shutdown answers with this token from loopback only (the tray icon's graceful "
+                         "stop, serve/trayctl.py). Without it the endpoint does not exist, as before")
     ap.add_argument("--mcp-config", help="a JSON file with MCP servers in Claude Desktop's format ({\"mcpServers\": "
                                          "{...}}); the web app's chat can use their tools (also \"mcp_servers\" in "
                                          "the config)")
@@ -7730,6 +7781,14 @@ def main() -> int:
     if not svc.api_key and "api_key" in cfg:             # #569: written, but empty: the server has none (a warning, not a stop)
         print("[strata] the api_key in the config is empty: this server has no API key (anyone who can reach it can "
               "use it); set one, or leave api_key out", file=sys.stderr, flush=True)
+    svc.control_token = str(a.control_token or "").strip()    # the tray icon's stop token; empty = no endpoint
+    if svc.control_token and len(svc.control_token) < 16:
+        print("[strata] --control-token is too short to be a secret: use 16 characters or more "
+              "(the tray icon generates a 32-character one), or leave it out", file=sys.stderr)
+        return 2
+    if svc.control_token:
+        print("[strata] control: POST /api/shutdown answers on loopback only, with the --control-token "
+              "(the tray icon's graceful stop)", flush=True)
     svc.cors_origins = origins_of(cfg.get("cors_origins"), "cors_origins", wildcard=True)
     svc.trusted_origins = origins_of(cfg.get("trusted_origins"), "trusted_origins", wildcard=False)
     try:
@@ -7802,7 +7861,12 @@ def main() -> int:
     print(f"ready: http://{here}:{a.port}/v1  (OpenAI: /v1/chat/completions, Anthropic: /v1/messages, "
           f"context {engine.max_context} tokens{', images on' if vision else ''}"
           f"{', API key required' if svc.api_key else ''})", flush=True)
-    print(f"       open http://{here}:{a.port}/ in a browser to chat; close this window to stop the model", flush=True)
+    if svc.control_token:                                 # the tray icon started it: there is no window to close
+        print(f"       open http://{here}:{a.port}/ in a browser to chat; stop it from the tray icon, or send "
+              f"POST /api/shutdown with the control token (loopback only)", flush=True)
+    else:
+        print(f"       open http://{here}:{a.port}/ in a browser to chat; close this window to stop the model",
+              flush=True)
     if a.host not in ("127.0.0.1", "localhost", "::1"):
         # issue #26: reachable from other devices - say at which address, and what can still block it
         ips = lan_addresses()
@@ -7833,6 +7897,11 @@ def main() -> int:
     try:
         while True:
             time.sleep(1)                               # Windows never delivers Ctrl+C to an untimed Event.wait()
+            if svc.stop_requested:                      # the tray icon's POST /api/shutdown: the same way out
+                print("\n[strata] stopping (the tray icon asked for it) ...", flush=True)
+                shutdown(svc, httpd, hub)
+                print("[strata] stopped", flush=True)
+                return 0
     except KeyboardInterrupt:
         print("\n[strata] stopping (Ctrl+C again to end the engine at once) ...", flush=True)
         shutdown(svc, httpd, hub)

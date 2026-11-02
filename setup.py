@@ -74,6 +74,7 @@ HF_REVISIONS = {
     "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF": "ed59f92082b1e93c0e96d60a8b11aab089b52f09",        # 2026-09-29
     "ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF": "b22d729eae29b5796f76fb70f91aef549b9fc52c",   # 2026-09-24
     "ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-Coder-GGUF": "5348543e0147355ac9cbcb031184a3546350988e",  # 2026-09-29
+    "ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF": "d562806dbafae37109975e970aae91b43e73b440",               # 2026-10-30
     "unsloth/Qwen3.8-Flash-Next-GGUF": "38bb39ee97821de2c9009abb7e93950eec396e66",                   # 2026-09-30
     "neuralll/GLM-5.3-Flash-GSQ-RCO-3.0bit-Q4Kattn-GGUF": "7feedfeb5ee924bfbe0064c63b124728b443ddc0",  # 2026-09-26
     "patrickbdevaney/GLM-5.3-Flash-REAP50-GGUF": "46cb1bb887721d919e978d2f3eb18da245fecd77",           # 2026-10-05
@@ -493,6 +494,34 @@ FAMILIES = {
                        (49248507840, "89180f13784dc1128586b98adf1ca876279881a20bc4f01747703ce352563372"),
                        "GLM-5.3-Flash-UD-IQ2_XXS-00004-of-00004.gguf":
                        (2690716000, "9e0ef47daa1fdffce3cf2ac1594ce4634d176ad018be6e692729757f38d5fbf6")}},
+    # Qwen3.8 27B (ISTA-DASLab): llama.cpp's dense "qwen35" - no experts at all, so strata-poly reads the whole file
+    # into VRAM at load.  Measured on the AryaStrata host (RTX 4070 Ti SUPER 16 GB, docs/QWEN38-27B.md): 32K with a
+    # q8_0 cache at 14,948 MiB and a needle found; 64K, 96K, 128K and 200,069 tokens on the q4_0 cache, each with its
+    # needle found.  "base_mib" is what the card holds before the caches (weights, image encoder, CUDA context and a
+    # 1,024-token prompt batch's scratch) and "kv_bytes" a token of q4_0 cache: 16,384 values at 0.5625 bytes.
+    "qwen38": {"title": "Qwen3.8 27B", "by": "Qwen; GSQ-RCO quants by ISTA-DASLab",
+               "about": "a dense 27B: the whole file in VRAM, with its draft block and its vision encoder",
+               "hf": hf("ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF"),
+               "file": "Qwen3.8-27B-GSQ-RCO-{q}-mtp.gguf", "shards": 1, "tag": "qwen38-", "name": "qwen3.8-27b",
+               "engine": "poly", "vision": True, "dense": True, "windows": True,
+               "vision_gb": 0.93, "vision_vram_gb": 0.93, "ran_on_gb": 16,
+               "mmproj_hf": hf("ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF"),
+               "mmproj": "mmproj-Qwen3.8-27B-BF16.gguf", "kv_bytes": 18432, "batch_saves_mib": 1076,
+               "base_mib": {"IQ2_S": 13496, "IQ3_XXS": 13624},
+               "max_measured_ctx": {"IQ2_S": 204800, "IQ3_XXS": 98304},
+               "models": {
+                   "IQ2_S": {"about": "2-bit: the context fits 200K on a 16 GB card",
+                             "download_gb": 9.61, "ram_gb": 12, "arena_gb": 0.0,
+                             "sha256": {"Qwen3.8-27B-GSQ-RCO-IQ2_S-mtp.gguf":
+                                        (9607981120,
+                                         "e6406238a5cc0043775cd1963b6f9e5b8707400276e38d9fde742304906b1330")}},
+                   "IQ3_XXS": {"about": "3-bit: better answers, 96K of context measured",
+                               "download_gb": 10.44, "ram_gb": 13, "arena_gb": 0.0,
+                               "sha256": {"Qwen3.8-27B-GSQ-RCO-IQ3_XXS-mtp.gguf":
+                                          (10442827840,
+                                           "63f29a2189a6b4cc31f81e093d3856ad293a5583114439f41ae1ed7af4093262")}}},
+               "sha256": {"mmproj-Qwen3.8-27B-BF16.gguf":
+                          (931146528, "13cb7bebccbd04afc8f4090cb949ecf8937cdf7377c5799b1a0c594e7c0d3e16")}},
     # DeepSeek V4 Flash (llama.cpp's deepseek4) on strata-poly, from Unsloth's split GGUF; no draft block in it.  Like
     # GLM's sizes, "ram_gb" is poly_ram_need() for a 32 GB card and "vram_beside_gb" was measured there at 32K: it has
     # run on an RTX 5090 with 120 GB of RAM only.  "row_bytes": its caches keep compressed rows, 6,880 bytes a token.
@@ -2293,7 +2322,8 @@ def verify_sha256(s: Path, size: int, sha: str, own: bool = False) -> None:
 # general.architecture of each strata-poly family's GGUFs, the name Engine::open() (src/poly/engine.cpp) picks its
 # code by; the families not listed are qwen35moe
 POLY_GGUF_ARCHS = {"glm": ("glm5-next", "glm5next"), "deepseek": ("deepseek4",), "lfm25": ("lfm2moe",),
-                   "gemma4": ("gemma4",), "flint": ("flint",), "kolibri": ("kolibri1",), "clover": ("clover_moe",)}
+                   "gemma4": ("gemma4",), "flint": ("flint",), "kolibri": ("kolibri1",), "clover": ("clover_moe",),
+                   "qwen38": ("qwen35",)}
 
 
 def gguf_arch(s: Path) -> str:
@@ -6185,6 +6215,39 @@ def write_run_script(model, cfg_path, port, open_browser=True):
     return script
 
 
+def write_tray_launcher():
+    """AryaStrata-Tray.vbs (Windows): double-click AryaStrata's tray icon - the model runs with no console window,
+    and the icon is where it is started, stopped and restarted (serve/tray.py, serve/trayctl.py, docs/TRAY.md).
+    The same text the icon's own "Start at sign-in" writes into the Startup folder."""
+    if not WIN:
+        return None
+    tray = ROOT / "serve" / "tray.py"
+    if not tray.exists():
+        return None
+    from serve.trayctl import autostart_text, pythonw_for
+    p = ROOT / "AryaStrata-Tray.vbs"
+    p.write_text(autostart_text(pythonw_for(ROOT / ".venv" / "Scripts" / "python.exe"), tray), encoding="utf-8")
+    return p
+
+
+def offer_tray(a):
+    """Windows, at the end of an install: the tray launcher is written, and the sign-in entry is OFFERED, default
+    off - START-HERE.bat and run-<model>.bat stay the way AryaStrata has always started, and --yes is never held
+    up by the question (the tray icon's menu can turn the sign-in entry on or off later, no setup needed)."""
+    p = write_tray_launcher()
+    if p is None:
+        return None
+    say(f"  Tray icon:        {p.name} - AryaStrata in the notification area, with no window to close (docs/TRAY.md)")
+    if a.yes or a.no_start:
+        return p
+    if ask("  Start AryaStrata from the tray icon at sign-in?", ["y", "n"], "n", a.yes) == "y":
+        from serve.trayctl import enable_autostart, pythonw_for
+        e = enable_autostart(pythonw_for(ROOT / ".venv" / "Scripts" / "python.exe"), ROOT / "serve" / "tray.py")
+        (ok if e else say)(f"the sign-in entry is in the Startup folder ({e.name})" if e else
+                           "  no Startup folder was found: double-click AryaStrata-Tray.vbs after you sign in")
+    return p
+
+
 # ------------------------------------------------------------------------------------------------ the rope config
 def derived_factor(ctx: int, trained: int = 262144) -> float:
     """The automatic extension factor: the FINAL context over the trained one, at least 1.
@@ -6643,6 +6706,183 @@ def poly_kv_whole(cfg: dict, cfg_path: Path | None = None) -> None:
         write_config(cfg_path, cfg)
 
 
+DENSE_CONTEXTS = [32768, 65536, 98304, 131072, 204800]
+
+
+def dense_poly_plan(fam: dict, model: str, vram_gb: float) -> dict:
+    """The cache format, context and prompt batch a dense poly model gets on a card of vram_gb.
+
+    The numbers are measured (docs/QWEN38-27B.md): a card holds "base_mib" before the caches (weights, image encoder,
+    CUDA context and a 1,024-token batch's scratch) and 18,432 bytes a token of q4_0 cache, 1,076 MiB less of scratch
+    with --prompt-batch 256.  The context is the largest of DENSE_CONTEXTS that fits with 150 MiB to spare, and never
+    past what was measured on that file: past it the engine stalls as the card fills rather than failing cleanly.
+    """
+    base = fam["base_mib"][model]
+    room = vram_gb * 1024 - 150
+    cap = fam["max_measured_ctx"][model]
+    for ctx in sorted(DENSE_CONTEXTS, reverse=True):
+        if ctx > cap:
+            continue
+        batch = 256 if ctx > 131072 else 1024
+        need = base - (fam["batch_saves_mib"] if batch == 256 else 0) + fam["kv_bytes"] * ctx / 2 ** 20
+        if need <= room:
+            return {"kv": "q4_0", "context": ctx, "batch": batch, "need_mib": round(need), "fits": True}
+    need = base + fam["kv_bytes"] * 8192 / 2 ** 20
+    return {"kv": "q4_0", "context": 8192, "batch": 1024, "need_mib": round(need), "fits": need <= room}
+
+
+def dense_poly_setup(a, family: str, fam: dict, gpu: dict, hip: bool, cuda_tk: int, multi: bool, ram: float,
+                     data: Path, elsewhere: list, port: int, adopted) -> int:
+    """Steps 3 to 7 for a dense model of strata-poly: a file read whole into VRAM, no experts and no expert cache, so
+    the only real question is the context its card can hold (docs/QWEN38-27B.md)."""
+    title = fam["title"]
+    _sg = getattr(a, "_custom_gguf_shards", None)
+    if hip:
+        warn(f"{title} has not been run on an AMD card: the engine builds there, this model was not tried")
+    if multi:
+        fail(f"{title} is one card's model for now: its weights are read whole and do not split across GPUs",
+             "use --gpu 0 (one card), or run it on the card with the most VRAM")
+    sizes = family_models(family)
+    names = list(sizes)
+    if a.model and a.model not in names:
+        fail(f"{title} has no {a.model} model file", "choose one of: " + ", ".join(names))
+    vram = gpu["vram_gb"]
+    # the default is the file whose measured context reaches the model's long end (200K with images); a better quant
+    # is there for the asking (--model IQ3_XXS)
+    model = a.model or "IQ2_S"
+    d = sizes[model]
+    plan = dense_poly_plan(fam, model, vram)
+    ctx = a.context or plan["context"]
+    kv = (a.kv or plan["kv"]).lower()
+    if kv not in ("q4_0", "q8_0", "fp16"):
+        fail(f"--kv {a.kv}: {title} takes q4_0 (measured to 200K), q8_0 (32K measured) or fp16 (not measured)",
+             "leave --kv out for the one that fits")
+    if kv != "q4_0":
+        plan = {**plan, "kv": kv}
+    if ctx > plan["context"] and not a.context:
+        ctx = plan["context"]
+    if not plan["fits"] or ctx > fam["max_measured_ctx"][model] and a.context:
+        fail(f"{title} {model} takes about {plan['need_mib']} MiB of VRAM for its weights and a {ctx // 1024}K context; "
+             f"{gpu_name(gpu)} has {vram:.0f} GB",
+             f"--model IQ3_XXS (a smaller file) or --context {plan['context']} (the largest measured to fit here)")
+    say()
+    say(f"  {model}: {d['about']}; download {d['download_gb']:.1f} GB, read whole into VRAM at load.")
+    say(f"  Context {ctx // 1024}K with a {kv} cache: about {plan['need_mib']} MiB of VRAM of "
+        f"{vram * 1024:.0f} MiB, measured to fit (docs/QWEN38-27B.md).")
+    if ram < d["ram_gb"]:
+        confirm_risk(f"RAM: {ram:.0f} GB. {title} wants about {d['ram_gb']} GB while its {d['download_gb']:.1f} GB "
+                     "file is read", False, a.yes, f"{title} wants about {d['ram_gb']} GB of RAM; this PC has "
+                     f"{ram:.0f}", f"--family {family} --model {model} --yes installs it anyway")
+        warn(f"going on with {ram:.0f} GB of RAM, as you chose")
+    if vram < fam["ran_on_gb"]:
+        warn(f"{title} has run on no card under {fam['ran_on_gb']} GB; {vram:.0f} GB of VRAM is what this PC has")
+    ok(f"size: {model}, {ctx} tokens of context, {kv} cache")
+
+    sees = fam.get("vision") is True and a.vision not in ("no", "none")
+    if fam.get("vision") is True and a.vision in (None, "auto") and vram < 14:
+        say("  Images: the encoder takes 0.93 GB of VRAM, which this card has not beside the model: it runs on the "
+            "CPU (a few seconds a picture)")
+        sees = "cpu"
+    elif sees:
+        sees = "gpu" if vram >= 14 else "cpu"
+
+    step(3, "Python packages")
+    pip_install(requirement_lines() if REQUIREMENTS.exists() else PY_PACKAGES,
+                "numpy, jinja2, regex, pyyaml, tqdm, requests, cmake, ninja, pillow, psutil")
+
+    step(4, "the strata-poly engine")
+    llama = get_llama_cpp()
+    ok(f"llama.cpp {LLAMA_CPP_COMMIT[:7]} (gguf-py, ggml)")
+    vision = "gpu" if sees == "gpu" else ("cpu" if sees else "none")
+    if not a.build and not hip and cuda_tk != 12:
+        get_poly_prebuilt(gpu)
+    eng = build_engine_poly_hip(gpu, llama) if hip else build_engine_poly(gpu, a.yes, llama, vision, cuda_tk)
+    lib_dirs = engine_lib_dirs(eng)
+    ok(f"engine: {eng / POLY_EXE}")
+
+    tag = fam["tag"] + (custom_gguf_tag(_sg, model) if _sg else "")
+    models_dir = Path(a.gguf_dir) if a.gguf_dir else Path(a.models_dir) / tag
+    shards = (_sg if _sg else [models_dir / model_file(fam, model, i) for i in range(1, model_shards(fam, model) + 1)])
+    gguf = shards[0]
+    mmproj = models_dir / fam["mmproj"] if vision != "none" else None
+    absent = [s.name for s in shards if not s.exists()] + ([mmproj.name] if mmproj and not mmproj.is_file() else [])
+    if a.gguf_dir and absent:
+        fail(f"{models_dir} has no {absent[0]}", "put the file there under that name, or drop --gguf-dir")
+    step(5, f"downloading {title} {model}")
+    for s in shards:
+        # a file that is already the right size is setup's or the user's own: never downloaded over (a download
+        # that fails after it starts takes the destination with it)
+        size = sizes[model]["sha256"][s.name][0]
+        if s.exists() and (done(s) or _sg or s.stat().st_size == size):
+            ok(f"{s.name} already downloaded")
+        else:
+            download(fam["hf"] + s.name, s)
+        if not _sg:
+            own = bool(a.gguf_dir) and s.parent == models_dir
+            (verify_poly_own if own else verify_poly_download)(s, *sizes[model]["sha256"][s.name], family)
+    if mmproj is not None:
+        msize = fam["sha256"][mmproj.name][0]
+        if mmproj.exists() and (done(mmproj) or _sg or mmproj.stat().st_size == msize):
+            ok(f"{mmproj.name} already downloaded")
+        else:
+            download(fam["mmproj_hf"] + mmproj.name, mmproj, "vision encoder")
+        if not _sg:
+            verify_poly_download(mmproj, *fam["sha256"][mmproj.name], family)
+        ok(f"vision encoder: {mmproj}")
+    ok("model file present")
+
+    step(6, "preparing the model for AryaStrata")
+    data, _ = data_folder(a.data_dir)
+    pack = find_in([data, *elsewhere], f"packs/{tag.lower()}") or data / "packs" / tag.lower()
+    if not (pack / "tokenizer" / "vocab.json").exists():
+        run([sys.executable, str(ROOT / "tools" / "strata_tokenizer.py"), "--gguf", str(gguf), "--out", str(pack)],
+            env=dict(os.environ, STRATA_GGUF_PY=str(llama / "gguf-py")))
+    ok(f"tokenizer: {pack / 'tokenizer'}")
+
+    step(7, "writing the start script")
+    reserve = a.vram_reserve_mib if a.vram_reserve_mib is not None else 512
+    args = ["--model", str(gguf), "--max-context", str(ctx), "--kv", kv, "--prompt-batch", str(plan["batch"]),
+            "--vram-reserve-mib", str(reserve)]
+    cfg = {"exe": str(eng / POLY_EXE), "args": args, "cwd": str(ROOT), "tokenizer": str(pack / "tokenizer"),
+           "model_name": f"{fam['name']}-{model.lower()}", "display_name": f"{title} {model} - {ctx // 1024}K",
+           "log": str(ROOT / f"strata-{tag.lower()}.log"), "lib_dirs": lib_dirs, "port": port}
+    if cuda_tk == 12:
+        cfg["cuda"] = 12
+    if hip:
+        cfg["backend"] = "hip"
+    if gpu.get("count", 1) > 1 or a.gpu is not None:
+        cfg["gpu"] = gpu["index"]
+        cfg["gpus_asked"] = True
+    if a.host:
+        cfg["host"] = a.host
+    if a.api_key:
+        cfg["api_key"] = a.api_key
+    if a.browser is not None:
+        cfg["open_browser"] = a.browser
+    if vision != "none":
+        cfg_path = ROOT / f"strata-{tag.lower()}.json"
+        vt = vision_tokens(getattr(a, "vision_tokens", None), vision, cfg_path if cfg_path.is_file() else adopted)
+        cfg["vision"] = {"exe": str(eng / VEXE), "mmproj": str(mmproj), "model": str(gguf), "gpu": vision == "gpu",
+                         "max_tokens": vt, "min_tokens": 1024}
+        if vision == "cpu":
+            cfg["vision"]["threads"] = max(1, (os.cpu_count() or 8) // 2)
+    cfg_path = ROOT / f"strata-{tag.lower()}.json"
+    write_setup_config(cfg_path, cfg, adopted if adopted is not None and adopted.name == cfg_path.name else None)
+    script = write_run_script(tag, cfg_path, port, cfg.get("open_browser") is not False)
+    ok(f"start script: {script.name}")
+    say()
+    say("All set.")
+    say(f"  API (OpenAI):     http://127.0.0.1:{port}/v1   (any API key; model name: anything)")
+    say(f"  API (Anthropic):  http://127.0.0.1:{port}/v1/messages")
+    if vision != "none":
+        say("  Images:           send them in the chat page, in chat.py (/image <path>) or over the API")
+    say(f"  Next time:        just run {'START-HERE.bat' if WIN else './setup.sh'} (or {script.name})")
+    offer_tray(a)
+    if a.no_start:
+        return 0
+    return start(cfg_path, port)
+
+
 def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, adopted) -> int:
     """Steps 2 to 7 for a model of strata-poly (docs/GLM.md, docs/BACKENDS.md): its questions, the Python
     packages, the engine (ready-made or compiled here), the model file, its tokenizer and expert profile, the run
@@ -6650,6 +6890,8 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
     _sg = getattr(a, "_custom_gguf_shards", None)
     fam = FAMILIES[family]
     title = fam["title"]
+    if fam.get("dense"):   # a model with no experts: its own steps, see dense_poly_setup()
+        return dense_poly_setup(a, family, fam, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, adopted)
     if hip and WIN:   # the engine is compiled here from AMD's ROCm Windows wheels (rocm_win_root)
         warn(f"{title} on AMD cards on Windows: EXPERIMENTAL.  Setup compiles the HIP engine here (AMD's ROCm "
              "wheels), which has run Tiel Coder on an RX 9070 XT and Qwen3.6, Ornith, Tiel Coder and Gemma 4 on an "
@@ -7000,6 +7242,7 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
         say(f"  Other devices:    the server window prints this PC's address (http://<IP>:{port}/)"
             + ("" if a.api_key else " - no API key set: anyone on your network can use it"))
     say(f"  Next time:        just run {'START-HERE.bat' if WIN else './setup.sh'} (or {script.name}) - it starts right away")
+    offer_tray(a)
     if a.no_start:
         return 0
     return start(cfg_path, port)
@@ -7387,6 +7630,7 @@ def install_own_path(a, family, gpu, hip, amd, cuda_tk, multi, port, ram, adopte
     say(f"  API (OpenAI):     http://127.0.0.1:{port}/v1   (any API key; model name: anything)")
     say(f"  API (Anthropic):  http://127.0.0.1:{port}/v1/messages")
     say(f"  Next time:        just run {'START-HERE.bat' if WIN else './setup.sh'} (or {script.name}) - it starts right away")
+    offer_tray(a)
     if vision != "none":
         say("  Images:           send them in the chat page, in chat.py (/image <path>) or over the API")
     if par is None and not par_said:                   # the opt-in, said once (nothing changes)
@@ -8743,6 +8987,7 @@ def main() -> int:
         say(f"  Other devices:    the server window prints this PC's address (http://<IP>:{port}/)"
             + ("" if a.api_key else " - no API key set: anyone on your network can use it"))
     say(f"  Next time:        just run {'START-HERE.bat' if WIN else './setup.sh'} (or {script.name}) - it starts right away")
+    offer_tray(a)
     if vision != "none":
         say("  Images:           send them in the chat page, in chat.py (/image <path>) or over the API")
     if cfg.get("images"):

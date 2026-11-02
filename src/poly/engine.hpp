@@ -41,7 +41,7 @@ struct Likeliest;
 /// deltas in two arrays, which a reader can take four codes to a load, and int8k keeps only the keys' side
 /// quantized.  q8_0 is qwen35moe's; int8 and int8k are Gemma 4's - the two readers are not the same arithmetic,
 /// so a model has one or the other rather than a choice between them.
-enum class KvFmt { kFp16 = 0, kQ8_0 = 1, kInt8 = 2, kInt8K = 3 };
+enum class KvFmt { kFp16 = 0, kQ8_0 = 1, kInt8 = 2, kInt8K = 3, kQ4_0 = 4 };
 
 struct Options {
     std::string model;
@@ -421,6 +421,10 @@ protected:
     /// its output, and the tokens leave their rows in its caches.  block_rows() only leaves the rows.
     virtual void block_attend(int64_t pos, int n) { (void) pos, (void) n; }
     virtual void block_rows(int64_t pos, int n) { (void) pos, (void) n; }
+    /// The draft block's FFN for n tokens, into fo_ (draft_step() adds it to the block's residual).  The engine's own
+    /// is the routed experts' sequence: the router's scores and their copy to the host, the shared expert, then the
+    /// experts.  An architecture whose file has no router runs its one dense FFN here instead.
+    virtual void draft_ffn(Layer& L, int il, int n);
     /// Which recording of a layer's head fits n tokens from pos().  Launches that are sized by the rows they read
     /// are recorded once for each size (room()), and the architecture numbers the sizes from 0.
     virtual int head_key(int il, int n) const { (void) il, (void) n; return 0; }
@@ -472,7 +476,7 @@ protected:
     /// A number of the model's shape, which its file must have.
     int shape_i(const char* key) const;
     float shape_f(const char* key) const;
-    void load_shape();
+    void load_shape(bool require_moe = true);
     void load_moe(int il, bool shared = true);
     void alloc();
     void shared_scratch();

@@ -3446,7 +3446,10 @@ class WebApp(unittest.TestCase):
         self.assertIn("text/html", ctype)
         self.assertIn(b"\"web/app.js\"", body)   # relative since #82 (works behind a path-prefixed proxy)
         for path, want in (("/web/app.js", "javascript"), ("/web/app.css", "text/css"), ("/web/tokens.css", "text/css"),
-                           ("/web/components.css", "text/css"), ("/web/sprite.svg", "image/svg+xml")):
+                           ("/web/components.css", "text/css"), ("/web/sprite.svg", "image/svg+xml"),
+                           ("/web/brand-mark.svg", "image/svg+xml"),
+                           ("/web/companion-idle.webp", "image/webp"),
+                           ("/web/companion-idle-reduced.png", "image/png")):
             with self.subTest(path=path):
                 code, ctype, _ = self.get(path)
                 self.assertEqual(code, 200)
@@ -6271,3 +6274,130 @@ class PrepareCancelled(unittest.TestCase):
             ids, _, _ = svc.prepare(self.msgs(), None, {}, cancel=threading.Event())
             self.assertEqual(ids.count(ByteTokenizer().encode("<|image_pad|>", parse_special=True)[0]), 6)
             svc.embeddings.path.unlink(missing_ok=True)
+
+
+class ShutdownRoute(unittest.TestCase):
+    """The tray icon's graceful stop (docs/TRAY.md): POST /api/shutdown is Ctrl+C's own path, reachable only
+    over loopback, only as JSON, never from a web page, and only with the --control-token the server was given."""
+
+    TOKEN = "0123456789abcdef0123456789abcdef"
+
+    def serve_with(self, token):
+        tok = ByteTokenizer()
+        svc = Service(MockEngine(tok, "ok", max_context=CTX), tok, ChatTemplate(ROOT / "serve/chat_template.jinja"))
+        svc.control_token = token
+        httpd = serve(svc, port=0)
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        return svc, httpd, base
+
+    def post(self, base, headers=None, body=b"{}", ctype="application/json"):
+        req = urllib.request.Request(base + "/api/shutdown", data=body, method="POST",
+                                     headers={"Content-Type": ctype, **(headers or {})})
+        return urllib.request.urlopen(req, timeout=10)
+
+    def test_a_server_without_a_control_token_has_no_such_path(self):
+        svc, httpd, base = self.serve_with("")
+        try:
+            with self.assertRaises(urllib.error.HTTPError) as e:
+                self.post(base, {"X-AryaStrata-Control": self.TOKEN})
+            self.assertEqual(e.exception.code, 404)
+            e.exception.close()
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+        self.assertFalse(svc.stop_requested)
+
+    def test_the_token_is_the_only_way_in(self):
+        for headers, code in (({}, 401), ({"X-AryaStrata-Control": "wrong-token-here"}, 401),
+                              ({"X-AryaStrata-Control": self.TOKEN[:-1]}, 401)):
+            svc, httpd, base = self.serve_with(self.TOKEN)
+            try:
+                with self.assertRaises(urllib.error.HTTPError) as e:
+                    self.post(base, headers)
+                self.assertEqual(e.exception.code, code, repr(headers))
+                e.exception.close()
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+            self.assertFalse(svc.stop_requested, repr(headers))
+        svc, httpd, base = self.serve_with(self.TOKEN)
+        try:
+            with self.post(base, {"X-AryaStrata-Control": self.TOKEN}) as r:
+                self.assertEqual(r.status, 200)
+                self.assertEqual(json.loads(r.read())["status"], "stopping")
+            self.assertTrue(svc.stop_requested)              # main() takes Ctrl+C's shutdown() path on this flag
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+    def test_the_tray_needs_no_api_key_for_the_stop(self):
+        """The tray has no key: the route is answered before the key check, and the token is the proof."""
+        svc, httpd, base = self.serve_with(self.TOKEN)
+        svc.api_key = "k3y"
+        try:
+            with self.assertRaises(urllib.error.HTTPError) as e:      # /status keeps needing the key
+                urllib.request.urlopen(base + "/status", timeout=10)
+            e.exception.close()
+            with self.post(base, {"X-AryaStrata-Control": self.TOKEN}) as r:
+                self.assertEqual(r.status, 200)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+    def test_no_web_page_shuts_the_model_down(self):
+        svc, httpd, base = self.serve_with(self.TOKEN)
+        try:
+            with self.assertRaises(urllib.error.HTTPError) as e:      # a page of another origin, with the token
+                self.post(base, {"X-AryaStrata-Control": self.TOKEN, "Origin": "http://evil.example"})
+            self.assertEqual(e.exception.code, 403)
+            e.exception.close()
+            with self.assertRaises(urllib.error.HTTPError) as e:      # a plain form is not a stop request
+                self.post(base, {"X-AryaStrata-Control": self.TOKEN}, ctype="application/x-www-form-urlencoded")
+            self.assertEqual(e.exception.code, 415)
+            e.exception.close()
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+        self.assertFalse(svc.stop_requested)
+
+    def test_a_request_from_the_network_is_refused_even_with_the_token(self):
+        import serve.server as S
+        svc, httpd, base = self.serve_with(self.TOKEN)
+        try:
+            with mock.patch.object(S, "LOOPBACK_NAMES", ()):          # the peer is no longer read as this PC
+                with self.assertRaises(urllib.error.HTTPError) as e:
+                    self.post(base, {"X-AryaStrata-Control": self.TOKEN})
+                self.assertEqual(e.exception.code, 403)
+                e.exception.close()
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+        self.assertFalse(svc.stop_requested)
+
+    def run_main(self, argv):
+        """-> (return code, stdout, stderr) of main() for one start, with serving replaced by a stop here."""
+        import serve.server as S
+        err, out = io.StringIO(), io.StringIO()
+
+        def fake_serve(svc, host=None, port=None):
+            raise _Reached
+
+        with mock.patch.object(S, "serve", fake_serve), mock.patch.object(sys, "argv", argv), \
+                mock.patch.object(sys, "stderr", new=err), mock.patch.object(sys, "stdout", new=out):
+            try:
+                code = S.main()
+            except _Reached:
+                code = 0
+        return code, out.getvalue(), err.getvalue()
+
+    def test_a_short_control_token_is_refused_at_the_start(self):
+        code, out, err = self.run_main(["server.py", "--engine", "mock", "--port", "0", "--control-token", "abc"])
+        self.assertEqual(code, 2)
+        self.assertIn("control-token", err)
+
+    def test_the_start_with_a_token_says_where_the_stop_comes_from(self):
+        code, out, err = self.run_main(["server.py", "--engine", "mock", "--port", "0",
+                                        "--control-token", self.TOKEN])
+        self.assertEqual(code, 0, err)
+        self.assertIn("control: POST /api/shutdown", out)
+        self.assertIn("tray", out)                                     # the ready line says there is no window to close

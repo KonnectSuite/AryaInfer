@@ -63,10 +63,12 @@ double ms_since(Clock::time_point t) { return std::chrono::duration<double, std:
 // A save is a file of some 40 KB and a rename.
 constexpr double kProfileSaveMs = 10000.0;
 
-// The most tokens of a window whose guesses are the block's: the token the model has and three guesses, each
-// from the one before.  A repeat of the conversation may fill a longer window (Options::window), and so may a
-// model whose guesses come together (Engine::guesses_at_once()).
-constexpr int kBlockWindow = 4;
+// The most tokens of a window whose guesses are the block's: the token the model has and up to seven guesses, each
+// from the one before, as far as Guesses::wants() finds them paying.  It times a window of each size, so a card or a
+// model that gains nothing from the deeper chain keeps the shorter one: the window is a ceiling, not a choice.  A
+// repeat of the conversation may fill a longer window (Options::window), and so may a model whose guesses come
+// together (Engine::guesses_at_once()).
+constexpr int kBlockWindow = 8;
 
 // A window longer than that is for a copy: a repeat of the conversation whose match is this many tokens or more.
 // A repeat of a few tokens is in any text, and what followed it there is seldom what follows here for long.
@@ -1069,7 +1071,9 @@ void usage() {
                  "                         the conversation grows, the expert cache having the rest until then)\n"
                  "  --kv fmt               the K and V attention caches' format, opt-in: fp16 (default,\n"
                  "                         unchanged); q8_0 (ggml Q8_0 blocks: half the KV VRAM, slightly\n"
-                 "                         different answers; qwen35moe's and kolibri1's); int8 / int8k (Gemma 4's:\n"
+                 "                         different answers; qwen35moe's and kolibri1's); q4_0 (ggml Q4_0 blocks: a\n"
+                 "                         quarter of fp16's, a dense qwen35 model's - Qwen3.8 27B - and the format a\n"
+                 "                         200K context needs on a 16 GB card); int8 / int8k (Gemma 4's:\n"
                  "                         the same Q8_0 rule with the codes and their deltas in two arrays, so a\n"
                  "                         reader takes four codes to a load; int8k keeps the keys' side\n"
                  "                         quantized and the values' in fp16)\n"
@@ -1174,10 +1178,11 @@ int main(int argc, char** argv) {
             const std::string fmt = val();
             if (fmt == "fp16") o.kv_format = KvFmt::kFp16;
             else if (fmt == "q8_0") o.kv_format = KvFmt::kQ8_0;
+            else if (fmt == "q4_0") o.kv_format = KvFmt::kQ4_0;
             else if (fmt == "int8") o.kv_format = KvFmt::kInt8;
             else if (fmt == "int8k") o.kv_format = KvFmt::kInt8K;
             else {
-                std::fprintf(stderr, "strata-poly: --kv %s: unknown format (use fp16, q8_0, int8 or int8k)\n",
+                std::fprintf(stderr, "strata-poly: --kv %s: unknown format (use fp16, q8_0, q4_0, int8 or int8k)\n",
                              fmt.c_str());
                 std::exit(2);
             }

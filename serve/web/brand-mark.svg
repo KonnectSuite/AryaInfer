@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">AryaAI full mark</title>
+  <desc id="desc">AryaAI production brand asset. Vector artwork contains no external resources.</desc>
+  <defs>
+    <linearGradient id="mark-full-full-circuit-frame" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#8A5CFF"/>
+      <stop offset="0.32" stop-color="#2B6CFF"/>
+      <stop offset="1" stop-color="#00E0D2"/>
+    </linearGradient>
+    <linearGradient id="mark-full-full-circuit-letter" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E6E8EB"/>
+      <stop offset="1" stop-color="#E6E8EB" stop-opacity="0.72"/>
+    </linearGradient>
+    <linearGradient id="mark-full-full-circuit-word" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2B6CFF"/>
+      <stop offset="1" stop-color="#00E0D2"/>
+    </linearGradient>
+  </defs>
+
+
+    <g fill="none" stroke="#2B6CFF" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M106 164H66L50 148H30"/>
+      <path d="M106 212H50"/>
+      <path d="M106 260H28"/>
+      <path d="M106 308H60L44 324H24"/>
+      <path d="M406 164H446L462 148H482"/>
+      <path d="M406 212H462"/>
+      <path d="M406 260H484"/>
+      <path d="M406 308H452L468 324H488"/>
+    </g>
+    <g fill="#0F141B" stroke="#2B6CFF" stroke-width="8">
+      <circle cx="28" cy="148" r="9"/><circle cx="50" cy="212" r="9"/>
+      <circle cx="28" cy="260" r="9"/><circle cx="22" cy="324" r="9"/>
+      <circle cx="484" cy="148" r="9"/><circle cx="462" cy="212" r="9"/>
+      <circle cx="484" cy="260" r="9"/><circle cx="490" cy="324" r="9"/>
+    </g>
+      <path d="M188 446V392L90 336V144L256 48L422 144V336L324 392V446" fill="none" stroke="url(#mark-full-full-circuit-frame)" stroke-width="40" stroke-linejoin="miter"/>
+      <path d="M256 104L366 168V304L256 368L146 304V168Z" fill="#0F141B"/>
+      <path d="M256 120L358 348H304L282 296H230L208 348H154ZM256 204L233 260H279Z" fill="url(#mark-full-full-circuit-letter)" fill-rule="evenodd"/>
+</svg>
