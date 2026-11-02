@@ -385,3 +385,25 @@ The deep positions' rates rest on few rounds (4-19), so read them as indicative,
 With these measured rates the EAGLE width formula (expected tokens `1 + Σ A_d` against the measured round time)
 predicts 4.6-5.6 tokens for a window of 6-7 tokens against today's 3.0, which is exactly what Phase 1 and the tree
 have to buy back against its extra cost.
+
+## The measured width (Phase 1, opt-in)
+
+`--spec-width measured` chooses the window from what the rounds measured instead of from the block's own
+probabilities: a window of w tokens is expected to write `1 + A_0 + ... + A_{w-2}`, where `A_d` is the chance the
+guesses through position d are all right (the rounds' own count, the position below's measured rate until the depth
+has samples), over the measured time of a round of that window.  The counters print with `--report-drafts`.
+
+Measured 2026-11-02, Q3 IQ3_XXS, q4_0 cache, 256 new tokens, same prompts as the baseline:
+
+| context | default (block probabilities) | measured width |
+| --- | --- | --- |
+| 8K | 72.4 tok/s, 3.12 tokens/round | 63.8 tok/s, 2.25 tokens/round |
+| 32K | 65.5 tok/s, 3.05 tokens/round | 65.2 tok/s, 2.64 tokens/round |
+| 64K | 64.1 tok/s, 2.98 tokens/round | 62.1 tok/s, 2.64 tokens/round |
+
+The measured width does not pay, so it stays opt-in and the default path is unchanged (re-measured after the change:
+72.1 / 65.5 / 61.3 tok/s at 8K / 32K / 64K).  The reason shows in the counters: the default rule drafts deeper only
+when the block is confident, and on exactly those rounds the second guess is accepted 0.79 of the time, while the
+measured rule's uniform exploration measures 0.64.  Unconditional acceptance is the wrong statistic for a policy that
+selects its rounds on confidence; the next version has to keep acceptance per confidence bucket, so that a guess the
+block calls likely is weighed by what guesses like it did.

@@ -350,11 +350,14 @@ struct Session {
     Guesses guesses;                      // whether the block is asked in a round, and for how many (guesses.hpp)
     int piece_calls = kPiece;             // generate()'s pieces when it is given `between`
 
-    Session(Engine& e, std::vector<int32_t> eos_ids, const CacheFlags& f, int lookup, bool report_drafts = false)
+    Session(Engine& e, std::vector<int32_t> eos_ids, const CacheFlags& f, int lookup, bool report_drafts = false,
+            bool spec_measured = false)
         : engine(e), eos(std::move(eos_ids)), flags(f), kept(e, with_floor(f)), report(report_drafts),
           most(lookup > 0 || e.drafts() ? std::min<int>(e.max_window(), strata::spec::DraftPolicy::kMaxT) : 1),
           look(lookup > 0 && most > 1),
-          repeats(std::max(lookup, 3), 64, (size_t) e.max_context() + 4096), policy(most) {}
+          repeats(std::max(lookup, 3), 64, (size_t) e.max_context() + 4096), policy(most) {
+        guesses.measure_widths(spec_measured);
+    }
 
     static CacheOptions with_floor(const CacheFlags& f) {
         CacheOptions o = f.o;
@@ -502,7 +505,7 @@ struct Session {
                 // is taken as it is: the block would mostly say the same, and asking it takes time.  Otherwise the
                 // block guesses, each guess from the one before, while a guess more pays (Guesses).
                 const bool blocks = engine.drafts() && room && !(k == widest - 1 && policy.lookup_rate(match) >= 0.9);
-                const bool ask = guesses.begin(blocks, policy);
+                const bool ask = guesses.begin(blocks, policy, widest);
                 // the round's time, as the policy counts it: a window of `in` tokens wrote n of them
                 const auto count = [&](int in, int n) {
                     return guesses.end(in, n, ms_since(round), engine.took_record());
@@ -1078,6 +1081,9 @@ void usage() {
                  "  --no-draft             do not run the block that guesses ahead\n"
                  "  --report-drafts        name the acceptance at each guess position in the statistics (a guess at\n"
                  "                         position 0 is the first one after the token the model wrote)\n"
+                 "  --spec-width block     the guesses' width from the block's own probabilities (the default), or\n"
+                 "                         measured: from the acceptance the rounds measured, per position, and a\n"
+                 "                         round's measured time by window (EAGLE-4's chain rule)\n"
                  "  --draft-model FILE     a file of the same model to take that block from, when --model has none;\n"
                  "                         for Gemma 4, its draft model (a gemma4-assistant file)\n"
                  "  --draft-vocab N        the block guesses among the vocabulary's first N tokens (default:\n"
@@ -1208,6 +1214,14 @@ int main(int argc, char** argv) {
         else if (a == "--lookup") lookup = std::atoi(val());
         else if (a == "--no-draft") o.draft = false;
         else if (a == "--report-drafts") o.report_drafts = true;
+        else if (a == "--spec-width") {
+            const std::string how = val();
+            if (how != "block" && how != "measured") {
+                std::fprintf(stderr, "--spec-width takes block or measured\n");
+                std::exit(2);
+            }
+            o.spec_measured = how == "measured";
+        }
         else if (a == "--draft-model") o.draft_model = val();
         else if (a == "--expert-swaps") o.expert_swaps = std::atoi(val());
         else if (a == "--tail-skip") o.tail_skip = std::atoi(val());
@@ -1325,7 +1339,7 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "strata-poly: conversation cache off: not enough free RAM to park conversations "
                                      "(--conversation-cache-mib N asks for one anyway)\n");
         }
-        Session ss(engine, eos, cache, lookup, o.report_drafts);
+        Session ss(engine, eos, cache, lookup, o.report_drafts, o.spec_measured);
         int rc = 0;
         if (want_serve) {
             rc = serve(ss);

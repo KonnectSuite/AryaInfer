@@ -80,6 +80,7 @@ struct Options {
                                   ///< 0: 8, or 4 where every guess keeps a copy of the recurrent state
     bool draft = true;            ///< run the block that guesses ahead, when there is one and window is above 1
     bool report_drafts = false;   ///< --report-drafts: name the acceptance at each guess position in the statistics
+    bool spec_measured = false;   ///< --spec-width measured: the window's width from the measured acceptance (Guesses)
     int draft_vocab = -1;         ///< the guesses come from the vocabulary's first this many tokens; 0: all of it;
                                   ///< -1: as many as the architecture's vocabulary has in order of use (guess_vocab())
     std::string draft_model;      ///< a file of the same model to take that block from, when the model's has none;
