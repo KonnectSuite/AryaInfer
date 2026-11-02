@@ -26,7 +26,7 @@ from serve.server import (CTX_SLACK, ByteTokenizer, EngineDied, EngineNonFinite,
                           PP_DONE_TAIL, Service,
                           StrataEngine, api_key_of, engine_args, key_matches, layer_split_value, prompt_progress,
                           prompt_tokens_seen,
-                          request_stats, request_timings, serve, start_failure_hint)
+                          request_stats, request_timings, serve, start_failure_hint, model_settings)
 from types import SimpleNamespace  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -6202,6 +6202,51 @@ class UntimedReads(unittest.TestCase):
         v.proc = SimpleNamespace(stdout=SimpleNamespace(readline=lambda: "OK 7 1 1 1\n"))
         self.assertEqual(v._readline(5.0, "x"), "OK 7 1 1 1\n")
 
+
+
+class ThinkingBudgetByEffort(unittest.TestCase):
+    """A config's reasoning_budget_by_effort: each level has its ceiling, and a request's own budget still wins."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tok = ByteTokenizer()
+        cls.svc = Service(MockEngine(cls.tok, "ok", max_context=CTX), cls.tok,
+                          ChatTemplate(ROOT / "serve/chat_template.jinja"))
+        cls.svc.reasoning_budget_by_effort = {"off": 0, "low": 512, "medium": 1536, "high": 4096}
+        cls.svc.config_effort = "medium"
+
+    def test_each_level_gets_its_ceiling(self):
+        self.assertEqual(self.svc.reasoning_budget({"reasoning_effort": "low"}), 512)
+        self.assertEqual(self.svc.reasoning_budget({"reasoning_effort": "medium"}), 1536)
+        self.assertEqual(self.svc.reasoning_budget({"reasoning_effort": "high"}), 4096)
+        self.assertEqual(self.svc.reasoning_budget({"reasoning_effort": "xhigh"}), 4096)
+        self.assertIsNone(self.svc.reasoning_budget({"reasoning_effort": "off"}))
+
+    def test_a_request_that_names_no_level_uses_the_configured_one(self):
+        self.assertEqual(self.svc.reasoning_budget({}), 1536)
+
+    def test_a_request_budget_wins_over_the_table(self):
+        self.assertEqual(self.svc.reasoning_budget({"reasoning_effort": "low", "reasoning_budget_tokens": 900}), 900)
+        self.assertIsNone(self.svc.reasoning_budget({"reasoning_effort": "high", "reasoning_budget_tokens": 0}))
+
+    def test_an_anthropic_budget_maps_to_its_level(self):
+        # Anthropic's thinking.budget_tokens is a level, so the table's ceiling for that level applies
+        self.assertEqual(self.svc.reasoning_budget({"thinking": {"type": "enabled", "budget_tokens": 3000}}), 1536)
+        self.assertIsNone(self.svc.reasoning_budget({"thinking": {"type": "disabled"}}))
+
+    def test_without_a_table_the_config_default_still_applies(self):
+        svc = Service(MockEngine(self.tok, "ok", max_context=CTX), self.tok,
+                      ChatTemplate(ROOT / "serve/chat_template.jinja"))
+        svc.reasoning_budget_tokens = 777
+        self.assertEqual(svc.reasoning_budget({"reasoning_effort": "high"}), 777)
+
+    def test_the_config_keeps_and_checks_the_table(self):
+        self.assertEqual(model_settings({"reasoning_budget_by_effort": {"low": 512, "high": 4096}})
+                         ["reasoning_budget_by_effort"], {"low": 512, "high": 4096})
+        self.assertEqual(model_settings({"reasoning_budget_by_effort": {"off": 0}})
+                         ["reasoning_budget_by_effort"], {"off": 0})
+        with self.assertRaises(ValueError):
+            model_settings({"reasoning_budget_by_effort": {"bogus": 10}})
 
 if __name__ == "__main__":
     unittest.main()

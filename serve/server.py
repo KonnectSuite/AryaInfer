@@ -61,8 +61,8 @@ from urllib.parse import parse_qs, urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT))   # run as a script (run-<model>.bat) as well as a module
-from serve.frontend import (THINK_END, ChatTemplate, Event, OutputParser, anthropic_to_messages,  # noqa: E402
-                            effort_levels, forced_call, gemma_model_turn, images_of, literal_tags,
+from serve.frontend import (THINK_END, EFFORT, ChatTemplate, Event, OutputParser, anthropic_to_messages,  # noqa: E402
+                            budget_effort, effort_levels, forced_call, gemma_model_turn, images_of, literal_tags,
                             mark_think_literals, openai_to_messages, tool_choice_of, unmark_think_literals,
                             with_effort_instruction)
 from serve.mcp import McpCancelled, hub_from_config  # noqa: E402
@@ -3187,6 +3187,25 @@ def budget_tokens(value) -> int | None:
     return value if value > 0 else None
 
 
+EFFORT_LEVELS = ("off", "low", "medium", "high")   # the levels a per-level thinking budget can name
+
+
+def effort_level(value) -> str | None:
+    """An effort as a client writes it ("high", "xhigh", "none", False, ...) as one of EFFORT_LEVELS, or None.
+
+    The four levels are the ones the web app offers and the ones a per-level budget names; the aliases are the ones
+    the template's own mapping takes (high and xhigh are the same depth, and none/off/disabled the same off)."""
+    if value is None or value == "":
+        return None
+    if value is False:
+        return "off"
+    key = str(value).strip().lower()
+    if key not in EFFORT:
+        return None
+    level = EFFORT[key]
+    return "off" if level is None else ("high" if level == "xhigh" else level)
+
+
 class Service:
     def __init__(self, engine: Engine, tokenizer, template: ChatTemplate, model_name: str = "qwen3.8-flash-next",
                  vision: Vision | None = None, sampling_defaults: dict | None = None,
@@ -3272,6 +3291,7 @@ class Service:
         self.last_image_at = 0.0                         # when an image turn last ended (the elastic encoder's idle)
         self.reasoning_loop_recovery = False
         self.reasoning_budget_tokens = 0                 # #123: the config's default thinking budget (0: none)
+        self.reasoning_budget_by_effort = {}             # opt-in: a thinking ceiling for each effort level
         self.repeat_stop_tokens = REPEAT_STOP_TOKENS     # #606: one token this many times in a row ends a reply (0: off)
         self.anthropic_think_unasked = True               # #278: "anthropic_thinking": "on_request" -> False
         self.tool_call_recovery = False                   # opt-in: tool calls in forms next to the template's
@@ -3752,12 +3772,47 @@ class Service:
         prompt from it would send nothing, #351).  Reporting only: requests are checked in prepare()."""
         return int(getattr(self.engine, "max_context", 0) or getattr(self.engine, "known_ctx", 0) or 0)
 
+    def request_effort(self, req) -> str | None:
+        """The effort level this request runs at, as one of EFFORT_LEVELS: its own effort, thinking or template
+        arguments, else the level a request that names none gets (the shared Chat setting, then the config)."""
+        req = req if isinstance(req, dict) else {}
+        for value in (req.get("reasoning_effort"), None):
+            level = effort_level(value)
+            if level:
+                return level
+        thinking = req.get("thinking")
+        if isinstance(thinking, dict):
+            if thinking.get("type") == "disabled":
+                return "off"
+            if thinking.get("budget_tokens") is not None:
+                level = effort_level(budget_effort(thinking["budget_tokens"]).get("reasoning_effort"))
+                if level:
+                    return level
+        ctk = req.get("chat_template_kwargs")
+        if isinstance(ctk, dict):
+            if ctk.get("enable_thinking") is False:
+                return "off"
+            level = effort_level(ctk.get("reasoning_effort"))
+            if level:
+                return level
+        level = effort_level(req.get("output_config", {}).get("effort")
+                             if isinstance(req.get("output_config"), dict) else None)
+        return level or effort_level(self.effort_default())
+
     def reasoning_budget(self, req) -> int | None:
-        """#123: the most tokens this request may think, or None: the request's `reasoning_budget_tokens`, else the
-        config's.  0 (or less) means no budget, so a request can turn a configured one off.  ValueError (a 400) for
-        anything that is not a whole number."""
-        value = (req or {}).get("reasoning_budget_tokens") if isinstance(req, dict) else None
-        return budget_tokens(self.reasoning_budget_tokens if value is None else value)
+        """#123: the most tokens this request may think, or None.  The request's `reasoning_budget_tokens` wins;
+        a config's `reasoning_budget_by_effort` gives the ceiling for the level it runs at (off 0 means no thinking
+        room); the config's `reasoning_budget_tokens` is the fallback.  0 (or less) means no budget.  ValueError
+        (a 400) for anything that is not a whole number."""
+        req = req if isinstance(req, dict) else {}
+        value = req.get("reasoning_budget_tokens")
+        if value is not None:
+            return budget_tokens(value)
+        if self.reasoning_budget_by_effort:
+            level = self.request_effort(req)
+            if level in self.reasoning_budget_by_effort:
+                return budget_tokens(self.reasoning_budget_by_effort[level])
+        return budget_tokens(self.reasoning_budget_tokens)
 
     def _vision_down(self) -> bool:
         """The encoder should run and does not (the engine's load starts it again).  An elastic encoder is down
@@ -7397,6 +7452,18 @@ def model_settings(cfg: dict, overrides: dict | None = None) -> dict:
     budget = cfg.get("reasoning_budget_tokens")        # #123: a default thinking budget for every request
     if budget is not None:
         budget_tokens(budget)
+    by_effort = cfg.get("reasoning_budget_by_effort")  # opt-in: a ceiling for each effort level (see reasoning_budget)
+    if by_effort is not None:
+        if not isinstance(by_effort, dict):
+            raise ValueError(f"\"reasoning_budget_by_effort\" must be an object of level: tokens, not {by_effort!r}")
+        clean = {}
+        for level, value in by_effort.items():
+            name = effort_level(level)
+            if name is None:
+                raise ValueError("\"reasoning_budget_by_effort\": " + repr(level)
+                                 + " is not a level: use off, low, medium or high")
+            clean[name] = budget_tokens(0 if value is None else value) or 0
+        by_effort = clean
     loops = cfg.get("reasoning_loop_recovery", False)  # #728: false (default) | "stop" | "recover" (true)
     if loops is True:
         loops = "recover"
@@ -7421,6 +7488,7 @@ def model_settings(cfg: dict, overrides: dict | None = None) -> dict:
         "warm_start": flag("warm_start"),                                    # opt-in: see Service.start_warm
         "repeat_stop_tokens": rs,
         "reasoning_budget_tokens": budget if budget is not None else 0,
+        "reasoning_budget_by_effort": by_effort or {},
         "reasoning_loop_recovery": loops,
         "idle_unload_s": over["idle_unload_s"] if "idle_unload_s" in over else
         number("idle_unload_s", float, "a number of seconds"),
@@ -7823,10 +7891,16 @@ def main() -> int:
     import serve.frontend as _frontend
     _frontend.ENV_TO_USER = etu
     svc.effort_end = bool(effort_end)                   # #458: "effort_position": "end" with an engine that has it
-    budget = svc.reasoning_budget({})                   # #123: a default thinking budget for every request
-    if budget:
-        print(f"[strata] thinking budget: {budget} tokens (reasoning_budget_tokens; a request can set its own)",
-              flush=True)
+    if svc.reasoning_budget_by_effort:                 # opt-in: the ceiling follows the thinking level
+        levels = ", ".join(f"{name} {svc.reasoning_budget_by_effort[name]}"
+                           for name in EFFORT_LEVELS if name in svc.reasoning_budget_by_effort)
+        print(f"[strata] thinking budget by effort: {levels} tokens "
+              "(reasoning_budget_by_effort; a request can set its own)", flush=True)
+    else:
+        budget = svc.reasoning_budget({})               # #123: a default thinking budget for every request
+        if budget:
+            print(f"[strata] thinking budget: {budget} tokens (reasoning_budget_tokens; a request can set its own)",
+                  flush=True)
     svc.gpu_index = (gpu_list(cfg) or [0])[0]           # the Monitor reads the card the engine runs on (issue #51)
     svc.gpu_indices = gpu_list(cfg)                     # ... or every card of a layer split (issue #112)
     if a.engine == "strata" and groups:                 # replicas: every card of every group

@@ -200,8 +200,8 @@ in effect, not greedy), "17 times 23, the number only" returns exactly `391`, an
 The model's own chat template reads `reasoning_effort` with three graded values and `enable_thinking` for off, so the
 server offers all four levels and maps them to the template's vocabulary (`high` -> `xhigh`, `off` ->
 `enable_thinking: false`).  `tools/qwen38_thinking.py` measures what each level actually does: six probes, two of them
-hard (a two-way price comparison and a non-trivial palindrome task whose generated code is executed), thinking budget
-4096, answers capped at 900 tokens.
+hard (a two-way price comparison and a non-trivial palindrome task whose generated code is executed), answers capped at
+900 tokens, each level under its own ceiling (below).
 
 | level | Q3 (IQ3_XXS) probes | Q3 thinking | Q2 (IQ2_S) probes | Q2 thinking |
 | --- | --- | --- | --- | --- |
@@ -213,16 +213,22 @@ hard (a two-way price comparison and a non-trivial palindrome task whose generat
 So thinking is what carries the hard probes: with it off the model still answers the easy ones but misses one or two
 of the hard ones, and every graded level passes all six on both files.  How much it thinks does not vary much between
 low and high on probes this size - the template's own instruction is doing the steering, not a budget - so a
-first-cut `reasoning_budget_tokens` of 1536 was checked for clipping and does not bind: a long planning prompt thought
+first-cut `reasoning_budget_tokens` of 1536 was checked for clipping and did not bind: a long planning prompt thought
 about 800-900 tokens at every budget tried (1536, 4096 and none), and the only `length` finishes were the answer
 running past its own max_tokens.
 
-Shipped in both configs: `reasoning_effort: "medium"` for requests that name no level, `reasoning_budget_tokens: 4096`
-as a safety valve rather than a steering knob, and the loop guard (`reasoning_loop_recovery: "recover"` plus the
-repeat-stop tokens the server already applies).  Verified after the change on both files: a request naming no level
-thinks (medium applied), `off` returns in 0.1-0.2 s with no thinking at all, low/medium/high each think and every one
-of them answered 37 x 41 as exactly `1517`, and the one repetition the probe set flags is a repeated `while` line in
-generated code, not a runaway stream.
+The budgets were then made per level (`reasoning_budget_by_effort`): off 0, low 4,000, medium 8,000, high 10,000 -
+the ladder a reviewer of this work recommended, and a ceiling rather than a target.  Measured per level on the hard
+palindrome task (max_tokens 12,000 so the answer-room rule does not trim the level): off 0 tokens of thinking, low 346,
+medium 368, high 322 - all four produced runnable code, and the ceilings were nowhere near reached.  The server's log
+shows the applied cap per request ("thinking: ... of budget 8000", "capped at 9000 of max_tokens 12000 ... (budget
+10000)"), so the ladder is visible at run time.
+
+Shipped in both configs: `reasoning_effort: "medium"` for requests that name no level, the per-level ceilings above,
+and the loop guard (`reasoning_loop_recovery: "recover"` plus the repeat-stop tokens the server already applies).
+Verified after the change on both files: a request naming no level thinks (medium applied), `off` returns in 0.1-0.2 s
+with no thinking at all, low/medium/high each think and every one of them answered 37 x 41 as exactly `1517`, and the
+one repetition the probe set flags is a repeated `while` line in generated code, not a runaway stream.
 
 ## Prefill: what was tried and measured (2026-11-02)
 

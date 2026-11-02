@@ -866,6 +866,13 @@ print(r.choices[0].message.content)
   from going to sleep while at least one request is running or waiting (Windows' `SetThreadExecutionState` with
   `ES_SYSTEM_REQUIRED`; the screen may still turn off), and gives the normal sleep rules back when the server is idle
   and when it exits. Default off. On Linux and macOS it does nothing (one line at startup says so).
+- **A thinking budget for each level (opt-in).** `"reasoning_budget_by_effort": {"off": 0, "low": 4000, "medium": 8000,
+  "high": 10000}` in `strata-<model>.json` gives every thinking level its own ceiling, so the level a request runs at
+  decides how long the model may think. A request's own `reasoning_budget_tokens` still wins; a level with no entry
+  falls back to `reasoning_budget_tokens`; `0` means no thinking room. Anthropic's `"thinking": {"budget_tokens": N}`
+  picks the level (under 2K low, under 8K medium, else high) and so that level's ceiling. Measured on this host:
+  a hard, code-checked task used 320-640 tokens of thinking and a long planning task about 800-900, so the ceilings
+  are rarely reached - they bound a runaway and keep the answer's room inside `max_tokens`.
 - **A hard thinking budget (opt-in).** `"reasoning_budget_tokens": N` in a request (OpenAI or Anthropic) caps the
   thinking at N tokens: when it gets there the server ends it with a short wrap-up line and `</think>`, and the model
   answers from there (the engine continues from what it already holds, so nothing is read again). The wrap-up is
