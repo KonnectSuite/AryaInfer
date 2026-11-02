@@ -344,13 +344,14 @@ struct Session {
     // time, which of the two pays.  It and the repeats are the other engine's (strata/spec).
     int most;                             // the tokens of a window at most; 1: no guesses
     bool look;                            // guess from repeats
+    bool report = false;                  // --report-drafts: the statistics name the acceptance at each guess
     strata::spec::SuffixDrafter repeats;
     strata::spec::DraftPolicy policy;
     Guesses guesses;                      // whether the block is asked in a round, and for how many (guesses.hpp)
     int piece_calls = kPiece;             // generate()'s pieces when it is given `between`
 
-    Session(Engine& e, std::vector<int32_t> eos_ids, const CacheFlags& f, int lookup)
-        : engine(e), eos(std::move(eos_ids)), flags(f), kept(e, with_floor(f)),
+    Session(Engine& e, std::vector<int32_t> eos_ids, const CacheFlags& f, int lookup, bool report_drafts = false)
+        : engine(e), eos(std::move(eos_ids)), flags(f), kept(e, with_floor(f)), report(report_drafts),
           most(lookup > 0 || e.drafts() ? std::min<int>(e.max_window(), strata::spec::DraftPolicy::kMaxT) : 1),
           look(lookup > 0 && most > 1),
           repeats(std::max(lookup, 3), 64, (size_t) e.max_context() + 4096), policy(most) {}
@@ -370,6 +371,9 @@ struct Session {
         int64_t produced = 0, resume = 0, read = 0;
         int64_t gave_way = -1;   // where `between` stopped the read
         int64_t guessed = 0, guessed_right = 0;
+        int64_t rounds = 0;   // the decode rounds, drafted in or not
+        // --report-drafts: per guess position, the guesses made there and the ones accepted
+        int64_t drafted_pos[8] = {}, accepted_pos[8] = {};
         double prompt_ms = 0, decode_ms = 0;
         const char* finish = "length";
     };
@@ -486,6 +490,7 @@ struct Session {
             const int block_window = engine.guesses_at_once() ? most : kBlockWindow;
             int32_t t = pick(engine.logits());   // picked, and not shown yet
             while (show(t)) {
+                ++r.rounds;
                 // t goes into the model now, and with it guesses at what follows when there are any that pay
                 const Clock::time_point round = Clock::now();
                 const bool room = engine.pos() + most <= engine.max_context();
@@ -533,6 +538,10 @@ struct Session {
                 kept.read(w, right + 1);
                 r.guessed += use.t - 1;
                 r.guessed_right += right + (more ? 0 : 1);
+                for (int j = 0; j < use.t - 1 && j < 8; ++j) {
+                    ++r.drafted_pos[j];
+                    if (j < right) ++r.accepted_pos[j];
+                }
                 policy.observe(use.lookup, use.t, right, match, count(use.t, right + 1));
                 if (!more) break;
             }
@@ -889,6 +898,12 @@ int serve(Session& ss) {
             std::fprintf(stderr, ", drafts accepted %lld of %lld\n", (long long) r.guessed_right, (long long) r.guessed);
         else
             std::fprintf(stderr, "\n");
+        if (ss.report && r.guessed > 0) {   // --report-drafts: accepted/drafted at each guess position, and the rounds
+            std::fprintf(stderr, "strata drafts by pos:");
+            for (int j = 0; j < 8 && r.drafted_pos[j] > 0; ++j)
+                std::fprintf(stderr, " %lld/%lld", (long long) r.accepted_pos[j], (long long) r.drafted_pos[j]);
+            std::fprintf(stderr, "; rounds %lld\n", (long long) r.rounds);
+        }
         // DONE <generated> <prompt> <prompt ms> <decode ms> <finish> <drafts accepted> <drafts offered> <reused>
         //      <experts from VRAM> <experts> <RAM blobs> <file blobs> <file MB> <prompt tokens read> <offloaded>
         const strata::poly::Stats& now = engine.stats();
@@ -1061,6 +1076,8 @@ void usage() {
                  "  --lookup N             guess what followed an earlier repeat of the last N or more tokens\n"
                  "                         (default 3, 0 = never)\n"
                  "  --no-draft             do not run the block that guesses ahead\n"
+                 "  --report-drafts        name the acceptance at each guess position in the statistics (a guess at\n"
+                 "                         position 0 is the first one after the token the model wrote)\n"
                  "  --draft-model FILE     a file of the same model to take that block from, when --model has none;\n"
                  "                         for Gemma 4, its draft model (a gemma4-assistant file)\n"
                  "  --draft-vocab N        the block guesses among the vocabulary's first N tokens (default:\n"
@@ -1190,6 +1207,7 @@ int main(int argc, char** argv) {
         else if (a == "--window") o.window = std::atoi(val());
         else if (a == "--lookup") lookup = std::atoi(val());
         else if (a == "--no-draft") o.draft = false;
+        else if (a == "--report-drafts") o.report_drafts = true;
         else if (a == "--draft-model") o.draft_model = val();
         else if (a == "--expert-swaps") o.expert_swaps = std::atoi(val());
         else if (a == "--tail-skip") o.tail_skip = std::atoi(val());
@@ -1307,7 +1325,7 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "strata-poly: conversation cache off: not enough free RAM to park conversations "
                                      "(--conversation-cache-mib N asks for one anyway)\n");
         }
-        Session ss(engine, eos, cache, lookup);
+        Session ss(engine, eos, cache, lookup, o.report_drafts);
         int rc = 0;
         if (want_serve) {
             rc = serve(ss);

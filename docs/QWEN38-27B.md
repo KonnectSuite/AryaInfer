@@ -362,3 +362,26 @@ why: the agentic coding
 suite (tools/arya_agent_bench.py - eighteen live sessions, hours of them; no claim of it is made for this model) and a
 release build of strata-poly that includes the dense qwen35 work, without which the installer only helps on a machine
 that can compile it (that is the release step).
+
+## Speculative decoding: baseline and instrumentation (2026-11-02)
+
+`tools/qwen38_spec_bench.py` drives the engine over its own stdin protocol (`GEN`), which is how the server feeds long
+prompts without Windows' command-line limit.  Greedy (`temperature=0`), q4_0 cache, 256 new tokens, a filler prompt
+ending in a request for a long answer.  `--report-drafts` now prints the acceptance at each guess position and the
+round count, so the policy's choices can be checked against what actually happens.
+
+| context | prompt | prefill | decode | tokens/round | accept by position (0..6) |
+| --- | --- | --- | --- | --- | --- |
+| 8K | 7,897 | 1,179 tok/s | 72.4 tok/s | 3.12 | .846 .787 .822 1.00 1.00 1.00 .80 |
+| 32K | 31,997 | 1,016 tok/s | 65.5 tok/s | 3.05 | .800 .642 .659 .737 .909 .875 .857 |
+| 64K | 63,997 | 843 tok/s | 64.1 tok/s | 2.98 | .840 .830 .711 .789 .857 1.00 1.00 |
+
+The deep positions' rates rest on few rounds (4-19), so read them as indicative, not settled.  Two things stand out:
+
+- the adaptive window settles at about 2.6 guesses a round, so positions 3-6 are reached only a handful of times;
+- the first guess is accepted 0.80-0.85 of the time and the second 0.64-0.83, which is the EAGLE tree's point: it
+  keeps alternatives alive at the first branch instead of spending the window on a chain that dies at position 2.
+
+With these measured rates the EAGLE width formula (expected tokens `1 + Σ A_d` against the measured round time)
+predicts 4.6-5.6 tokens for a window of 6-7 tokens against today's 3.0, which is exactly what Phase 1 and the tree
+have to buy back against its extra cost.
