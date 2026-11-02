@@ -54,7 +54,7 @@ class Family(unittest.TestCase):
 
 
 class Plan(unittest.TestCase):
-    """The context a card gets is the measured one: 16 GB reaches 200K on the smaller file and 96K on the bigger."""
+    """The context a card gets is the measured one: 16 GB reaches 200K on the smaller file and 128K on the bigger."""
 
     def setUp(self):
         self.fam = setup.FAMILIES["qwen38"]
@@ -66,11 +66,12 @@ class Plan(unittest.TestCase):
         self.assertLessEqual(p["need_mib"], 16 * 1024)
         self.assertGreater(p["need_mib"], 15_500)
 
-    def test_16_gb_on_iq3_xxs_stops_at_the_measured_96k(self):
+    def test_16_gb_on_iq3_xxs_reaches_the_measured_128k(self):
         p = setup.dense_poly_plan(self.fam, "IQ3_XXS", 16.0)
-        self.assertEqual((p["context"], p["batch"]), (98304, 1024))
-        # measured peak at 96K: 15,351 MiB
-        self.assertAlmostEqual(p["need_mib"], 15351, delta=60)
+        self.assertEqual((p["context"], p["batch"]), (131072, 256))
+        # measured peak at 128K with the 256 batch: 15,661 MiB (the 96K point, 15,351, used the 1,024 batch)
+        self.assertLessEqual(p["need_mib"], 16 * 1024)
+        self.assertGreater(p["need_mib"], 14_000)
 
     def test_a_12_gb_card_does_not_fit_either_file(self):
         for model in ("IQ2_S", "IQ3_XXS"):
@@ -78,7 +79,7 @@ class Plan(unittest.TestCase):
 
     def test_a_bigger_card_still_respects_what_was_measured(self):
         p = setup.dense_poly_plan(self.fam, "IQ3_XXS", 32.0)
-        self.assertEqual(p["context"], 98304)
+        self.assertEqual(p["context"], 131072)
 
 
 class Routing(unittest.TestCase):

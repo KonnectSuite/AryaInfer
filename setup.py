@@ -509,7 +509,11 @@ FAMILIES = {
                "mmproj_hf": hf("ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF"),
                "mmproj": "mmproj-Qwen3.8-27B-BF16.gguf", "kv_bytes": 18432, "batch_saves_mib": 1076,
                "base_mib": {"IQ2_S": 13496, "IQ3_XXS": 13624},
-               "max_measured_ctx": {"IQ2_S": 204800, "IQ3_XXS": 98304},
+               "max_measured_ctx": {"IQ2_S": 204800, "IQ3_XXS": 131072},
+               # the largest context measured on each file with that prompt batch: the scratch is ~1,400 MiB at
+               # 1,024 tokens and ~360 at 256, which is what let 128K fit on IQ3_XXS (measured 2026-11-02)
+               "max_measured_ctx_batch": {"IQ2_S": {1024: 131072, 256: 204800},
+                                          "IQ3_XXS": {1024: 98304, 256: 131072}},
                "models": {
                    "IQ2_S": {"about": "2-bit: the context fits 200K on a 16 GB card",
                              "download_gb": 9.61, "ram_gb": 12, "arena_gb": 0.0,
@@ -6739,14 +6743,15 @@ def dense_poly_plan(fam: dict, model: str, vram_gb: float) -> dict:
     """
     base = fam["base_mib"][model]
     room = vram_gb * 1024 - 150
-    cap = fam["max_measured_ctx"][model]
+    caps = fam.get("max_measured_ctx_batch", {}).get(model, {})
     for ctx in sorted(DENSE_CONTEXTS, reverse=True):
-        if ctx > cap:
-            continue
-        batch = 256 if ctx > 131072 else 1024
-        need = base - (fam["batch_saves_mib"] if batch == 256 else 0) + fam["kv_bytes"] * ctx / 2 ** 20
-        if need <= room:
-            return {"kv": "q4_0", "context": ctx, "batch": batch, "need_mib": round(need), "fits": True}
+        kv = fam["kv_bytes"] * ctx / 2 ** 20
+        for batch, save in ((1024, 0), (256, fam["batch_saves_mib"])):
+            if ctx > caps.get(batch, fam["max_measured_ctx"][model]):
+                continue
+            need = base - save + kv
+            if need <= room:
+                return {"kv": "q4_0", "context": ctx, "batch": batch, "need_mib": round(need), "fits": True}
     need = base + fam["kv_bytes"] * 8192 / 2 ** 20
     return {"kv": "q4_0", "context": 8192, "batch": 1024, "need_mib": round(need), "fits": need <= room}
 
@@ -6781,7 +6786,9 @@ def dense_poly_setup(a, family: str, fam: dict, gpu: dict, hip: bool, cuda_tk: i
         plan = {**plan, "kv": kv}
     if ctx > plan["context"] and not a.context:
         ctx = plan["context"]
-    if not plan["fits"] or ctx > fam["max_measured_ctx"][model] and a.context:
+    measured = fam.get("max_measured_ctx_batch", {}).get(model, {}).get(plan["batch"],
+                                                                         fam["max_measured_ctx"][model])
+    if not plan["fits"] or ctx > measured and a.context:
         fail(f"{title} {model} takes about {plan['need_mib']} MiB of VRAM for its weights and a {ctx // 1024}K context; "
              f"{gpu_name(gpu)} has {vram:.0f} GB",
              f"--model IQ3_XXS (a smaller file) or --context {plan['context']} (the largest measured to fit here)")

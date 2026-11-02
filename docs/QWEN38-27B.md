@@ -103,13 +103,15 @@ prompt, greedy.  The q4_0 cache is `--kv q4_0` (18,432 bytes a token instead of 
 | IQ3_XXS, q4_0 | 64K | 64,077 | found | 842.9 tok/s | 33.3 tok/s | 15,015 MiB |
 | IQ3_XXS, q4_0 | 96K | 96,026 | found | 639.4 tok/s | 28.5 tok/s | 15,351 MiB |
 | IQ3_XXS, q4_0 | 120K | 120,056 | **stalled** at 94,208 | - | - | 15,939 MiB |
+| IQ3_XXS, q4_0, `--prompt-batch 256` | 128K | 128,024 | **found** | 574.9 tok/s | 51.6 tok/s | 15,661 MiB |
 | IQ2_S, q4_0 | 128K | 128,066 | found | 548.4 tok/s | 22.2 tok/s | 15,749 MiB |
 | IQ2_S, q4_0, `--prompt-batch 256` | 200K | 200,069 | **found** | 440.0 tok/s | 5.3 tok/s | 15,942 MiB |
 
 The 4-bit cache is what makes 64K and up fit at all: with q8_0 the 62K attempt on IQ3_XXS stalled at 28.7K tokens.
-The 200K run sits 434 MiB from the card's limit, so it wants the smaller file *and* the smaller prompt batch (the
-batch's scratch is about 1.4 MiB a token).  Decode at 200K is 5.3 tok/s: the generic attention kernel reads the whole
-cache every token and this model's 6 heads a group rules out the flash kernels (see below).
+The 120K stall on IQ3_XXS was not the cache but the default 1,024-token prompt batch: its scratch is about 1.4 MiB a
+token, and dropping to `--prompt-batch 256` frees enough for 128K on the same file (measured 2026-11-02: 15,661 MiB
+peak, needle found).  The 200K run sits 434 MiB from the card's limit, so it wants the smaller file *and* the smaller
+prompt batch.  Decode at 200K is 5.3 tok/s on the generic kernel; the group-6 kernel below is what raised it.
 
 ### After the group-6 decode kernel (NInfer's geometry idea, 2026-11-02)
 
@@ -340,13 +342,14 @@ Done and measured on this host:
   smokes and the needles above.
 - The 4-bit cache: --kv q4_0 on the generic attention path (which is the one this model takes, 6 heads a group),
   with the flash path carried too.  The greedy answer is identical to q8_0's, token for token.
-- Context: 32K q8_0 and 64K, 96K, 128K and **200,069 tokens** on q4, each with the needle found.  The 120K attempt on
-  the bigger file stalls, which is the card's limit, not the engine's.
+- Context: 32K q8_0 and 64K, 96K, 128K and **200,069 tokens** on q4, each with the needle found.  The 120K attempt at
+  the default batch stalled, which was the batch's scratch, not the cache: 128K on the same file fits with
+  `--prompt-batch 256` (measured 574.9 tok/s reading, 51.6 writing, 15,661 MiB).
 - Vision: the 27B mmproj loads in strata-vision (llama.cpp mtmd, --min-tokens 1024), the engine takes its .sve
   through --images/--image-pad, and the server answers picture questions on both caches.
 - Registry: serve/models.py knows qwen35; models.json lists the two entries; two run configs are in the repository
-  root, named the way the MoE families are - "AryaStrata Qwen3.8 27B IQ3_XXS - 64K vision"
-  (`strata-qwen3.8-27b-iq3_xxs.json`, 65,536 tokens on q4_0) and "AryaStrata Qwen3.8 27B IQ2_S - 200K vision"
+  root, named the way the MoE families are - "AryaStrata Qwen3.8 27B IQ3_XXS - 128K vision"
+  (`strata-qwen3.8-27b-iq3_xxs.json`, 131,072 tokens on q4_0 with `--prompt-batch 256`) and "AryaStrata Qwen3.8 27B IQ2_S - 200K vision"
   (`strata-qwen3.8-27b-iq2_s.json`, 204,800 tokens, q4_0, `--prompt-batch 256`); the tokenizer was extracted from the
   file with `tools/strata_tokenizer.py`.
 
