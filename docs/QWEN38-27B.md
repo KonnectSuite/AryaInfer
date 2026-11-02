@@ -467,3 +467,39 @@ kernels would need writing, in this order:
 2. the ancestor mask in the `fdec` decode-attention kernel, so a tree's rows verify at the chain's kernel speed.
 
 Until those exist the chain is the default and the benchmarks above are the case against turning the tree on.
+
+## What the measurements came to (2026-11-02)
+
+Round cost by window width, 8K prompt, Q3 IQ3_XXS, q4_0 cache, 128 new tokens:
+
+| window | round | tokens/round | decode |
+| --- | --- | --- | --- |
+| 2 | 29.6 ms | 1.80 | 60.9 tok/s |
+| 3 | 36.2 ms | 2.33 | 64.3 tok/s |
+| 4 | 39.7 ms | 2.78 | 70.1 tok/s |
+| 6 | 45.0 ms | 3.05 | 67.8 tok/s |
+| adaptive (default) | ~43 ms | 3.12 | 71.8-72.4 tok/s |
+
+A one-token step with no guesses is 23.8 ms (42.1 tok/s), close to the weights' bandwidth floor, so the marginal row
+of a verify costs about 5 ms.  A guess pays when it adds more than about 5 ms of expected tokens; a tree's extra rows
+add a token only when the main branch fails, and on this model they measure 1.5-2 ms of expected tokens.  That is the
+arithmetic against the tree, and it does not depend on the tree's kernels: the EAGLE-4 tree wins on data-center
+hardware where a verify row is cheap relative to a token, not on one 16 GB card where it costs a third of the weights'
+pass.
+
+Draft vocabulary, 8K: 65,536 rows 70.7 tok/s (3.20 tokens/round), 98,304 68.6 (3.12), the default 131,072 71.8 (3.1),
+and 65,536 at 32K 68.0 against the default's 65.5-66.3.  The draft head is not the round's cost; the tuning window is
+inside the run-to-run noise.
+
+Phase 4 notes:
+
+- the recorded layers' graph key already carries the window width (`key{block_pass_ ? -n : n}`), so no change was
+  needed there;
+- an L2 prefetch of the next matrix was assessed and not pursued: the per-row marginal is compute and L2-bound, and
+  EAGLE-4's own warm-up is measured on a B300 whose L2 is far larger than this card's;
+- a persisted cost profile was not needed: the policy re-learns its round times within the first ~30 rounds of an
+  answer, which the 128-token benchmarks do not show as a loss.
+
+What remains, if the tree is ever the priority: the GDN recurrence for a tree's rows as one kernel over a state table
+(the per-row copies are the measured cost), and the ancestor mask in the `fdec` decode-attention kernel.  Even then
+the arithmetic above says the tree would have to add more than ~5 ms of tokens per row to pay.
