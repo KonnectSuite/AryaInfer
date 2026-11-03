@@ -209,6 +209,15 @@ class Contract(unittest.TestCase):
         self.assertNotEqual(used, set())
         self.assertEqual(sorted(used - symbols), [])
 
+    def test_saving_a_chat_keeps_the_live_turns(self):
+        # saveChat must not re-point `messages` at the stored copy: that dropped every turn added since the last save,
+        # so the model only ever saw alternate turns ("no context" in a normal conversation)
+        body = self.js[self.js.index("function saveChat()"):]
+        body = body[:body.index("\n}")]
+        self.assertNotIn("const chat = ensureChat()", body)
+        self.assertNotIn("chat.messages =", body)
+        self.assertIn("savedMessages(messages)", body)
+
     def test_the_phone_contract(self):
         # an iPhone is a narrow, coarse-pointer screen: the things that only worked with a mouse must work there too
         self.assertIn('content="width=device-width, initial-scale=1, viewport-fit=cover"', self.html)

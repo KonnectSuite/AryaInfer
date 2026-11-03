@@ -1793,8 +1793,14 @@ function ensureChat() {
 }
 function activeChatItem() { return chats.find((c) => c.id === activeChat) || null; }
 function saveChat() {
-  const chat = ensureChat();
-  chat.messages = savedMessages(messages);
+  // The active chat by id, without ensureChat(): that one re-points `messages` at the chat's stored array, which
+  // would throw away every turn added since the last save (the second turn, then the fourth, and so on).
+  const chat = activeChatItem();
+  if (!chat) {                                       // the last chat was deleted: still persist the empty list
+    store.set(CHAT_STORE, {version: 1, active: activeChat, items: chats});
+    renderChats();
+    return;
+  }
   chat.updatedAt = Date.now();
   if (chat.title === "New chat") {
     const first = messages.find((m) => m.role === "user");
@@ -1802,7 +1808,9 @@ function saveChat() {
   }
   chats.sort((a, b) => b.updatedAt - a.updatedAt);
   if (chats.length > CHAT_CAP) chats.length = CHAT_CAP;   // the active chat is the newest, so it is never dropped
-  store.set(CHAT_STORE, {version: 1, active: activeChat, items: chats});
+  // the live array stays the chat's own; the stored copy is a snapshot (attachments keep only their names)
+  const items = chats.map((c) => (c.id === chat.id ? {...c, messages: savedMessages(messages)} : c));
+  store.set(CHAT_STORE, {version: 1, active: activeChat, items});
   renderChats();
 }
 function ago(t) {
