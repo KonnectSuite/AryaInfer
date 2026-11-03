@@ -427,7 +427,6 @@ function roomViewerRender() {
   };
   add("Edit it", () => roomEdit(item), true);
   add("Ask for a change", () => roomAskChange(item));
-  add("Open in the workbench", () => { wbShowImage(item.url); roomViewerClose(); });
   add("Download", () => {
     const link = document.createElement("a");
     link.href = item.url;

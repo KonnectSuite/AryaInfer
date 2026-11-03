@@ -94,9 +94,6 @@
           <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-image"/></svg>
           <span class="st-tool__led"></span><span class="st-tool__label">Images</span></button>
       </div>
-      <button class="st-btn st-btn--icon" id="wb-toggle" type="button" title="Workbench (Ctrl+Shift+B)"
-              aria-label="Open the workbench" aria-pressed="false">
-        <svg class="st-icon"><use href="web/sprite.svg#i-panel"/></svg></button>
       <img class="st-header__companion" id="header-companion" src="web/companion-idle.webp" data-state="idle" alt="">
       <span class="st-pill" id="pill" data-state="idle" role="status" aria-live="polite">
         <span class="st-pill__dot"></span><span id="pill-text">Connecting&hellip;</span></span>
@@ -152,61 +149,6 @@
           </form>
         </div>
         </div>
-        <aside class="workbench" id="workbench" data-open="false" aria-label="Workbench">
-          <div class="workbench__resize" id="wb-resize" role="separator" aria-orientation="vertical" tabindex="0"
-               aria-label="Resize the workbench"></div>
-          <div class="workbench__head">
-            <div class="seg wb-tabs" role="tablist" aria-label="Workbench view">
-              <button type="button" role="tab" data-wb-tab="artifact" aria-selected="true">Artifact</button>
-              <button type="button" role="tab" data-wb-tab="files" aria-selected="false">Files</button>
-              <button type="button" role="tab" data-wb-tab="reader" aria-selected="false">Reader</button>
-              <button type="button" role="tab" data-wb-tab="activity" aria-selected="false">Activity</button>
-            </div>
-            <button class="st-btn st-btn--icon" id="wb-close" type="button" aria-label="Close the workbench">
-              <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-x"/></svg></button>
-          </div>
-          <div class="workbench__body">
-            <div class="wb-pane" data-wb-pane="artifact">
-              <div class="wb-bar">
-                <select class="st-input wb-select" id="wb-artifact" aria-label="Which artifact"></select>
-                <div class="seg seg--two" id="wb-mode" role="radiogroup" aria-label="Preview or source">
-                  <button type="button" role="radio" data-wb-mode="preview" aria-checked="true">Preview</button>
-                  <button type="button" role="radio" data-wb-mode="source" aria-checked="false">Source</button>
-                </div>
-                <button class="st-btn st-btn--icon" id="wb-copy" type="button" aria-label="Copy the artifact" title="Copy">
-                  <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-copy"/></svg></button>
-                <button class="st-btn st-btn--icon" id="wb-download" type="button" aria-label="Download the artifact" title="Download">
-                  <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-download"/></svg></button>
-                <button class="st-btn st-btn--icon" id="wb-open" type="button" aria-label="Open in a new tab" title="Open in a new tab">
-                  <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-external"/></svg></button>
-              </div>
-              <div class="st-empty wb-empty" id="wb-none">
-                <span class="st-empty__title">Nothing here yet</span>
-                <span>An HTML, SVG or Markdown block in an answer opens here.</span>
-              </div>
-              <div class="wb-stage" id="wb-stage">
-                <iframe id="wb-frame" class="wb-frame" sandbox="allow-scripts" referrerpolicy="no-referrer"
-                        title="Artifact preview" hidden></iframe>
-                <img class="wb-image" id="wb-image" alt="" hidden>
-                <pre class="wb-source" id="wb-source" hidden></pre>
-              </div>
-            </div>
-            <div class="wb-pane" data-wb-pane="files" hidden>
-              <div class="wb-files" id="wb-files"></div>
-            </div>
-            <div class="wb-pane" data-wb-pane="reader" hidden>
-              <div class="wb-bar">
-                <input class="st-input" id="wb-url" placeholder="https://example.org/page" autocomplete="off" spellcheck="false">
-                <button class="st-btn st-btn--secondary" id="wb-read" type="button">Read</button>
-              </div>
-              <div class="muted small" id="wb-read-msg" role="status"></div>
-              <pre class="wb-source" id="wb-read-text"></pre>
-            </div>
-            <div class="wb-pane" data-wb-pane="activity" hidden>
-              <div class="wb-activity" id="wb-activity"></div>
-            </div>
-          </div>
-        </aside>
       </section>
 
       <!-- ============================ Images ============================ -->

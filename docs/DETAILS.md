@@ -2383,25 +2383,19 @@ The dialog keeps two keys of its own in each server's settings: `icon` (which ma
 name). AryaInfer ignores them; they are how the page draws the same card next time, and they travel with the server in
 `mcp-servers.json`.
 
-**The Workbench** is the panel on the right of the chat (the header button, or Ctrl/Cmd+Shift+B). It shows what
-the conversation produced, beside it:
+**Rendered answers** - a fenced block the browser can show is rendered in the chat itself, above its code. What
+counts is the content, not the label: a block labelled `xml` that holds an `<svg>` is a drawing, an unlabelled block
+that starts like a document is a page, and Markdown is Markdown. The block is rendered in a frame with
+`sandbox="allow-scripts"` and no `allow-same-origin`, and with its own policy
+(`default-src 'none'`, inline style and script only): a page the model wrote cannot read this page, call this
+server, or reach the network. A **Download** button saves the block as the file it is, named from the block's own
+`<title>`, `<h1>` or first heading (`Cat Bike.html`, `Hello.md`, `artifact.svg` when it has none); the copy button and
+the collapsible **Code** stay. There is no side panel: pictures in an answer (a Markdown image, a `generate_image`
+thumbnail) are download links too. A block still streaming, or one larger than 200 KB, stays code.
 
-- **Artifact** - a fenced block the browser can show opens the panel while the answer is being written. What counts is
-  the content, not the label: a block labelled `xml` that holds an `<svg>` is a drawing, an unlabelled block that
-  starts like a document is a page, and Markdown is Markdown. The block is rendered in a frame with
-  `sandbox="allow-scripts"` and no `allow-same-origin`, and with its own policy
-  (`default-src 'none'`, inline style and script only): a page the model wrote cannot read this page, call this
-  server, or reach the network. Preview and Source switch between the rendering and the code, and the block can be
-  copied, downloaded or opened in a tab of its own.
-- **Files** - what was attached to the chat and every tool result over 2,000 characters, with the tool and server it
-  came from.
-- **Reader** - one address as readable text, fetched by the server with the same rules as the `read_page` tool
-  (`check_url`, `allow_local`, `max_fetch_chars`). The reply is text, never HTML, so nothing from a page executes
-  here. `POST /search {"read": {"url": "..."}}` is that request; it is answered for this page only, like the rest.
-- **Activity** - the tool calls of the answer as they happen, with the arguments, the result, the time and an estimate
-  of the tokens the result adds to the next request (characters divided by four, and labelled as an estimate).
-
-The panel's width, its view and whether it is open are kept for this browser; its content is always the active chat's.
+`POST /search {"read": {"url": "..."}}` is still the reader request behind the `read_page` tool: it fetches one address
+with the same rules (`check_url`, `allow_local`, `max_fetch_chars`) and answers with text, never HTML, for this page
+only.
 
 ### API request monitor
 

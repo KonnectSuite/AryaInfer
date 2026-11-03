@@ -1,4 +1,4 @@
-﻿<h1 align="center">AryaInfer</h1>
+<h1 align="center">AryaInfer</h1>
 
 Local AI for coding, coding agents and image understanding, configured and benchmarked against our own host.
 
@@ -794,7 +794,7 @@ All twelve models are used the same way: the same app, the same API.
   The model that answers is picked in the message box; Settings is a panel over the page with the theme, the API key
   and the model's run-config values.
 - **On a phone (iPhone Safari included):** the sidebar is a drawer, the model and other menus open as a sheet at the
-  bottom of the screen, Settings, the MCP dialog and the Workbench take the whole screen, and the composer keeps Send
+  bottom of the screen, Settings and the MCP dialog take the whole screen, and the composer keeps Send
   in reach. The microphone button dictates into the message box and into the image room's box - it is the browser's
   own speech service, so it appears only in a browser that has one (Safari and Chrome do; Firefox does not).
 - **Your apps and coding agents:** add an "OpenAI-compatible" provider with the base URL
@@ -813,11 +813,11 @@ All twelve models are used the same way: the same app, the same API.
   hand) and a [SearXNG web search](docs/SEARCH.md) beside it; both are offered from the next answer on.
 - **Pictures:** a [ComfyUI](docs/COMFYUI.md) on this machine or another one adds **Images** to the sidebar - a room
   that creates, edits and keeps pictures, the way a picture app does - and a `generate_image` tool to the chat, whose
-  answers show what it made and open it in the Workbench. Set it up in **Settings > Tools > Images**; the same dialog
-  starts, stops and checks the ComfyUI server and imports workflow JSONs.
-- **The Workbench:** the panel on the right renders what an answer produces - an HTML, SVG or Markdown block opens in
-  it while the model writes, in a sandboxed frame that cannot reach this page, this server or the network - and lists
-  the attached files, a reader for one address, and the tool calls behind the answer.
+  answers show what it made in the chat, where the picture downloads from. Set it up in **Settings > Tools > Images**
+  (the same dialog starts, stops and checks the ComfyUI server and imports workflow JSONs).
+- **Rendered answers:** an HTML, SVG or Markdown block in an answer renders in a sandboxed frame in the chat itself
+  (it cannot reach this page, this server or the network) with a **Download** button that saves it as the file it is;
+  the code stays under it, and a block still streaming, or over 200 KB, stays code.
 - **From your phone or another PC:** `START-HERE.bat --setup --host 0.0.0.0 --api-key <secret>`. Always set a key.
 
 The following behavior and platform differences are inherited from the upstream

@@ -1,4 +1,4 @@
-﻿# Images through ComfyUI
+# Images through ComfyUI
 
 AryaInfer can generate and edit pictures with a [ComfyUI](https://github.com/comfyanonymous/ComfyUI) on this machine
 or on another one. The chat page never talks to ComfyUI directly: every call goes through AryaInfer's own server,
@@ -66,14 +66,14 @@ image-to-image graph, because attaching a picture is the instruction to edit it.
 answers with a sentence, not a crash.
 
 The tool is **raster only**. When the user asks for an SVG, HTML, a diagram, a chart, an icon set or a UI mockup, the
-model writes the code in a fenced block instead; the answer renders it in a sandboxed frame (no network, opaque
-origin, inline style and script only) with **Open in the panel** for the Workbench's Artifact tab. The code stays
-readable under the preview, and a block that is still streaming, or one larger than 200 KB, stays code. When the chat has web
-search on, the model may search for a factual reference and turn what it finds into the prompt; web pictures cannot be
-downloaded into ComfyUI, and the room never pretends otherwise.
+model writes the code in a fenced block instead; the answer renders it in a sandboxed frame in the chat itself (no
+network, opaque origin, inline style and script only), with a **Download** button that saves the block as a file. The
+code stays readable under the preview, and a block that is still streaming, or one larger than 200 KB, stays code.
+When the chat has web search on, the model may search for a factual reference and turn what it finds into the prompt;
+web pictures cannot be downloaded into ComfyUI, and the room never pretends otherwise.
 
 - **My images** is the server-side gallery: search, favourites, a pager, and a viewer with edit / ask-for-a-change /
-  open in the Workbench / download / favourite / delete.
+  download / favourite / delete.
 - **Templates** are twelve prompts to start from (a studio portrait, a product shot, a poster, a restyle).
 - **Local model** is the older sd-cli image form, shown only when an sd-cli image model is configured.
 - The thread is kept in this browser (like the chats); the pictures are on the server, so they show in every browser.

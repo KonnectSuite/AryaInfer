@@ -1686,15 +1686,16 @@ function inline(s) {
   s = s.replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
   s = esc(s)
     .replace(/!\[([^\]\n]{0,160})\]\((\/comfy\/files\/[0-9a-f]{32}\.png|web\/[A-Za-z0-9._-]+)\)/g,
-             '<img class="inline-img" src="$2" alt="$1" loading="lazy" data-wb-image="$2">')
+             '<a class="inline-img-link" href="$2" download="arya-image.png" title="Download the picture">' +
+             '<img class="inline-img" src="$2" alt="$1" loading="lazy"></a>')
     .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^*\w])\*([^*\n]+)\*(?![*\w])/g, "$1<em>$2</em>")
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
   return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code class="inline">${esc(codes[+i])}</code>`);
 }
 // A fenced block that is a picture or a page is worth seeing: SVG, HTML and Markdown get a sandboxed preview above
-// the code, and a button that opens the same block in the Workbench's Artifact tab.  A very large block, and one that
-// is still streaming (its closing fence has not arrived), stay as code.
+// the code, and a button downloads the block as the file it is.  A very large block, and one that is still streaming
+// (its closing fence has not arrived), stay as code.
 function codeBlock(lang, code, opts = {}) {
   const kind = opts.live ? null : wbKind(lang, code);
   const render = Boolean(kind) && String(code || "").length <= 200_000;
@@ -1703,16 +1704,16 @@ function codeBlock(lang, code, opts = {}) {
       `referrerpolicy="no-referrer" title="${esc(String(kind).toUpperCase())} preview" ` +
       `srcdoc="${esc(wbDoc({lang: kind, code}))}"></iframe></div>`
     : "";
-  const open = render
-    ? `<button class="st-btn st-btn--secondary st-code__open" type="button" data-artifact-open>` +
-      `Open in the panel</button>`
+  const download = render
+    ? `<button class="st-btn st-btn--secondary st-code__download" type="button" data-artifact-download>` +
+      `Download</button>`
     : "";
   const body = render
     ? `${preview}<details class="st-code__code"><summary>Code</summary><pre><code>${esc(code)}</code></pre></details>`
     : `<pre><code>${esc(code)}</code></pre>`;
   return `<div class="st-code"${kind ? ` data-kind="${kind}"` : ""}>` +
     `<div class="st-code__head"><span>${esc(lang || kind || "code")}</span>` +
-    `<span class="st-code__acts">${open}` +
+    `<span class="st-code__acts">${download}` +
     `<button class="st-btn st-btn--icon" data-code-copy aria-label="Copy code">${icon("copy")}</button></span></div>` +
     `${body}</div>`;
 }
@@ -2290,8 +2291,9 @@ function toolHtml(t, k) {
   const pics = toolImages(t);
   const thumbnails = pics.length
     ? `<div class="tool-call__pics">` + pics.map((p) =>
-        `<button class="tool-pic" type="button" data-wb-image="${esc(p.url)}" title="Open in the workbench">` +
-        `<img src="${esc(p.url)}" alt="" loading="lazy"></button>`).join("") + `</div>`
+        `<a class="tool-pic" href="${esc(p.url)}" download="arya-image.png" title="Download the picture" ` +
+        `aria-label="Download the picture">` +
+        `<img src="${esc(p.url)}" alt="" loading="lazy"></a>`).join("") + `</div>`
     : "";
   return `<details class="st-collapse tool-call" data-tool="${k}" data-state="${esc(t.state)}"${t.open ? " open" : ""}>` +
     `<summary>${icon("tool", "st-icon st-icon--sm")}<span class="tool-call__name" title="${esc(t.name || "")}">${esc(t.tool || t.name || "tool")}</span>` +
@@ -2354,7 +2356,6 @@ function updateAssistant(el, m, streaming) {
     if (streaming) bubble.classList.add("cursor"); else bubble.classList.remove("cursor");
   }
   el.querySelector(".meta-text").textContent = m.meta || (streaming ? "" : m.stopped ? "Stopped" : "");
-  wbMaybeAuto(m);
   el.querySelector("[data-msg-copy]").hidden = streaming || !m.text;
   // swipe controls: regenerate disabled while streaming; prev/next shown when there is more than one variant
   const rg = el.querySelector("[data-msg-regen]");
@@ -2373,15 +2374,12 @@ function renderChat() {
   chat.querySelectorAll(".st-msg").forEach((e) => e.remove());
   $("chat-empty").hidden = messages.length > 0;
   messages.forEach((m, i) => chat.appendChild(msgEl(m, i)));
-  if (wb.open) wbRender();
   scrollDown(true);
 }
 function nearBottom() { const s = $("chat-scroll"); return s.scrollHeight - s.scrollTop - s.clientHeight < 120; }
 function scrollDown(force) { const s = $("chat-scroll"); if (force || nearBottom()) s.scrollTop = s.scrollHeight; }
 
 $("chat").addEventListener("click", (e) => {
-  const pic = e.target.closest("[data-wb-image]");
-  if (pic) { e.preventDefault(); wbShowImage(pic.dataset.wbImage); return; }   // a thumbnail: open it in the panel
   const rg = e.target.closest("[data-msg-regen]");
   if (rg) { regenerateMessage(+rg.closest(".st-msg").dataset.i); return; }
   const pv = e.target.closest("[data-msg-prev]");
@@ -2790,49 +2788,10 @@ document.addEventListener("click", (e) => {
   if (settingsOpen() && !$("settings-pop").contains(e.target) && !$("settings-btn").contains(e.target)) openSettings(false);
 });
 
-// ------------------------------------------------------------------ the Workbench (right panel)
-// What the conversation produced, beside it: the HTML, SVG and Markdown blocks in the answers (rendered in a
-// sandboxed frame that cannot reach this page, this server or the network), the files that were attached or read by a
-// tool, a reader for one address, and the tool trail of the answer. The width, the view and whether it is open are
-// kept for this browser; the content is always the active chat's.
-const WB_STORE = "workbench";
-let wb = {open: false, tab: "artifact", mode: "preview", width: 420, selected: null, autoFor: null, autoKey: null};
-
-function wbSave() { store.set(WB_STORE, {open: wb.open, tab: wb.tab, mode: wb.mode, width: wb.width}); }
-function wbLoad() {
-  const saved = store.get(WB_STORE, null);
-  if (saved && typeof saved === "object") wb = {...wb, ...saved};
-  wb.width = Math.min(720, Math.max(320, +wb.width || 420));
-  $("workbench").style.width = `${wb.width}px`;
-  $("workbench").dataset.open = String(!!wb.open);
-  $("wb-toggle").setAttribute("aria-pressed", String(!!wb.open));
-  $("wb-toggle").setAttribute("aria-label", wb.open ? "Close the workbench" : "Open the workbench");
-}
-function wbOpen(open, tab) {
-  wb.open = !!open;
-  if (tab) wb.tab = tab;
-  $("workbench").dataset.open = String(wb.open);
-  $("wb-toggle").setAttribute("aria-pressed", String(wb.open));
-  $("wb-toggle").setAttribute("aria-label", wb.open ? "Close the workbench" : "Open the workbench");
-  // opening it where the last session left it, unless that view has nothing to show and an answer has an artifact
-  if (wb.open && !tab && wb.tab === "files" && !wbFileList().length && wbArtifacts().length) wb.tab = "artifact";
-  if (wb.open) wbShowTab(wb.tab);
-  wbSave();
-}
-function wbShowTab(tab) {
-  wb.tab = tab;
-  for (const b of document.querySelectorAll("[data-wb-tab]")) b.setAttribute("aria-selected", String(b.dataset.wbTab === tab));
-  for (const p of document.querySelectorAll("[data-wb-pane]")) p.hidden = p.dataset.wbPane !== tab;
-  if (tab === "artifact") wbRenderArtifact();
-  if (tab === "files") wbRenderFiles();
-  if (tab === "activity") wbRenderActivity();
-  if (tab === "reader") $("wb-url").focus();
-  wbSave();
-}
-function wbRender() { wbShowTab(wb.tab); }
-
-// ---- artifacts: a fenced block the browser can show. What counts is the content, not the label the model chose:
-// a ```xml block holding an <svg> is a drawing, and an unlabelled block that starts like a document is a page.
+// ------------------------------------------------------------------ previews in the chat, and downloads
+// A fenced block that is a picture or a page is worth seeing: SVG, HTML and Markdown get a sandboxed preview above
+// their code (codeBlock), and the block's button downloads it as the file it is.  There is no side panel: what the
+// model writes stays in the answer, where it was produced.
 function wbKind(lang, code) {
   const label = String(lang || "").toLowerCase();
   const head = String(code || "").slice(0, 4000);
@@ -2846,64 +2805,6 @@ function wbKind(lang, code) {
     }
   }
   return null;
-}
-function wbArtifacts() {
-  const out = [];
-  const scan = (list, prefix) => {
-    list.forEach((m, i) => {
-      if (m.role !== "assistant" || !m.text) return;
-      const re = /```([a-zA-Z0-9_+-]*)[ \t]*\r?\n([\s\S]*?)```/g;
-      let match, n = 0;
-      while ((match = re.exec(m.text))) {
-        const lang = (match[1] || "").toLowerCase();
-        const kind = wbKind(lang, match[2]);
-        if (!kind) continue;
-        n += 1;
-        out.push({id: `${prefix}${i}-${n}`, lang: kind, code: match[2].trim(), title: wbTitle(match[2], kind, n)});
-      }
-      // a block still being written: the last fence is open, so show what there is of it while the answer streams
-      const fences = (m.text.match(/```/g) || []).length;
-      if (fences % 2 === 1) {
-        const after = m.text.slice(m.text.lastIndexOf("```") + 3);
-        const nl = after.indexOf("\n");
-        if (nl >= 0) {
-          const body = after.slice(nl + 1);
-          const kind = wbKind(after.slice(0, nl).trim(), body);
-          if (kind) {
-            n += 1;
-            out.push({id: `${prefix}${i}-${n}-draft`, lang: kind, code: body.trim(), draft: true,
-                      title: `${wbTitle(body, kind, n)} (writing…)`});
-          }
-        }
-      }
-    });
-    // pictures the answers made or named: a generate_image call's results, a tool result's addresses, a Markdown image
-    list.forEach((m) => {
-      if (m.role !== "assistant") return;
-      const seen = new Set();
-      const add = (url, alt) => {
-        if (!sameOriginImage(url) || seen.has(`img:${url}`)) return;
-        seen.add(`img:${url}`);
-        out.push({id: `img:${url}`, kind: "image", lang: "image", code: url, url,
-                  title: alt ? String(alt).slice(0, 60) : "Image"});
-      };
-      for (const t of m.tools || []) {
-        for (const image of t.images || []) add(image.url, t.tool);
-        for (const match of (t.result || "").matchAll(IMAGE_URL)) add(match[0], t.tool);
-      }
-      for (const match of (m.text || "").matchAll(/!\[([^\]\n]{0,80})\]\(([^)\s]+)\)/g)) add(match[2], match[1]);
-    });
-  };
-  scan(messages, "");
-  // the Images room has its own thread, and its answers belong in the panel too (an SVG made there opens like one
-  // made in the chat; its pictures open in the stage instead of doing nothing)
-  if (typeof room === "object" && room && Array.isArray(room.messages)) scan(room.messages, "room-");
-  return out;
-}
-function wbTitle(code, lang, n) {
-  const h = code.match(/<h1[^>]*>([^<]{1,80})<\/h1>/i) || code.match(/<title[^>]*>([^<]{1,80})<\/title>/i) ||
-            code.match(/^#\s+(.{1,80})$/m) || code.match(/<!--\s*([^->]{1,80})\s*-->/);
-  return h ? h[1].trim() : `${lang === "markdown" ? "Markdown" : lang.toUpperCase()} · ${n}`;
 }
 // The frame's own policy: no network at all, no access to this page, inline script and style only. Nothing the model
 // writes can reach the server, the user's other tabs or the internet through it.
@@ -2929,278 +2830,33 @@ function wbDoc(a) {
   if (/<html[\s>]/i.test(inner)) return inner.replace(/<html([^>]*)>/i, `<html$1><head>${WB_CSP}</head>`);
   return `<!doctype html><html><head><meta charset="utf-8">${WB_CSP}</head><body>${inner}</body></html>`;
 }
-function wbRenderArtifact() {
-  const list = wbArtifacts();
-  const select = $("wb-artifact");
-  const ids = list.map((a) => a.id).join(",");
-  if (select.dataset.ids !== ids) {
-    select.dataset.ids = ids;
-    select.replaceChildren();
-    for (const a of list) {
-      const o = document.createElement("option");
-      o.value = a.id;
-      o.textContent = a.title;
-      select.append(o);
-    }
-    select.hidden = !list.length;
-  }
-  let a = list.find((x) => x.id === wb.selected);
-  if (!a && list.length) a = list[list.length - 1];
-  wb.selected = a ? a.id : null;
-  if (select.value !== wb.selected) select.value = wb.selected || "";
-  const empty = !a;
-  $("wb-none").hidden = !empty;
-  $("wb-stage").hidden = empty;
-  for (const id of ["wb-copy", "wb-download", "wb-open"]) $(id).hidden = empty;
-  $("wb-mode").hidden = empty;
-  if (empty) return;
-  select.value = wb.selected;
-  $("wb-source").textContent = a.kind === "image" ? a.url : a.code;
-  const source = wb.mode === "source";
-  const picture = a.kind === "image";
-  $("wb-source").hidden = !source;
-  $("wb-frame").hidden = source || picture;
-  $("wb-image").hidden = !picture || source;
-  if (picture) $("wb-image").src = a.url;
-  // srcdoc, not a blob URL: a sandboxed frame has an opaque origin and may not load a blob made by this page
-  if (!source && !picture) $("wb-frame").srcdoc = wbDoc(a);
+// The file a downloaded block becomes: its own <title>, <h1> or first heading, else "artifact", with the kind's
+// extension.  Characters Windows does not allow in a name become dashes.
+function artifactFileName(kind, code) {
+  const m = code.match(/<title[^>]*>([^<]{1,80})<\/title>/i) || code.match(/<h1[^>]*>([^<]{1,80})<\/h1>/i) ||
+            code.match(/^#\s+(.{1,80})$/m);
+  const base = (m ? m[1] : "artifact").trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").slice(0, 60).trim();
+  return `${base || "artifact"}.${kind === "markdown" ? "md" : kind === "svg" ? "svg" : "html"}`;
 }
-function wbCurrent() {
-  const list = wbArtifacts();
-  return list.find((a) => a.id === wb.selected) || list[list.length - 1] || null;
+function downloadArtifact(kind, code) {
+  if (!code) return;
+  const type = kind === "svg" ? "image/svg+xml" : kind === "markdown" ? "text/markdown" : "text/html";
+  const url = URL.createObjectURL(new Blob([code], {type}));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = artifactFileName(kind, code);
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
-// A picture clicked in the chat: open the panel on it (the answer's own images are in its artifact list).
-function wbShowImage(url) {
-  const found = wbArtifacts().find((a) => a.kind === "image" && a.code === url);
-  if (!found) return;
-  wb.selected = found.id;
-  wbOpen(true, "artifact");
-}
-// A rendered block's "Open in the panel": find that exact block in the artifact list and open it there.  The block's
-// text is the key (ids move as the thread grows) and the kind keeps an SVG from matching an HTML block of the same text.
-function wbShowArtifact(kind, code) {
-  const wanted = String(code || "").trim();
-  const found = wbArtifacts().find((a) => a.lang === kind && a.code === wanted);
-  if (!found) return;
-  wb.selected = found.id;
-  wbOpen(true, "artifact");
-}
-// The button is rendered inside both the chat's answers and the Images room's thread, so one listener on the document
-// serves both.
+// The download button is inside both the chat's answers and the Images room's thread; one listener on the document
+// serves both.  The block's kind and its text are the source of truth, so the file is exactly what was rendered.
 document.addEventListener("click", (e) => {
-  const button = e.target.closest("[data-artifact-open]");
+  const button = e.target.closest("[data-artifact-download]");
   if (!button) return;
   const box = button.closest(".st-code");
   const code = box && box.querySelector("pre code");
-  if (code && box.dataset.kind) wbShowArtifact(box.dataset.kind, code.textContent);
+  if (code && box.dataset.kind) downloadArtifact(box.dataset.kind, code.textContent);
 });
-$("wb-artifact").onchange = () => { wb.selected = $("wb-artifact").value; wbRenderArtifact(); };
-for (const b of $("wb-mode").children) {
-  b.onclick = () => {
-    wb.mode = b.dataset.wbMode;
-    for (const x of $("wb-mode").children) x.setAttribute("aria-checked", String(x === b));
-    wbRenderArtifact();
-    wbSave();
-  };
-}
-for (const id of ["wb-copy", "wb-download", "wb-open"]) $(id).onclick = () => {
-  const a = wbCurrent();
-  if (!a) return;
-  if (id === "wb-copy") { copyText(a.kind === "image" ? a.url : a.code); return; }
-  if (a.kind === "image") {                             // the server's own file: no blob needed
-    if (id === "wb-open") { window.open(a.url, "_blank", "noopener"); return; }
-    const link = document.createElement("a");
-    link.href = a.url;
-    link.download = `image-${Date.now()}.png`;
-    link.click();
-    return;
-  }
-  const type = a.lang === "html" ? "text/html" : a.lang === "svg" ? "image/svg+xml" : "text/markdown";
-  const url = URL.createObjectURL(new Blob([a.code], {type}));
-  if (id === "wb-open") { window.open(url, "_blank", "noopener"); return; }
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${a.title.replace(/[\\/:*?"<>|]+/g, "-").slice(0, 50) || "artifact"}.${a.lang === "markdown" ? "md" : a.lang}`;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
-};
-
-// ---- files: what was attached, and what a tool read ----
-function wbFileList() {
-  const out = [];
-  messages.forEach((m, i) => {
-    if (m.role !== "user") return;
-    for (const f of m.files || []) if (f.text != null) out.push({name: f.name, text: f.text, meta: "attached", key: `a${i}-${out.length}`});
-    for (const img of m.images || []) if (img.url) out.push({name: img.name, image: img.url, meta: "attached picture", key: `i${i}-${out.length}`});
-  });
-  messages.forEach((m, i) => {
-    for (const t of m.tools || []) {
-      if (t.result == null || t.result.length < 2000) continue;
-      out.push({name: `${t.server ? `${t.server} / ` : ""}${t.tool || t.name}`, text: t.result, key: `t${i}-${t.id}`,
-                meta: `tool result · ${fmt(t.chars || t.result.length)} characters`});
-    }
-  });
-  return out;
-}
-function wbRenderFiles() {
-  const box = $("wb-files");
-  const files = wbFileList();
-  box.replaceChildren();
-  if (!files.length) {
-    const empty = document.createElement("div");
-    empty.className = "st-empty";
-    empty.innerHTML = `<span class="st-empty__title">No files yet</span><span>Attach one in the message box, or let a tool read one.</span>`;
-    box.append(empty);
-    return;
-  }
-  for (const f of files) {
-    const item = document.createElement("div");
-    item.className = "wb-file";
-    item.dataset.wbFile = f.key;
-    item.setAttribute("role", "button");
-    item.setAttribute("tabindex", "0");
-    item.innerHTML = `<span class="wb-file__name"></span><span class="wb-file__meta"></span>`;
-    item.querySelector(".wb-file__name").textContent = f.name;
-    item.querySelector(".wb-file__meta").textContent = f.meta;
-    if (f.image) {
-      const img = document.createElement("img");
-      img.src = f.image;
-      img.alt = f.name;
-      img.style.maxWidth = "100%";
-      img.style.marginTop = "6px";
-      img.style.borderRadius = "8px";
-      item.append(img);
-    } else {
-      const pre = document.createElement("pre");
-      pre.className = "wb-file__body";
-      pre.textContent = f.text;
-      pre.hidden = true;
-      item.append(pre);
-    }
-    box.append(item);
-  }
-}
-$("wb-files").onclick = (e) => {
-  const item = e.target.closest("[data-wb-file]");
-  const body = item && item.querySelector(".wb-file__body");
-  if (body) body.hidden = !body.hidden;
-};
-
-// ---- activity: the tool trail of the answer ----
-function wbRenderActivity() {
-  const box = $("wb-activity");
-  const m = (busy && busy.msg) || [...messages].reverse().find((x) => x.role === "assistant" && x.tools && x.tools.length);
-  box.replaceChildren();
-  if (!m || !(m.tools || []).length) {
-    const empty = document.createElement("div");
-    empty.className = "st-empty";
-    empty.innerHTML = `<span class="st-empty__title">No tool calls</span><span>The model's tool calls and their results show here while it answers.</span>`;
-    box.append(empty);
-    return;
-  }
-  const head = document.createElement("div");
-  head.className = "muted small";
-  const ran = m.tools.filter((t) => t.state === "done" || t.state === "error").length;
-  head.textContent = `${fmt(m.tools.length)} call${m.tools.length === 1 ? "" : "s"} · ${fmt(ran)} finished`;
-  box.append(head);
-  for (const t of m.tools) {
-    const row = document.createElement("div");
-    row.className = "wb-file";
-    const ok = t.state === "done" ? "ok" : t.state === "error" ? "failed" : t.state;
-    const bytes = t.chars ? `${fmt(t.chars)} characters · ` : "";
-    row.innerHTML = `<span class="wb-file__name"></span><span class="wb-file__meta"></span>`;
-    row.querySelector(".wb-file__name").textContent = `${t.tool || t.name}${t.server ? ` · ${t.server}` : ""}`;
-    row.querySelector(".wb-file__meta").textContent =
-      `${ok}${t.ms != null ? ` · ${(t.ms / 1000).toFixed(1)} s` : ""} · ${bytes}adds about ${fmt(Math.round((t.chars || (t.result || "").length) / 4))} tokens`;
-    if (t.result != null) {
-      const pre = document.createElement("pre");
-      pre.className = "wb-file__body";
-      pre.textContent = t.result;
-      pre.hidden = true;
-      row.append(pre);
-    }
-    box.append(row);
-  }
-}
-$("wb-activity").onclick = (e) => {
-  const item = e.target.closest(".wb-file");
-  const body = item && item.querySelector(".wb-file__body");
-  if (body) body.hidden = !body.hidden;
-};
-
-// ---- reader: one address as readable text, through the same fetch the page reader uses ----
-async function wbRead() {
-  const url = $("wb-url").value.trim();
-  const msg = $("wb-read-msg");
-  const say = (text, bad) => { msg.textContent = text; msg.className = `small ${bad ? "mcp-msg-bad" : "mcp-msg-ok"}`; };
-  if (!url) { say("Paste an address first.", true); return; }
-  if (!/^https?:\/\/[^\s/]+/i.test(url)) { say("The address must start with http:// or https://.", true); return; }
-  $("wb-read").disabled = true;
-  say("Reading…", false);
-  try {
-    const r = await fetch("search", {method: "POST", headers: headers(true), body: JSON.stringify({read: {url}})});
-    const j = await r.json();
-    if (!r.ok) { say((j.error && j.error.message) || `HTTP ${r.status}`, true); return; }
-    if (!j.ok) { say(j.error || "The page could not be read.", true); return; }
-    $("wb-read-text").textContent = j.text;
-    say(`${fmt(j.chars)} characters · ${(j.ms / 1000).toFixed(1)} s${j.truncated ? " · cut at the setting's limit" : ""}`, false);
-  } catch (e) {
-    say(String(e.message || e), true);
-  } finally {
-    $("wb-read").disabled = false;
-  }
-}
-$("wb-read").onclick = wbRead;
-$("wb-url").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); wbRead(); } };
-
-// ---- opening, closing, resizing ----
-$("wb-toggle").onclick = () => wbOpen(!wb.open);
-$("wb-close").onclick = () => wbOpen(false);
-for (const b of document.querySelectorAll("[data-wb-tab]")) b.onclick = () => wbShowTab(b.dataset.wbTab);
-let wbDrag = null;
-$("wb-resize").addEventListener("pointerdown", (e) => {
-  wbDrag = {x: e.clientX, width: $("workbench").getBoundingClientRect().width};
-  $("wb-resize").setPointerCapture(e.pointerId);
-});
-$("wb-resize").addEventListener("pointermove", (e) => {
-  if (!wbDrag) return;
-  wb.width = Math.min(720, Math.max(320, wbDrag.width + (wbDrag.x - e.clientX)));
-  $("workbench").style.width = `${wb.width}px`;
-});
-$("wb-resize").addEventListener("pointerup", () => { if (wbDrag) { wbDrag = null; wbSave(); } });
-$("wb-resize").addEventListener("keydown", (e) => {
-  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-  e.preventDefault();
-  wb.width = Math.min(720, Math.max(320, wb.width + (e.key === "ArrowLeft" ? 24 : -24)));
-  $("workbench").style.width = `${wb.width}px`;
-  wbSave();
-});
-document.addEventListener("keydown", (e) => {
-  if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return;
-  if (e.key.toLowerCase() !== "b") return;
-  e.preventDefault();
-  wbOpen(!wb.open);
-});
-// Live: the first fenced page or drawing in an answer opens the panel on it, once per message.
-// Live: a viewable block that appears in the answer being written opens the panel on it, and keeps it on the newest.
-// It re-reads the chat only when a fence opens or closes, never on every token.
-function wbMaybeAuto(m) {
-  if (!busy || busy.msg !== m || !m.text) return;
-  const fences = (m.text.match(/```/g) || []).length;
-  if (!fences) return;
-  const key = String(fences);
-  if (wb.autoFor === m && wb.autoKey === key) return;     // nothing new since the last look
-  wb.autoFor = m;
-  wb.autoKey = key;
-  const list = wbArtifacts();
-  if (!list.length) return;
-  wb.selected = list[list.length - 1].id;                 // the block that just arrived
-  if (!wb.open) wbOpen(true, "artifact");
-  else if (wb.tab === "artifact") wbRenderArtifact();
-  else if (wb.tab === "files" && !wbFileList().length) wbShowTab("artifact");
-}
-wbLoad();
-wbShowTab(wb.tab);
 
 // ------------------------------------------------------------------ start
 setBusy(false);

@@ -358,48 +358,9 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
   .st-chip-btn>span { max-width: 110px; }
 }
 
-/* ---------------------------------------------------------------- workbench (the right panel) */
+/* the chat's column fills the room the right panel used to take */
 .view--chat { flex-direction: row; }
 .chat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.workbench { position: relative; flex: none; width: var(--st-panel-w); min-width: 320px; max-width: 720px; display: none;
-             flex-direction: column; min-height: 0; background: var(--st-surface); border-left: 1px solid var(--st-line); }
-.workbench[data-open="true"] { display: flex; }
-.workbench__resize { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 3; }
-.workbench__resize:hover, .workbench__resize:focus-visible { background: color-mix(in srgb, var(--st-accent) 35%, transparent); }
-.workbench__head { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 12px; border-bottom: 1px solid var(--st-line); }
-.wb-tabs { flex: 1; grid-template-columns: repeat(4, 1fr); }
-.wb-tabs button { height: 28px; font-size: var(--st-fs-xs); }
-.workbench__body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.wb-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 12px; }
-.wb-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.wb-select { height: 32px; font-size: var(--st-fs-sm); flex: 1; min-width: 120px; max-width: 100%; }
-.seg--two { grid-template-columns: repeat(2, 1fr); }
-.seg--two button { height: 30px; padding: 0 10px; font-size: var(--st-fs-xs); }
-.wb-bar .st-btn--icon { width: 30px; height: 30px; }
-.wb-stage { flex: 1; min-height: 0; display: flex; border: 1px solid var(--st-line); border-radius: var(--st-r-md); overflow: hidden;
-            background: var(--st-bg); }
-.wb-frame { flex: 1; width: 100%; border: 0; background: #fff; }
-.wb-source { flex: 1; margin: 0; padding: 12px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
-             font: 400 12.5px/1.55 var(--st-font-mono); color: var(--st-ink-soft); background: var(--st-surface-2); }
-#wb-read-text { border: 1px solid var(--st-line); border-radius: var(--st-r-md); max-height: none; }
-.wb-empty { flex: 1; }
-.wb-files, .wb-activity { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 0; flex: 1; }
-.wb-file { display: flex; flex-direction: column; gap: 3px; padding: 9px 11px; border: 1px solid var(--st-line);
-           border-radius: 10px; background: var(--st-surface); cursor: pointer; text-align: left; color: var(--st-ink); }
-.wb-file:hover { border-color: var(--st-accent); }
-.wb-file__name { font-weight: 600; font-size: var(--st-fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.wb-file__meta { font-size: var(--st-fs-xs); color: var(--st-ink-muted); }
-.wb-file__body { margin: 6px 0 0; padding: 10px; max-height: 320px; overflow: auto; border-radius: 8px; background: var(--st-surface-2);
-                 font: 400 12px/1.5 var(--st-font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-.wb-activity .tool-call { margin: 0; }
-.wb-activity .st-badge { flex: none; }
-@media (max-width: 1100px) {
-  .workbench { position: fixed; right: 0; top: var(--st-header-h); bottom: 0; z-index: 35; width: min(var(--st-panel-w), 92vw);
-               box-shadow: var(--st-sh-pop); }
-}
-@media (max-width: 640px) {
-  .workbench { top: 0; width: 100vw; }
-}
 
 /* the model list (a hidden <select> keeps the state; the menu is what the page shows) */
 .model-select{height:30px;max-width:280px;padding:0 var(--st-s-2);border-radius:var(--st-r-md);border:1px solid var(--st-line);background:var(--st-surface-2);color:var(--st-ink);font:inherit;font-size:var(--st-fs-sm)}
@@ -441,12 +402,12 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 /* pictures the answers made: thumbnails under a tool call and in the panel's stage */
 .tool-call__pics { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
 .tool-pic { padding: 0; border: 1px solid var(--st-line); border-radius: 10px; overflow: hidden; background: var(--st-surface-2);
-            cursor: zoom-in; line-height: 0; }
+            cursor: pointer; line-height: 0; }
 .tool-pic:hover { border-color: var(--st-accent); }
 .tool-pic img { display: block; width: 148px; height: 148px; object-fit: cover; }
-.inline-img { max-width: 100%; border-radius: var(--st-r-md); border: 1px solid var(--st-line); cursor: zoom-in; display: block;
+.inline-img-link { display: block; }
+.inline-img { max-width: 100%; border-radius: var(--st-r-md); border: 1px solid var(--st-line); cursor: pointer; display: block;
               margin: 6px 0; }
-.wb-image { flex: 1; width: 100%; height: 100%; object-fit: contain; background: var(--st-bg); }
 /* ---------------- the Images room ---------------- */
 .view--images { position: relative; }
 .room { display: flex; flex-direction: column; height: 100%; min-height: 0; max-width: 1180px; margin: 0 auto;
@@ -606,12 +567,6 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
   .st-code { font-size: var(--st-fs-xs); }
   .st-dialog__head, .st-pop__head { padding-left: 14px; }
 }
-/* the answer's right panel is a column on a desktop and the whole screen on a phone */
-@media (max-width: 720px) {
-  .workbench { position: fixed; inset: 0; width: 100vw; max-width: 100vw; min-width: 0; z-index: 30;
-               border-left: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
-  .workbench__resize { display: none; }
-}
 /* dictation: the button says it is listening */
 .st-btn--icon.is-recording { color: #fff; background: var(--st-danger, #c9413a); border-color: transparent;
                              animation: st-dictation 1.3s ease-in-out infinite; }
@@ -627,7 +582,7 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 
 /* ---------------- pieces the model writes: SVG, HTML, Markdown ---------------- */
 .st-code__acts { display: flex; align-items: center; gap: 6px; margin-left: auto; }
-.st-code .st-code__open { color: #cbd5e1; background: transparent; border-color: rgba(255, 255, 255, .18);
+.st-code .st-code__download { color: #cbd5e1; background: transparent; border-color: rgba(255, 255, 255, .18);
                           height: 26px; padding: 0 8px; font-size: var(--st-fs-xs); }
 .st-artifact { background: #fff; border-bottom: 1px solid rgba(255, 255, 255, .08); }
 .st-artifact__frame { display: block; width: 100%; height: 240px; border: 0; background: #fff; }

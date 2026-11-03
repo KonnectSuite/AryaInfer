@@ -139,20 +139,20 @@ class Contract(unittest.TestCase):
         used = set(re.findall(r'icon:\s*"([^"]+)"', catalog))
         self.assertEqual(sorted(used - symbols), [], "the catalog names icons the sprite lacks")
 
-    def test_the_workbench_contract(self):
-        for name in ("workbench", "wb-toggle", "wb-close", "wb-resize", "wb-artifact", "wb-mode", "wb-stage",
-                     "wb-frame", "wb-source", "wb-none", "wb-files", "wb-url", "wb-read", "wb-read-msg",
-                     "wb-read-text", "wb-activity", "wb-copy", "wb-download", "wb-open", "wb-image"):
-            self.assertIn(name, self.page.by_id, name)
+    def test_the_chat_render_contract(self):
+        # the right panel is gone: none of its ids, and no toggle for it
+        for name in ("workbench", "wb-toggle", "wb-close", "wb-resize", "wb-frame", "wb-stage", "wb-artifact",
+                     "wb-files", "wb-url", "wb-read", "wb-activity", "wb-download", "wb-open"):
+            self.assertNotIn(name, self.page.by_id, name)
         # the frame that renders a model-written page: scripts yes, anything else no, and never this page's origin
-        frame = self.html[self.html.index('id="wb-frame"') - 200: self.html.index('id="wb-frame"') + 400]
-        self.assertIn('sandbox="allow-scripts"', frame)
-        self.assertNotIn("allow-same-origin", frame)
+        self.assertIn('class="st-artifact__frame" sandbox="allow-scripts"', self.js)
+        self.assertNotIn("allow-same-origin", self.js)
         self.assertIn("default-src 'none'", self.js)                 # no network from an artifact
-        self.assertIn('$("wb-toggle").onclick', self.js)
-        self.assertIn('$("wb-read").onclick', self.js)
         self.assertIn("function sameOriginImage(", self.js)          # only this server's pictures, never the internet
-        self.assertIn("data-wb-image", self.js)
+        # every rendered block downloads from the answer itself; nothing goes through a side panel
+        for needle in ("data-artifact-download", "function downloadArtifact(", "function artifactFileName("):
+            self.assertIn(needle, self.js, needle)
+        self.assertNotIn("data-wb-image", self.js)
 
     def test_the_images_dialog_contract(self):
         for name in ("image-dialog", "image-close", "image-status", "image-url", "image-url-note", "image-headers",
@@ -217,9 +217,9 @@ class Contract(unittest.TestCase):
         self.assertNotIn("svg{max-width:96%", body)
 
     def test_written_pages_render_in_the_answer(self):
-        for needle in ("data-artifact-open", "st-artifact__frame", "function wbShowArtifact",
+        for needle in ("data-artifact-download", "st-artifact__frame", "function downloadArtifact(",
                        "codeBlock(m[2].trim(), rest, {live: true})",   # a streaming block stays code
-                       'scan(room.messages, "room-")', "sandbox=\"allow-scripts\""):
+                       "sandbox=\"allow-scripts\""):
             self.assertIn(needle, self.js, needle)
         css = (WEB / "app.css").read_text(encoding="utf-8")
         self.assertIn(".st-artifact__frame", css)
@@ -263,7 +263,6 @@ class Contract(unittest.TestCase):
         self.assertIn("@supports (height: 100dvh)", css)             # the browser bars move
         self.assertIn("env(safe-area-inset-bottom)", css)            # the home indicator
         self.assertRegex(css, r"\.st-menu \{[^}]*bottom: calc\(10px \+ env\(safe-area-inset-bottom\)\)")
-        self.assertRegex(css, r"\.workbench \{[^}]*position: fixed; inset: 0")   # the panel is the screen
         self.assertIn("font-size: 16px;", css)                       # no zoom when a field takes focus
         for name in ("voice-btn", "room-voice-btn"):
             self.assertIn(name, self.page.by_id, name)
@@ -275,9 +274,6 @@ class Contract(unittest.TestCase):
         self.assertIn(".st-composer__bar { flex-wrap: wrap;", css)
         # the MCP dialog's two panes become one column
         self.assertIn(".mcp-panes { grid-template-columns: 1fr;", css)
-        # the empty state of the panel is not inside the hidden stage, or "Nothing here yet" would never show
-        self.assertFalse(inside(self.page, "wb-none", "wb-stage"))
-        self.assertTrue(inside(self.page, "wb-none", "workbench"))
 
     def test_no_leftover_tab_markup(self):
         # the header's tab row became the sidebar's nav; nothing should still style or query the old classes
