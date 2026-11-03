@@ -915,4 +915,6 @@ tile and **682.6** with a 128 x 128 tile (sixteen warps, a warp's eight token gr
 activation copy 32 bytes at a time), against 1,428.4 for the expansion path.  The tile is now big enough to keep its
 activations for eight times as many output rows, but both the weight and activation staging are still load-sync-compute
 with no overlap; the next step is a double-buffered `cp.async` pipeline (what MMQ does) and a wider token tile, not
-another instruction change.
+another instruction change.  A per-128 activation group (one scale a k tile instead of four) was tried to cut that
+epilogue fourfold and made it **slower**: 562.6 tok/s.  The wider copy a token (128 bytes on 128 threads instead of
+32 bytes on 512) and the four A fragments held in registers cost more than the three scaled adds saved; it is parked.
