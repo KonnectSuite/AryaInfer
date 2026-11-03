@@ -530,3 +530,31 @@ answers; switching back to the GGUF model works; a streaming request forwarded 1
 Differences: 102,400-token context (the GGUF models keep 131,072 and 204,800), a WSL process to supervise, and none of
 the GGUF models' KV formats, slot tools or needle suite.  The two GGUF 27B models, the MoEs and the native engines are
 unchanged.
+
+### The Ninfer backend's AryaCode calibration (2026-11-02)
+
+The Ninfer server's defaults were calibrated with the same fixtures as the GGUF models (`tools/qwen38_calibrate.py`,
+`--max-tokens 1000` so thinking finishes before the answer, thinking on with `--default-thinking-budget 8000`, tool
+calls checked separately).  Six sets, ten requests each, scored by the tool:
+
+| set | truncations | loops | code | adherence | mean distinct-4 |
+| --- | --- | --- | --- | --- | --- |
+| config (the bare defaults at the time) | 1 | 2 | 6/7 | 3/3 | 0.89 |
+| coding 0.6/0.95/20, presence 0 | 0 | **0** | **7/7** | 3/3 | 0.91 |
+| coding-loop (presence 1.5) | 2 | 1 | 5/7 | 3/3 | 0.93 |
+| coding-0.5 (presence 0.5) | 0 | 1 | 7/7 | 3/3 | 0.88 |
+| balanced 0.7/0.9/20/0.8 | 0 | 0 | 7/7 | 3/3 | 0.89 |
+| greedy | 0 | 1 | 7/7 | 3/3 | 0.89 |
+
+The coding set won on the two things that matter in an agent loop: nothing truncated and no repeats.  The "config" row
+is what the bare defaults did at the time: the model card's presence penalty cost loops and a truncation, so the run
+config now carries the set's values outright: `--temperature 0.6 --top-p 0.95 --top-k 20 --presence-penalty 0
+--default-thinking-budget 8000`.
+
+With those flags and requests that name no sampling, the same set then measured 0 truncations, 1 loop, 7/7 code, 3/3
+adherence and 0.92 distinct-4: the defaults alone behave like the calibrated set.  OpenAI tool calling was checked on
+the same server: `finish_reason: tool_calls`, with `get_weather({"city":"Paris"})`.
+
+One gap to know: AryaStrata's per-effort thinking budgets (off/low/medium/high) are request-level fields on the strata
+path and are not rewritten for forwarded Ninfer requests; the Ninfer server applies its own
+`--default-thinking-budget 8000` and whatever thinking control a client sends in its own dialect.
