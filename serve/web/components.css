@@ -65,6 +65,17 @@ a{color:var(--st-accent-text);text-decoration:none} a:hover{text-decoration:unde
 .st-menu__note{margin-left:auto;color:var(--st-ink-muted);font-size:var(--st-fs-xs);font-weight:500}
 .invisible-ink{visibility:hidden}
 
+/* dialog — <dialog class="st-dialog"> with a head and a body; native focus trap and Escape */
+.st-dialog{width:min(760px,calc(100vw - 32px));max-height:min(86vh,900px);padding:0;border:1px solid var(--st-line);
+  border-radius:var(--st-r-xl);background:var(--st-surface);color:var(--st-ink);box-shadow:var(--st-sh-pop);overflow:hidden}
+.st-dialog--wide{width:min(1060px,calc(100vw - 32px))}
+.st-dialog::backdrop{background:rgba(8,12,18,.55)}
+.st-dialog[open]{animation:st-dialog-in 140ms var(--st-ease)}
+@keyframes st-dialog-in{from{opacity:0;transform:translateY(8px) scale(.995)}}
+.st-dialog__head{display:flex;align-items:center;gap:10px;padding:14px 14px 14px 20px;border-bottom:1px solid var(--st-line)}
+.st-dialog__spacer{flex:1}
+.st-dialog__body{padding:18px 20px 20px;overflow:auto;max-height:calc(min(86vh,900px) - 62px)}
+
 /* small shared pieces */
 .st-icon-tile{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;flex:none;
   border-radius:9px;background:var(--st-surface-2);border:1px solid var(--st-line);color:var(--st-ink-soft)}

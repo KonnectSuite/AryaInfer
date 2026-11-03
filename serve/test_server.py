@@ -3447,6 +3447,7 @@ class WebApp(unittest.TestCase):
         self.assertIn(b"\"web/app.js\"", body)   # relative since #82 (works behind a path-prefixed proxy)
         for path, want in (("/web/app.js", "javascript"), ("/web/app.css", "text/css"), ("/web/tokens.css", "text/css"),
                            ("/web/components.css", "text/css"), ("/web/sprite.svg", "image/svg+xml"),
+                           ("/web/mcp-catalog.js", "javascript"), ("/web/mcp-icons.svg", "image/svg+xml"),
                            ("/web/brand-mark.svg", "image/svg+xml"),
                            ("/web/companion-idle.webp", "image/webp"),
                            ("/web/companion-idle-reduced.png", "image/png")):

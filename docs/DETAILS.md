@@ -1567,7 +1567,9 @@ also paste as it is (key `"mcpServers"`):
 Or keep them in their own file and start the server with `--mcp-config path\to\claude_desktop_config.json` (a file
 with an `mcpServers` block; add it to the `serve/server.py` line of your run script). Restart AryaInfer after a change.
 
-**Or add them in the page: Monitor > MCP servers > Add a server.** The editor takes the same fields (name, program
+**Or add them in the page: Settings > Tools > MCP servers > Add server.** The catalog fills in the program, its
+arguments and the variables a server needs; Paste JSON takes a Claude Desktop block as it stands, and Manual has
+the same fields the config does (name, program
 with its arguments, environment and working folder, or the address with its headers), a **Disabled** switch, and
 **Edit**, **Restart** and **Remove** on each server it manages. The list it writes is `mcp-servers.json` beside the
 run config (one file for every model, since a server is not a model setting), and a change takes effect at once: only
@@ -1581,11 +1583,12 @@ unchanged keeps the stored value. The rest of this section applies to both.
   stdin/stdout; `npx`, `uvx`, `python` and friends are found on `PATH` as usual (Node.js is needed for `npx`
   servers). **An address** (`url`, optional `headers`) uses MCP's Streamable HTTP transport (the older SSE-only
   transport is not supported). `"disabled": true` keeps the entry (and its settings, secrets included) without
-  starting it: the Monitor lists it as Disabled and does not offer its tools.
+  starting it: the dialog lists it as Disabled and does not offer its tools.
 - The servers start with AryaInfer, in the background; the server window says what each one offers
   (`MCP server 'files': 14 tools (...)`), or why it did not start - its tools are then left out and the chat works
-  without them. The Monitor tab lists them, and the Sampling drawer has **Use tools from MCP servers** (on by
-  default). A server that stops later is started again at its next call, or now from the Monitor's **Restart**.
+  without them. The MCP dialog lists them with their state, their tools and the reason a server failed, and Settings >
+  Tools has **Use tools from MCP servers** (on by default). A server that stops later is started again at its next
+  call, or now from the dialog's **Restart**; its switch turns it off without losing its settings.
 - In the chat each call shows as a small block (tool, arguments, result); the model reads the result and goes on,
   up to `max_rounds` calls in a row per answer. A tool that fails or takes longer than `timeout_s` (default 60 s)
   gives the model an `error: ...` result instead of ending the chat. Results longer than `max_result_chars`
@@ -1596,7 +1599,7 @@ unchanged keeps the stored value. The rest of this section applies to both.
 
 **Security.** MCP tools run on your PC with your user's rights, and **the model decides when to call them** - also
 because of what it reads (a web page or a file can contain instructions). Give a filesystem server only the folders
-it needs, prefer read-only tools, and don't add servers you don't trust. A program added from the Monitor tab is a
+it needs, prefer read-only tools, and don't add servers you don't trust. A program added from the MCP dialog is a
 program this server starts with your rights, so the same rule holds there. The tools can only be used from the chat
 page itself (a request with another site's Origin or without a JSON content type is refused), and the editor changes
 servers only from that page; if AryaInfer is reachable from other devices, set an API key.
@@ -1604,8 +1607,8 @@ servers only from that page; if AryaInfer is reachable from other devices, set a
 ## Web search (SearXNG)
 
 The chat page can give the model a web search of your own: point AryaInfer at a
-[SearXNG](https://docs.searxng.org) instance (Monitor > Web search, or `websearch.json` beside the run config, or a
-`"search"` block in `strata-<model>.json`) and switch it on. The model then has `web_search` (a query, then titles,
+[SearXNG](https://docs.searxng.org) instance (Settings > Tools > Web search, or `websearch.json` beside the run config,
+or a `"search"` block in `strata-<model>.json`) and switch it on. The model then has `web_search` (a query, then titles,
 addresses and snippets) and `read_page` (one address from those results, as readable text). Both run in the server, in
 the same tool loop as the MCP tools above, and only for the chat page's own requests (`"strata_search": true`); every
 other client sees the API as before. The instance must answer JSON (`search.formats` in its `settings.yml`), and the
@@ -2366,6 +2369,19 @@ except the message you send. The newest 50 are kept; older ones are dropped when
 keeps a single chat (anything older than this build) copies that chat into the list on its first run and leaves the
 old entry in place, so going back to an older build still finds it. Search the list with the box above it, or press
 Ctrl/Cmd+K. The model is selected in the message box, and **Ctrl/Cmd+Shift+N** starts a chat.
+
+**Tools** live behind Settings > Tools, one dialog each. **MCP servers** lists what is configured, what is connected
+and which tools each server offers, with a switch per server and Restart, Edit, Copy JSON and Remove; *Add server*
+opens a catalog of known servers (file, git, fetch, GitHub, GitLab, Playwright, Docker, Postgres and others) whose
+form asks for the folder, token or URL that server needs and shows the command it will run, a **Paste JSON** box for a
+Claude Desktop or Cursor block, and the same fields by hand. A server added here starts at once, without a restart.
+**Web search** holds the SearXNG settings; its master switch saves at once, the other fields on Save, and *Try one
+search* runs a real query with the fields as they stand and reports the count, the time, the engines that answered
+and the first address.
+
+The dialog keeps two keys of its own in each server's settings: `icon` (which mark to draw) and `title` (the catalog's
+name). AryaInfer ignores them; they are how the page draws the same card next time, and they travel with the server in
+`mcp-servers.json`.
 
 ### API request monitor
 

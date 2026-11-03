@@ -105,6 +105,38 @@ class Contract(unittest.TestCase):
         for call in ('$("chat-list").onclick', '$("chat-menu").onclick', '$("chat-search").oninput'):
             self.assertIn(call, self.js)
 
+    def test_the_mcp_dialog_contract(self):
+        for name in ("mcp-dialog", "mcp-list", "mcp-detail", "mcp-add", "mcp-add-view", "mcp-catalog",
+                     "mcp-catalog-search", "mcp-paste", "mcp-paste-add", "mcp-form", "mcp-name", "mcp-kind",
+                     "mcp-stdio", "mcp-http", "mcp-command", "mcp-args", "mcp-env", "mcp-cwd", "mcp-url",
+                     "mcp-headers", "mcp-disabled", "mcp-save", "mcp-cancel", "mcp-msg", "mcp-close", "mcp-open",
+                     "mcp-filter", "mcp-count"):
+            self.assertIn(name, self.page.by_id, name)
+        self.assertIn('$("mcp-form").onsubmit', self.js)          # Enter saves, it does not reload
+        self.assertIn("mcp-servers.json", self.html)
+
+    def test_the_web_search_dialog_contract(self):
+        for name in ("search-dialog", "search-form", "search-enabled", "search-url", "search-url-note",
+                     "search-test-query", "search-test", "search-test-result", "search-save", "search-msg",
+                     "search-sum", "search-open", "search-close", "search-state"):
+            self.assertIn(name, self.page.by_id, name)
+        self.assertIn('$("search-form").onsubmit', self.js)
+        self.assertNotIn("prompt(", self.js)                      # the test query is a field, not a prompt box
+
+    def test_the_catalog_is_well_formed(self):
+        catalog = (WEB / "mcp-catalog.js").read_text(encoding="utf-8")
+        self.assertIn("window.MCP_CATALOG", catalog)
+        ids = re.findall(r'\bid:\s*"([^"]+)"', catalog)
+        self.assertGreaterEqual(len(ids), 18)
+        self.assertEqual(sorted(ids), sorted(set(ids)), "a catalog id is used twice")
+        for transport in re.findall(r'transport:\s*"([^"]+)"', catalog):
+            self.assertIn(transport, ("stdio", "http"))
+        # every icon a catalog entry names is a symbol in the MCP sprite
+        sprite = (WEB / "mcp-icons.svg").read_text(encoding="utf-8")
+        symbols = set(re.findall(r'<symbol id="m-([^"]+)"', sprite))
+        used = set(re.findall(r'icon:\s*"([^"]+)"', catalog))
+        self.assertEqual(sorted(used - symbols), [], "the catalog names icons the sprite lacks")
+
     def test_the_views_still_carry_what_the_other_suites_pin(self):
         for name in ("cc-card", "cc-slots-text", "cc-mem-text", "cc-facts", "cc-note"):
             self.assertIn(name, self.page.by_id)
@@ -116,7 +148,7 @@ class Contract(unittest.TestCase):
         self.assertIsNone(re.search(r'src="https?://', self.html), "the page must load only this server's files")
         self.assertIsNone(re.search(r'fetch\(\s*[`"]https?://', self.js), "the page must talk only to this server")
         scripts = re.findall(r'<script[^>]*src="([^"]+)"', self.html)
-        self.assertEqual(scripts, ["web/app.js"])
+        self.assertEqual(scripts, ["web/mcp-catalog.js", "web/app.js"])
 
     def test_the_icons_the_page_names_are_in_the_sprite(self):
         symbols = set(re.findall(r'<symbol id="([^"]+)"', self.sprite))

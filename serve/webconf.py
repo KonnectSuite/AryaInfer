@@ -51,7 +51,7 @@ def _aside(path: Path, why: str) -> dict:
         where = f"moved to {target.name}"
     except OSError:
         where = "left as it is"
-    print(f"[strata] {path.name}: {why}; {where}. The Monitor tab starts with no servers; the rest of the chat is "
+    print(f"[strata] {path.name}: {why}; {where}. The MCP dialog starts with no servers; the rest of the chat is "
           "unaffected.", flush=True)
     return {}
 

@@ -827,7 +827,7 @@ def hub_from_config(cfg: dict, mcp_config_path: str | None = None, managed: dict
         for name, c in servers_from(_file_block(mcp_config_path, where), where, keep_disabled=True).items():
             servers[name], sources[name] = c, "file"
     if managed:
-        where = f"{managed_file or 'mcp-servers.json'} (the Monitor tab's file)"
+        where = f"{managed_file or 'mcp-servers.json'} (the MCP dialog's file)"
         for name, c in servers_from(managed, where, keep_disabled=True).items():
             servers[name], sources[name] = c, "managed"
     if not servers:

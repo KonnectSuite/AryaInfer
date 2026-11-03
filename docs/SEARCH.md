@@ -28,7 +28,7 @@ as before. They cost the model nothing until it decides to call one.
 
    Without it the instance answers `403` with an HTML page, and the card's Test says so by name (`search.formats`)
    instead of reporting a generic failure.
-2. In AryaInfer open **Monitor > Web search (SearXNG)**, paste the instance's base URL (for example
+2. In AryaInfer open **Settings > Tools > Web search**, paste the instance's base URL (for example
    `http://127.0.0.1:8080`, or `https://search.example.ts.net`), and turn **Use web search** on.
 3. Press **Test**: it runs one real search with the fields as they are (saved or not) and reports the result count, the
    time, the engines that answered, the engines that did not, and the first address.

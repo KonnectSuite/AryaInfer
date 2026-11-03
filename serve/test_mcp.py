@@ -600,6 +600,21 @@ class EditorHttp(unittest.TestCase):
         self.assertIsNone(self.server("fresh"))
         self.assertEqual(sorted(s["name"] for s in self.status()["servers"]), ["fixed"])
 
+    def test_the_pages_own_keys_come_back(self):
+        # the page stores which mark a server gets and the name the catalog gave it; the engine ignores both, but
+        # GET /mcp has to hand them back so the next load draws the same card
+        code, _ = self.post({"add": {"marked": {**stdio(), "icon": "github", "title": "GitHub"}}})
+        self.assertEqual(code, 200)
+        stored = self.file()["mcpServers"]["marked"]
+        self.assertEqual((stored["icon"], stored["title"]), ("github", "GitHub"))
+        self.assertEqual(self.server("marked")["config"]["icon"], "github")
+        # an update is the whole server, as the page sends it (its own keys included): sending them back keeps them
+        code, _ = self.post({"update": {"name": "marked", "config": {**stored, "disabled": True}}})
+        self.assertEqual(code, 200)
+        self.assertEqual(self.server("marked")["config"]["icon"], "github")
+        self.assertEqual(self.server("marked")["config"]["disabled"], True)
+        self.assertEqual(self.file()["mcpServers"]["marked"]["icon"], "github")
+
     def test_a_disabled_server_is_listed_and_switched_back_on(self):
         code, _ = self.post({"add": {"off": {**stdio(), "disabled": True}}})
         self.assertEqual(code, 200)

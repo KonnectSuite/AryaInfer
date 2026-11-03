@@ -26,3 +26,15 @@ build, configuration, workload and raw results for every new performance claim.
 Technical identifiers such as `strata-poly`, the `polystrata.py` compatibility CLI,
 upstream release/download URLs, original benchmark files and repository names
 remain where changing them would break compatibility or erase attribution.
+
+## The web app's interface
+
+The chat page's MCP catalog and its add-server flow are adapted from
+[llama.cpp](https://github.com/ggml-org/llama.cpp)'s server WebUI (MIT): the shape of
+a catalog entry, the category grouping and the order of the add flow. No source file
+from that project is copied, and its web UI is Svelte, which this page does not use.
+
+The brand marks in `serve/web/mcp-icons.svg` come from
+[Simple Icons](https://simpleicons.org), whose icon data is CC0 1.0. Each mark is a
+trademark of its owner and identifies its product only; see
+`serve/web/mcp-icons.LICENSE.txt`.

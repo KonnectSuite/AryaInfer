@@ -802,8 +802,9 @@ All twelve models are used the same way: the same app, the same API.
     ([setup](docs/DETAILS.md#the-responses-api-and-codex-cli)).
 - **Thinking:** choose **off, low, medium or high** in the chat menu or in your app's "reasoning effort". Off is the
   fastest. High is best for hard questions.
-- **Tools in the chat page:** give the model your own [MCP servers](docs/DETAILS.md#tools-from-mcp-servers) and a
-  [SearXNG web search](docs/SEARCH.md) from **Monitor** - add them there, and they are offered from the next answer on.
+- **Tools in the chat page:** give the model your own [MCP servers](docs/DETAILS.md#tools-from-mcp-servers) from
+  **Settings > Tools > MCP servers** (a catalog of known servers, a pasted Claude Desktop block, or the fields by
+  hand) and a [SearXNG web search](docs/SEARCH.md) beside it; both are offered from the next answer on.
 - **From your phone or another PC:** `START-HERE.bat --setup --host 0.0.0.0 --api-key <secret>`. Always set a key.
 
 The following behavior and platform differences are inherited from the upstream

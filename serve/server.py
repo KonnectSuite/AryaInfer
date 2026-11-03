@@ -6543,7 +6543,7 @@ def make_handler(svc: Service):
             self._json(200, {**runconfig.view(new, svc.config_path), "changed": changed})
 
         def _mcp_post(self):
-            """POST /mcp: the Monitor tab's editor - add, change, disable, remove or restart one MCP server.  JSON
+            """POST /mcp: the MCP dialog's editor - add, change, disable, remove or restart one MCP server.  JSON
             from AryaStrata's own page only, as /config (the key is checked before).  The change reaches the page's
             own file (mcp-servers.json) first, then the running servers: only the one it names starts or stops."""
             body = self._body()
@@ -6561,7 +6561,7 @@ def make_handler(svc: Service):
                 self._json(500, {"error": {"type": "server_error",
                                            "message": f"the MCP servers cannot be written: {e}"}})
                 return
-            print(f"[strata] the Monitor tab: {', '.join(changed)} (MCP servers)", flush=True)
+            print(f"[strata] the MCP dialog: {', '.join(changed)} (MCP servers)", flush=True)
             self._json(200, {**(svc.mcp.status() if svc.mcp is not None else {"servers": [], "tools": 0}),
                              "changed": changed})
 
@@ -6698,7 +6698,7 @@ def make_handler(svc: Service):
                 return
             svc.search = websearch.SearchHub(settings) if settings["enabled"] and settings["base_url"] else None
             print(f"[strata] web search {'on: ' + settings['base_url'] if svc.search is not None else 'off'}"
-                  " (Monitor > Web search)", flush=True)
+                  " (Settings > Tools)", flush=True)
             self._json(200, self._search_view())
 
         def _search_test(self, spec):

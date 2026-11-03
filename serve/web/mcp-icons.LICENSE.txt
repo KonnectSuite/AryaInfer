@@ -1,0 +1,9 @@
+The brand marks in mcp-icons.svg (filesystem, git, github, gitlab, sentry, puppeteer, docker, kubernetes,
+postgres, sqlite, notion, slack, brave, chrome) come from Simple Icons, https://simpleicons.org, whose icon data is
+released under CC0 1.0 (https://creativecommons.org/publicdomain/zero/1.0/).
+
+Each mark is a trademark of its owner and is used here only to identify the product or service it belongs to. Their
+use does not imply any endorsement, and the marks are not covered by this repository's license.
+
+The remaining glyphs in that file (mcp, folder, globe, clock, cube, book, brain, playwright) were drawn for
+AryaInfer and carry the repository's MIT license like the rest of serve/web.

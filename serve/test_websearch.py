@@ -456,5 +456,109 @@ class ChatLoop(unittest.TestCase):
         self.assertEqual(code, 400)
 
 
+class PageSettings(unittest.TestCase):
+    """POST /search as the page's dialog sends it: the card's exact object, the refusals it must show, and one real
+    query through Test.  The page kept sending a shape nothing exercised; these are its fields, as they leave it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.good = fake.search_server()
+        cls.base = f"http://127.0.0.1:{cls.good.server_address[1]}"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.good.shutdown()
+        cls.good.server_close()
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        tok = ByteTokenizer()
+        self.svc = Service(MockEngine(tok, "</think>\n\nhi"), tok, ChatTemplate(ROOT / "serve/chat_template.jinja"))
+        self.svc.search_path = os.path.join(self.dir.name, "websearch.json")
+        self.svc.config_path = None
+        self.httpd = serve(self.svc, port=0)
+        self.base_url = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+
+    def tearDown(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.dir.cleanup()
+
+    def call(self, path, body=None):
+        req = urllib.request.Request(self.base_url + path, data=json.dumps(body).encode() if body is not None else None,
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            with e:
+                return e.code, json.loads(e.read())
+
+    def card(self, **over):
+        """The object the dialog's Save sends: every field, the toggles as booleans, numbers as numbers."""
+        body = {"enabled": True, "base_url": self.base + "/", "auth": "none", "token": "", "basic_user": "",
+                "basic_pass": "", "headers": {}, "language": "en", "safesearch": "", "categories": "",
+                "time_range": "", "read_page": True, "allow_local": True, "timeout_s": 20, "max_results": 8}
+        body.update(over)
+        return body
+
+    def test_the_cards_payload_is_saved_and_read_back(self):
+        code, view = self.call("/search", {"set": self.card()})
+        self.assertEqual(code, 200, view)
+        self.assertTrue(view["configured"])
+        self.assertEqual(view["settings"]["base_url"], self.base)            # the trailing slash goes
+        code, again = self.call("/search")
+        self.assertEqual(code, 200)
+        self.assertEqual(again["settings"]["base_url"], self.base)
+        self.assertEqual(sorted(again["tools"]), ["read_page", "web_search"])
+        self.assertEqual(self.svc.search.settings["base_url"], self.base)    # in force, not only on disk
+
+    def test_switching_it_off_hides_the_tools(self):
+        self.call("/search", {"set": self.card()})
+        code, view = self.call("/search", {"set": self.card(enabled=False)})
+        self.assertEqual(code, 200, view)
+        self.assertFalse(view["configured"])
+        self.assertIsNone(self.svc.search)
+
+    def test_a_bad_url_is_refused_with_a_sentence(self):
+        for bad, want in (("search.local", "must start with http"), (self.base + "/?q=x", "base address")):
+            with self.subTest(url=bad):
+                code, out = self.call("/search", {"set": self.card(base_url=bad)})
+                self.assertEqual(code, 400, out)
+                self.assertIn(want, out["error"]["message"])
+
+    def test_an_enabled_search_needs_a_url(self):
+        code, out = self.call("/search", {"set": self.card(base_url="")})
+        self.assertEqual(code, 400)
+        self.assertIn("needs the SearXNG instance's URL", out["error"]["message"])
+
+    def test_test_runs_one_real_query(self):
+        code, out = self.call("/search", {"test": {"query": "qwen 3.8", "settings": self.card()}})
+        self.assertEqual(code, 200, out)
+        self.assertTrue(out["ok"], out)
+        self.assertGreater(out["results"], 0)
+        self.assertTrue(out["first_url"])
+
+    def test_test_names_an_instance_without_json(self):
+        bad = fake.search_server()
+        bad.mode = "no-json"
+        try:
+            body = self.card(base_url=f"http://127.0.0.1:{bad.server_address[1]}", allow_local=True)
+            code, out = self.call("/search", {"test": {"query": "qwen", "settings": body}})
+        finally:
+            bad.shutdown()
+            bad.server_close()
+        self.assertEqual(code, 200, out)
+        self.assertFalse(out["ok"])
+        self.assertIn("json", out["error"])
+
+    def test_the_page_only(self):
+        req = urllib.request.Request(self.base_url + "/search", data=b'{"set": {}}',
+                                     headers={"Content-Type": "text/plain"})
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(caught.exception.code, 415)
+
+
 if __name__ == "__main__":
     unittest.main()

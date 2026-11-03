@@ -3,7 +3,7 @@
 AryaInfer ships no search of its own.  Point it at a [SearXNG](https://docs.searxng.org) instance - one on this PC,
 on the LAN or on a Tailnet - and the chat page offers the model two tools: `web_search` (a query in, numbered results
 out) and `read_page` (one address in, the readable text of that page out).  The settings live in `websearch.json`
-beside the run config and the page edits them (Monitor > Web search); the run config's `"search"` block is read too,
+beside the run config and the page edits them (Settings > Tools); the run config's `"search"` block is read too,
 and the file wins.  Nothing is offered until a URL is set and the switch is on.
 
 SearXNG details worth remembering (they are the failure modes the messages name):
