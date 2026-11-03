@@ -1,8 +1,8 @@
-<h1 align="center">AryaInfer</h1>
+﻿<h1 align="center">AryaInfer</h1>
 
 Local AI for coding, coding agents and image understanding, configured and benchmarked against our own host.
 
-**English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt-BR.md)
+**English** Â· [ç®€ä½“ä¸­æ–‡](README.zh-CN.md) Â· [æ—¥æœ¬èªž](README.ja.md) Â· [Deutsch](README.de.md) Â· [FranÃ§ais](README.fr.md) Â· [EspaÃ±ol](README.es.md) Â· [PortuguÃªs](README.pt-BR.md)
 
 Translations retain inherited guidance; current host results and validation status are maintained on this English page.
 
@@ -11,9 +11,9 @@ which is a fork of **[the original Strata](https://github.com/Niko1221/Strata)**
 Niko1221 and the Strata contributors. Their engines, tooling and research make this
 fork possible. See [credits](CREDITS.md) and the original [MIT license](LICENSE).
 
-[Supported models](#supported-models) · [Host results](#measured-on-this-host) · [Install](#install) · [Using it](#using-it) · [How it works](#how-does-it-work) · [Support](#support-and-contributing)
+[Supported models](#supported-models) Â· [Host results](#measured-on-this-host) Â· [Install](#install) Â· [Using it](#using-it) Â· [How it works](#how-does-it-work) Â· [Support](#support-and-contributing)
 
-AryaInfer inherits Strata and PolyStrata’s local inference engines, installer, web chat,
+AryaInfer inherits Strata and PolyStrataâ€™s local inference engines, installer, web chat,
 live resource monitor, and compatible APIs. It shares model work across GPU memory,
 system RAM, CPU and storage so large mixture-of-experts models can run on a PC.
 Our focus is coding agents, AryaAI development integration, and reproducible results
@@ -28,7 +28,7 @@ own network behavior.
 It runs twelve models, on two engines.
 
 The inherited installer includes twelve model families across the original Strata
-engine and PolyStrata’s additional `strata-poly` engine. Support in the codebase
+engine and PolyStrataâ€™s additional `strata-poly` engine. Support in the codebase
 does not mean every model, quantization or platform has been tested on our PC.
 The linked guides retain upstream measurements, hardware requirements and limitations.
 
@@ -37,15 +37,15 @@ The linked guides retain upstream measurements, hardware requirements and limita
 | **Qwen3.8-Flash-Next** | Strata; NVIDIA/AMD, Windows/Linux with platform-specific limits | Yes | **IQ3_XXS running and tuned; text/coding benchmarked; GPU vision smoke-tested** | [Models and variants](docs/MODELS.md) |
 | **GLM 5.3 Flash** | `strata-poly`; NVIDIA/Linux | No | Not validated here; substantial RAM requirements | [GLM](docs/GLM.md) |
 | **DeepSeek V4 Flash** | `strata-poly`; NVIDIA/Linux primary path | No | Not validated here; substantial RAM requirements | [DeepSeek](docs/DEEPSEEK.md) |
-| **LFM2.5-24B-A2B** | `strata-poly`; NVIDIA/Windows/Linux | No | **UD-Q4_K_XL: 128K text; short native-thinking coding (4K output) 18/18**; long coding 0/3, recall 2/6: not recommended for large-context agents | [Measured host results](docs/MODEL_ROSTER_HOST_RESULTS.md) · [Backends](docs/BACKENDS.md) |
-| **Flint 40B-A2.5B** | `strata-poly`; NVIDIA/Windows/Linux | No | **UD-Q4_K_XL: 262,144-token context; read 8K/32K/129K/243K-token prompts at 3,707/4,036/2,227/1,430 tok/s and wrote at 121/93/58/22 tok/s**; throughput only, no coding suite run here | [Measured host results](docs/ARYAINFER.md#flint-40b-a25-october-23-2026) · [Flint](docs/FLINT.md) |
-| **Qwen3.8 27B** | `strata-poly`; dense `qwen35`, NVIDIA/Windows (CUDA `sm_89` built and run here) | Yes | **IQ2_S + `--kv q4_0`: 200,069-token prompt with its needle found (417 tok/s read, 14.6 tok/s written); IQ3_XXS + q4_0: 96K; 32K with a q8_0 cache; a picture read correctly (card "4711")**; against llama.cpp on the same file the tokenization is identical, the first step's five likeliest ids are within 0.0031, and the greedy replies agree to the first near tie | [Qwen3.8 27B](docs/QWEN38-27B.md) · [Backends](docs/BACKENDS.md) |
-| **Qwen3.6-35B-A3B** | `strata-poly`; NVIDIA/Windows/Linux; Strata path for selected sizes | Yes | **Q4 and Q8: 262K context with GPU vision; coding, image and recall checks passed** | [Measured host results](docs/QWEN36_HOST_RESULTS.md) · [Backends](docs/BACKENDS.md) |
+| **LFM2.5-24B-A2B** | `strata-poly`; NVIDIA/Windows/Linux | No | **UD-Q4_K_XL: 128K text; short native-thinking coding (4K output) 18/18**; long coding 0/3, recall 2/6: not recommended for large-context agents | [Measured host results](docs/MODEL_ROSTER_HOST_RESULTS.md) Â· [Backends](docs/BACKENDS.md) |
+| **Flint 40B-A2.5B** | `strata-poly`; NVIDIA/Windows/Linux | No | **UD-Q4_K_XL: 262,144-token context; read 8K/32K/129K/243K-token prompts at 3,707/4,036/2,227/1,430 tok/s and wrote at 121/93/58/22 tok/s**; throughput only, no coding suite run here | [Measured host results](docs/ARYAINFER.md#flint-40b-a25-october-23-2026) Â· [Flint](docs/FLINT.md) |
+| **Qwen3.8 27B** | `strata-poly`; dense `qwen35`, NVIDIA/Windows (CUDA `sm_89` built and run here) | Yes | **IQ2_S + `--kv q4_0`: 200,069-token prompt with its needle found (417 tok/s read, 14.6 tok/s written); IQ3_XXS + q4_0: 96K; 32K with a q8_0 cache; a picture read correctly (card "4711")**; against llama.cpp on the same file the tokenization is identical, the first step's five likeliest ids are within 0.0031, and the greedy replies agree to the first near tie | [Qwen3.8 27B](docs/QWEN38-27B.md) Â· [Backends](docs/BACKENDS.md) |
+| **Qwen3.6-35B-A3B** | `strata-poly`; NVIDIA/Windows/Linux; Strata path for selected sizes | Yes | **Q4 and Q8: 262K context with GPU vision; coding, image and recall checks passed** | [Measured host results](docs/QWEN36_HOST_RESULTS.md) Â· [Backends](docs/BACKENDS.md) |
 | **Clover-35B-A3B-Preview** | `strata-poly`; NVIDIA/Windows/Linux | No | Not validated here; upstream measures 68-76 tok/s writing and 1,560-1,700 tok/s reading a 32K prompt on an 8 GB laptop card | [Clover](docs/models/clover.md) |
-| **Ornith 1.5** | `strata-poly`; NVIDIA/Windows/Linux | Yes | **APEX-I-QUALITY: 262K GPU vision; low reasoning passed 18/18 bounded coding and 3/3 long coding/image sessions** | [Measured host results](docs/MODEL_ROSTER_HOST_RESULTS.md) · [Backends](docs/BACKENDS.md) |
-| **Gemma 4 26B-A4B** | `strata-poly`; NVIDIA/Windows/Linux | Yes | **UD-Q4_K_M: 256K GPU vision; short coding low at 4K output 18/18**; long coding/image 2/3, recall 6/6 | [Measured host results](docs/MODEL_ROSTER_HOST_RESULTS.md) · [Backends](docs/BACKENDS.md) |
-| **Tiel Coder 35B-A3B** | `strata-poly`; NVIDIA/Windows/Linux | Yes | **UD-Q4_K_XL: 256K GPU vision; bounded coding off 16/18, low 18/18**; image checks 8/12 | [Measured host results](docs/MODEL_ROSTER_HOST_RESULTS.md) · [Backends](docs/BACKENDS.md) |
-| **MiniCPM-V 4.7 35B-A3B** | `strata-poly`; NVIDIA/Windows/Linux | Yes | **Q4: 262K GPU vision; low reasoning passed 18/18 bounded coding sessions and 3/3 long coding/image sessions** | [Measured host results](docs/MINICPMV_HOST_RESULTS.md) · [Backends](docs/BACKENDS.md) |
+| **Ornith 1.5** | `strata-poly`; NVIDIA/Windows/Linux | Yes | **APEX-I-QUALITY: 262K GPU vision; low reasoning passed 18/18 bounded coding and 3/3 long coding/image sessions** | [Measured host results](docs/MODEL_ROSTER_HOST_RESULTS.md) Â· [Backends](docs/BACKENDS.md) |
+| **Gemma 4 26B-A4B** | `strata-poly`; NVIDIA/Windows/Linux | Yes | **UD-Q4_K_M: 256K GPU vision; short coding low at 4K output 18/18**; long coding/image 2/3, recall 6/6 | [Measured host results](docs/MODEL_ROSTER_HOST_RESULTS.md) Â· [Backends](docs/BACKENDS.md) |
+| **Tiel Coder 35B-A3B** | `strata-poly`; NVIDIA/Windows/Linux | Yes | **UD-Q4_K_XL: 256K GPU vision; bounded coding off 16/18, low 18/18**; image checks 8/12 | [Measured host results](docs/MODEL_ROSTER_HOST_RESULTS.md) Â· [Backends](docs/BACKENDS.md) |
+| **MiniCPM-V 4.7 35B-A3B** | `strata-poly`; NVIDIA/Windows/Linux | Yes | **Q4: 262K GPU vision; low reasoning passed 18/18 bounded coding sessions and 3/3 long coding/image sessions** | [Measured host results](docs/MINICPMV_HOST_RESULTS.md) Â· [Backends](docs/BACKENDS.md) |
 | **Kolibri 1** | `strata-poly`; one or two NVIDIA cards, Windows/Linux | No | Not validated here; upstream measures 189-192 tok/s writing and 4,980-5,070 tok/s reading a 31K prompt with Q2_K on a 32 GB card | [Kolibri 1](docs/models/kolibri.md) |
 
 Qwen3.8 variants include **Coder, Swift 1.5, and Unsloth quantizations**. These are
@@ -102,7 +102,7 @@ These checks do not establish general repository-level coding quality or a fully
 qualified native desktop workflow. Raw records, ranges, exact model/build hashes,
 resource observations and methodology: [full host benchmark](bench/results/2026-10-17-aryastrata-qwen38-iq3xxs/README.md).
 
-[Current host setup](docs/ARYAINFER.md) · [AryaAI development DSH profile](docs/ARYAAI_DSH.md)
+[Current host setup](docs/ARYAINFER.md) Â· [AryaAI development DSH profile](docs/ARYAAI_DSH.md)
 
 Additional full-context host results: [Qwen3.6 Q4 versus Q8](docs/QWEN36_HOST_RESULTS.md)
 and [MiniCPM-V 4.7 Q4 with vision](docs/MINICPMV_HOST_RESULTS.md). The MiniCPM
@@ -162,7 +162,7 @@ add host results for each model as validation is completed.
 <p align="center"><img src="docs/media/speed.svg" width="820" alt="Upstream Qwen3.6 speed illustration: laptop and RTX 5090 measurements"><br>
 <sub>PolyStrata reference measurements on upstream hardware; these are not AryaInfer host results.</sub></p>
 
-A token is about ¾ of a word.
+A token is about Â¾ of a word.
 
 - **Writes answers:** how fast the reply appears in a short chat. 60 tokens per second is faster than you can read.
 - **Reads your prompt:** how fast it takes in what you send (a document, code or a chat history).
@@ -793,8 +793,12 @@ All twelve models are used the same way: the same app, the same API.
   (**Chat**, **Monitor** of the model and GPU/CPU/RAM, **About**), the MCP servers, the model list and **Settings**.
   The model that answers is picked in the message box; Settings is a panel over the page with the theme, the API key
   and the model's run-config values.
+- **On a phone (iPhone Safari included):** the sidebar is a drawer, the model and other menus open as a sheet at the
+  bottom of the screen, Settings, the MCP dialog and the Workbench take the whole screen, and the composer keeps Send
+  in reach. The microphone button dictates into the message box and into the image room's box - it is the browser's
+  own speech service, so it appears only in a browser that has one (Safari and Chrome do; Firefox does not).
 - **Your apps and coding agents:** add an "OpenAI-compatible" provider with the base URL
-  **`http://127.0.0.1:8080/v1`**. Use the configured model ID and the server’s configured key, if authentication is enabled. Our local model ID is `qwen3.8-flash-next-iq3_xxs`.
+  **`http://127.0.0.1:8080/v1`**. Use the configured model ID and the serverâ€™s configured key, if authentication is enabled. Our local model ID is `qwen3.8-flash-next-iq3_xxs`.
   - Apps that use Anthropic's API: `http://127.0.0.1:8080/v1/messages` (Claude Code:
     `ANTHROPIC_BASE_URL=http://127.0.0.1:8080`, and `"fit_max_tokens": true` in `strata-<model>.json`
     ([why](docs/FAQ.md#can-i-use-it-with-claude-code-codex-or-other-apps))).
@@ -1039,11 +1043,11 @@ Every part and its numbers: [docs/BACKENDS.md](docs/BACKENDS.md#how-a-backend-wo
 | --- | --- |
 | This PC, migration and selected Qwen settings | [Host setup and findings](docs/ARYAINFER.md) |
 | AryaAI development connection and output/context budget | [DSH integration](docs/ARYAAI_DSH.md) |
-| Model quantizations, variants and fit | [Models](docs/MODELS.md) · [Quantizations](docs/QUANTS.md) |
-| Setup, updates, storage paths and Docker | [Installation](docs/INSTALL.md) · [Assistant setup](docs/AI_SETUP.md) |
-| Engine internals, API and configuration | [Technical details](docs/DETAILS.md) · [Architecture](docs/HOW_IT_WORKS.md) |
+| Model quantizations, variants and fit | [Models](docs/MODELS.md) Â· [Quantizations](docs/QUANTS.md) |
+| Setup, updates, storage paths and Docker | [Installation](docs/INSTALL.md) Â· [Assistant setup](docs/AI_SETUP.md) |
+| Engine internals, API and configuration | [Technical details](docs/DETAILS.md) Â· [Architecture](docs/HOW_IT_WORKS.md) |
 | Reproducing and contributing results | [Benchmark guide](docs/COMMUNITY_BENCHMARKS.md) |
-| Common problems and project background | [Troubleshooting](docs/TROUBLESHOOTING.md) · [FAQ](docs/FAQ.md) |
+| Common problems and project background | [Troubleshooting](docs/TROUBLESHOOTING.md) Â· [FAQ](docs/FAQ.md) |
 
 ## Support and contributing
 
@@ -1067,7 +1071,7 @@ for comparison; it supplements the current guide rather than replacing it.
 
 ## Credits and license
 
-**AryaInfer → PolyStrata → original Strata.** This is a fork of
+**AryaInfer â†’ PolyStrata â†’ original Strata.** This is a fork of
 [PolyStrata](https://github.com/VecSzn/PolyStrata) by VecSzn, itself a fork of
 [Strata](https://github.com/Niko1221/Strata) by Niko1221 and contributors.
 AryaInfer contributes host configuration, integration, benchmarking and
@@ -1092,3 +1096,4 @@ PolyStrata is built on
 [llama.cpp / ggml](https://github.com/ggml-org/llama.cpp). All credits:
 [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md#credits). PolyStrata is open source under the [MIT License](LICENSE). A few
 parts and every model have their own licenses ([which ones](docs/HOW_IT_WORKS.md#license)).
+

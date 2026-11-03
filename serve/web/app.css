@@ -1,4 +1,4 @@
-/* AryaInfer web app - layout on top of tokens.css + components.css (the shared UI kit). Colours, type, radii and
+﻿/* AryaInfer web app - layout on top of tokens.css + components.css (the shared UI kit). Colours, type, radii and
    shadows come only from the kit's tokens. */
 [hidden] { display: none !important; }
 html, body { height: 100%; }
@@ -530,3 +530,97 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 .room__input { display: flex; align-items: flex-end; gap: 8px; }
 .room__input .room__prompt { flex: 1; min-height: 44px; max-height: 160px; resize: none; }
 .room__empty { max-width: 560px; }
+
+/* ---------------------------------------------------------------- phones: iPhone and other touch screens */
+/* the browser's own bars move; dvh keeps the layout the height that is really there */
+@supports (height: 100dvh) {
+  html, body, .app { height: 100dvh; }
+}
+/* a menu is position: fixed with no offsets of its own: on a narrow window it becomes a sheet above the thumb */
+@media (max-width: 900px) {
+  .st-menu { left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); top: auto;
+             max-width: none; max-height: min(70dvh, 460px); }
+  .st-pop { max-height: calc(100dvh - var(--st-header-h) - 16px); }
+  .st-pop__body { overscroll-behavior: contain; }
+}
+/* a touch screen has no hover: a control that only appeared on hover could never appear */
+@media (hover: none), (pointer: coarse) {
+  .st-chat-item__menu { opacity: 1; }
+  .st-btn--icon { min-width: 40px; min-height: 40px; }
+  .st-nav { min-height: 44px; }
+  .st-chip-btn { min-height: 36px; }
+  /* the software keyboard zooms a field under 16px, which leaves the page wider than the screen */
+  .st-input, .st-composer textarea, input, textarea, select { font-size: 16px; }
+}
+@media (max-width: 640px) {
+  .st-header { padding: max(0px, env(safe-area-inset-top)) var(--st-s-3) 0; }
+  .st-header__title { font-size: var(--st-fs-md); }
+  .composer-wrap { padding: 0 var(--st-s-3) calc(var(--st-s-3) + env(safe-area-inset-bottom)); }
+  /* dialogs take the screen: a 720px card on a 390px phone is a scroll box inside a scroll box */
+  .st-dialog { inset: 0; width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0;
+               padding-bottom: env(safe-area-inset-bottom); }
+  .st-dialog__body, .st-dialog--wide .st-dialog__body { padding: 14px; max-height: none; }
+  .st-dialog[open] { display: flex; flex-direction: column; }
+  .st-dialog .st-dialog__body { flex: 1; min-height: 0; }
+  .st-dialog--wide .st-dialog__body { overflow: auto; }
+  .st-label { flex-wrap: wrap; row-gap: 2px; }
+  .st-label output { white-space: normal; }
+  /* the MCP dialog's two panes become one column: a 300px list beside a form needs 700px it does not have */
+  .mcp-panes { grid-template-columns: 1fr; height: auto; flex: 1; min-height: 0; }
+  .mcp-side { border-right: 0; border-bottom: 1px solid var(--st-line); max-height: 34dvh; }
+  .mcp-body { min-height: 0; }
+  /* a tool block is a row of name, badge and time plus a preview: wrap it, and pictures go two to a row */
+  .room-bubble, .room-bubble__body, .st-msg, .st-bubble { min-width: 0; overflow-wrap: anywhere; }
+  .tool-call > summary { flex-wrap: wrap; row-gap: 4px; }
+  .tool-call__preview { display: none; }
+  .tool-call__pics { display: grid; grid-template-columns: 1fr 1fr; }
+  .tool-pic img { width: 100%; height: auto; aspect-ratio: 1; }
+  .tool-call pre, .st-code pre, .room-bubble pre { overflow-x: auto; max-width: 100%; }
+  .st-sidebar { padding-top: max(12px, env(safe-area-inset-top));
+                padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+  .room { padding-left: 10px; padding-right: 10px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+  .room__head { padding-top: max(10px, env(safe-area-inset-top)); }
+  .room__viewer { padding: 10px 12px calc(12px + env(safe-area-inset-bottom)); }
+  .room-bubble { max-width: 100%; }
+  /* a textarea or a row of buttons keeps its own minimum width; inside a column that minimum widens the pane past
+     the screen, which is what clipped the room */
+  .room__head { flex-wrap: wrap; gap: 6px; }
+  #room-provider { display: none; }
+  .room__head .st-btn { height: 34px; padding: 0 10px; }
+  .room__tabs { overflow-x: auto; scrollbar-width: none; }
+  .room, .room__body, .room__pane, .room__chat, .room__composer, .room__input, .room-msg { min-width: 0; }
+  .room__input { flex-wrap: wrap; row-gap: 8px; }
+  .room__input .room__prompt { flex: 1 1 100%; min-width: 0; }
+  .room__input .st-btn--primary { margin-left: auto; }
+  .st-composer textarea, .st-input, textarea { min-width: 0; }
+  .chat { padding: var(--st-s-4) var(--st-s-3) var(--st-s-4); }
+  /* the composer bar is one row of buttons on a desktop; a phone needs it to wrap, or it pushes the page wider
+     than the screen and the Send button leaves the viewport */
+  .st-composer__bar { flex-wrap: wrap; row-gap: 8px; }
+  .st-composer__bar .spacer, .composer-hint { display: none; }
+  .st-composer__bar .st-btn--send, #stop-btn { margin-left: auto; }
+  /* the model goes on its own line: a full-width target, and the icons keep the row below */
+  .st-composer__bar .model-pick { flex: 1 1 100%; max-width: 100%; }
+  .st-composer__bar .model-pick .st-chip-btn { width: 100%; justify-content: space-between; }
+  .st-composer { padding: 8px; }
+  .st-code { font-size: var(--st-fs-xs); }
+  .st-dialog__head, .st-pop__head { padding-left: 14px; }
+}
+/* the answer's right panel is a column on a desktop and the whole screen on a phone */
+@media (max-width: 720px) {
+  .workbench { position: fixed; inset: 0; width: 100vw; max-width: 100vw; min-width: 0; z-index: 30;
+               border-left: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  .workbench__resize { display: none; }
+}
+/* dictation: the button says it is listening */
+.st-btn--icon.is-recording { color: #fff; background: var(--st-danger, #c9413a); border-color: transparent;
+                             animation: st-dictation 1.3s ease-in-out infinite; }
+@keyframes st-dictation { 0%, 100% { box-shadow: 0 0 0 0 rgba(201, 65, 58, .45); } 50% { box-shadow: 0 0 0 6px rgba(201, 65, 58, 0); } }
+@media (prefers-reduced-motion: reduce) { .st-btn--icon.is-recording { animation: none; } }
+
+
+
+
+
+
+

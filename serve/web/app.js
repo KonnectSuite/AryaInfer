@@ -2526,6 +2526,62 @@ function renderAttachments() {
   });
 }
 $("attach-btn").onclick = () => $("file").click();
+// Dictation: the browser's own speech recognition (Safari on iOS, Chrome), appending what it hears to the box.  The
+// audio goes to that browser's speech service, not to this server - the tooltip says so - and the button stays hidden
+// where the API is missing.  iOS ends a session on a pause even with continuous on, so a wanted session restarts itself.
+const SPEECH = window.SpeechRecognition || window.webkitSpeechRecognition;
+function setupVoice(button, target) {
+  if (!SPEECH || !button || !target) { if (button) button.hidden = true; return; }
+  let rec = null, want = false, base = "";
+  const paint = (on) => {
+    button.hidden = false;
+    button.setAttribute("aria-pressed", String(on));
+    button.setAttribute("aria-label", on ? "Stop dictating" : "Dictate");
+    button.title = on ? "Stop dictating" : "Dictate (the browser's speech service)";
+    button.classList.toggle("is-recording", on);
+  };
+  button.onclick = () => {
+    if (want) { want = false; if (rec) rec.stop(); paint(false); return; }
+    base = target.value;
+    rec = new SPEECH();
+    rec.lang = navigator.language || "en-US";
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = (e) => {
+      let final = "", interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i += 1) {
+        const r = e.results[i];
+        if (r.isFinal) final += r[0].transcript; else interim += r[0].transcript;
+      }
+      if (final.trim()) base = `${base}${base && !/\s$/.test(base) ? " " : ""}${final.trim()}`;
+      target.value = base + (interim ? `${base ? " " : ""}${interim}` : "");
+      target.dispatchEvent(new Event("input", {bubbles: true}));
+    };
+    rec.onerror = (e) => {
+      if (e.error === "no-speech" || e.error === "aborted") return;
+      want = false;
+      toast("error", "Dictation stopped", e.error === "not-allowed" || e.error === "service-not-allowed"
+        ? "Allow the microphone for this page, then try again."
+        : `The browser's speech service said: ${e.error}`, 7000);
+    };
+    rec.onend = () => {
+      if (want) { try { rec.start(); return; } catch (e) { want = false; } }
+      target.value = base;                       // an unfinished phrase is dropped
+      paint(false);
+    };
+    want = true;
+    try {
+      rec.start();
+      paint(true);
+    } catch (e) {
+      want = false;
+      paint(false);
+      toast("error", "Dictation could not start", e.message, 6000);
+    }
+  };
+  paint(false);
+}
+setupVoice($("voice-btn"), $("input"));
 // drop files on the chat or the message box
 for (const id of ["chat", "composer"]) {
   const el = $(id);

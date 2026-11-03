@@ -209,6 +209,31 @@ class Contract(unittest.TestCase):
         self.assertNotEqual(used, set())
         self.assertEqual(sorted(used - symbols), [])
 
+    def test_the_phone_contract(self):
+        # an iPhone is a narrow, coarse-pointer screen: the things that only worked with a mouse must work there too
+        self.assertIn('content="width=device-width, initial-scale=1, viewport-fit=cover"', self.html)
+        css = (WEB / "app.css").read_text(encoding="utf-8")
+        self.assertIn("@media (hover: none), (pointer: coarse)", css)
+        self.assertIn(".st-chat-item__menu { opacity: 1; }", css)     # hover-only menus become visible
+        self.assertIn("@supports (height: 100dvh)", css)             # the browser bars move
+        self.assertIn("env(safe-area-inset-bottom)", css)            # the home indicator
+        self.assertRegex(css, r"\.st-menu \{[^}]*bottom: calc\(10px \+ env\(safe-area-inset-bottom\)\)")
+        self.assertRegex(css, r"\.workbench \{[^}]*position: fixed; inset: 0")   # the panel is the screen
+        self.assertIn("font-size: 16px;", css)                       # no zoom when a field takes focus
+        for name in ("voice-btn", "room-voice-btn"):
+            self.assertIn(name, self.page.by_id, name)
+        self.assertIn("webkitSpeechRecognition", self.js)
+        self.assertIn('setupVoice($("voice-btn"), $("input"))', self.js)
+        self.assertIn('setupVoice($("room-voice-btn"), $("room-prompt"))', self.room)
+        self.assertIn("is-recording", css)
+        # the composer's row of buttons wraps instead of pushing Send off the screen
+        self.assertIn(".st-composer__bar { flex-wrap: wrap;", css)
+        # the MCP dialog's two panes become one column
+        self.assertIn(".mcp-panes { grid-template-columns: 1fr;", css)
+        # the empty state of the panel is not inside the hidden stage, or "Nothing here yet" would never show
+        self.assertFalse(inside(self.page, "wb-none", "wb-stage"))
+        self.assertTrue(inside(self.page, "wb-none", "workbench"))
+
     def test_no_leftover_tab_markup(self):
         # the header's tab row became the sidebar's nav; nothing should still style or query the old classes
         self.assertNotIn('class="st-tab"', self.html)

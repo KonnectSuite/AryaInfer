@@ -2,7 +2,7 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>AryaInfer</title>
 <link rel="icon" href="web/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="web/tokens.css">
@@ -125,6 +125,9 @@
               <button type="button" class="st-btn st-btn--icon" id="attach-btn" title="Attach a text file (or drop it here)" aria-label="Attach a file">
                 <svg class="st-icon"><use href="web/sprite.svg#i-attach"/></svg></button>
               <input type="file" id="file" multiple hidden>
+              <button type="button" class="st-btn st-btn--icon" id="voice-btn" title="Dictate"
+                      aria-label="Dictate" aria-pressed="false" hidden>
+                <svg class="st-icon"><use href="web/sprite.svg#i-mic"/></svg></button>
               <button type="button" class="st-btn st-btn--icon" id="export-btn" title="Save this chat as Markdown" aria-label="Save this chat">
                 <svg class="st-icon"><use href="web/sprite.svg#i-download"/></svg></button>
               <button type="button" class="st-btn st-btn--icon" id="sampling-btn" title="Sampling and thinking" aria-label="Sampling and thinking">
@@ -167,15 +170,15 @@
                 <button class="st-btn st-btn--icon" id="wb-open" type="button" aria-label="Open in a new tab" title="Open in a new tab">
                   <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-external"/></svg></button>
               </div>
+              <div class="st-empty wb-empty" id="wb-none">
+                <span class="st-empty__title">Nothing here yet</span>
+                <span>An HTML, SVG or Markdown block in an answer opens here.</span>
+              </div>
               <div class="wb-stage" id="wb-stage">
                 <iframe id="wb-frame" class="wb-frame" sandbox="allow-scripts" referrerpolicy="no-referrer"
                         title="Artifact preview" hidden></iframe>
                 <img class="wb-image" id="wb-image" alt="" hidden>
                 <pre class="wb-source" id="wb-source" hidden></pre>
-                <div class="st-empty wb-empty" id="wb-none">
-                  <span class="st-empty__title">Nothing here yet</span>
-                  <span>An HTML, SVG or Markdown block in an answer opens here.</span>
-                </div>
               </div>
             </div>
             <div class="wb-pane" data-wb-pane="files" hidden>
@@ -257,6 +260,9 @@
               <button class="st-btn st-btn--icon" id="room-ref-btn" type="button" title="Attach a picture to edit">
                 <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-image"/></svg></button>
               <input type="file" id="room-ref-file" accept="image/png,image/jpeg,image/webp" hidden>
+              <button class="st-btn st-btn--icon" id="room-voice-btn" type="button" title="Dictate"
+                      aria-label="Dictate" aria-pressed="false" hidden>
+                <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-mic"/></svg></button>
               <button class="st-btn st-btn--secondary" id="room-cancel" type="button" hidden>Stop</button>
               <button class="st-btn st-btn--primary" id="room-go" type="submit">Send</button>
             </div>

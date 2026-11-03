@@ -1,4 +1,4 @@
-// ------------------------------------------------------------------ the Images room
+﻿// ------------------------------------------------------------------ the Images room
 // A conversation about pictures: the user says what they want (and what to change), the agent writes the prompt and
 // picks the ComfyUI workflow through the generate_image tool.  The room shows the answer the way the chat does - tool
 // block, thumbnails - and the agent may search the web for a reference description when that helps.  It talks to this
@@ -56,8 +56,9 @@ function roomSystem() {
   ].filter(Boolean).join("\n");
 }
 function roomRender() {
-  $("room-status").textContent = !comfyInfo.configured ? "no server yet" : comfyInfo.reachable
-    ? (comfyInfo.version ? `ComfyUI ${comfyInfo.version}` : "connected") : "not reachable";
+  const narrow = typeof NARROW === "object" && NARROW.matches;      // a phone shows the state, not the version
+  $("room-status").textContent = !comfyInfo.configured ? "not set up" : comfyInfo.reachable
+    ? (narrow ? "connected" : (comfyInfo.version ? `ComfyUI ${comfyInfo.version}` : "connected")) : "not reachable";
   $("room-status").className = `muted small ${comfyInfo.configured && !comfyInfo.reachable ? "mcp-msg-bad" : ""}`;
   $("room-tab-local").hidden = !health.image_generation;
   $("room-go").disabled = !comfyInfo.configured || !comfyInfo.reachable;
@@ -300,7 +301,7 @@ function roomRenderGallery() {
     tile.dataset.id = item.id;
     tile.innerHTML = `<img alt="" loading="lazy" src="${esc(item.url)}">` +
       `<span class="room-card__prompt"></span>` +
-      (item.favorite ? `<span class="room-card__star" aria-label="Favourite">★</span>` : "");
+      (item.favorite ? `<span class="room-card__star" aria-label="Favourite">â˜…</span>` : "");
     tile.querySelector(".room-card__prompt").textContent = item.prompt || item.workflow || "";
     tile.onclick = () => roomViewerOpen(item.id, page.items);
     grid.append(tile);
@@ -343,11 +344,11 @@ function roomViewerRender() {
   $("room-viewer-count").textContent = `${at + 1} of ${items.length}`;
   $("room-viewer-prev").disabled = at <= 0;
   $("room-viewer-next").disabled = at >= items.length - 1;
-  const bits = [item.workflow, item.width && item.height ? `${item.width}×${item.height}` : "",
+  const bits = [item.workflow, item.width && item.height ? `${item.width}Ã—${item.height}` : "",
                 item.seed != null ? `seed ${item.seed}` : "", item.created ? roomWhen(item.created) : ""].filter(Boolean);
   $("room-viewer-meta").innerHTML = `<p class="room-viewer__prompt"></p><p class="muted small"></p>`;
   $("room-viewer-meta").querySelector(".room-viewer__prompt").textContent = item.prompt || "(no prompt)";
-  $("room-viewer-meta").querySelector(".muted").textContent = bits.join(" · ");
+  $("room-viewer-meta").querySelector(".muted").textContent = bits.join(" Â· ");
   const actions = $("room-viewer-actions");
   actions.replaceChildren();
   const add = (label, act, primary) => {
@@ -367,7 +368,7 @@ function roomViewerRender() {
     link.download = `arya-${item.id}.png`;
     link.click();
   });
-  add(item.favorite ? "★ Favourite" : "☆ Favourite", async () => {
+  add(item.favorite ? "â˜… Favourite" : "â˜† Favourite", async () => {
     try {
       await comfyPost({favorite: {id: item.id}});
       item.favorite = !item.favorite;
@@ -426,6 +427,7 @@ $("room-search").oninput = roomDebounce(() => { room.query = $("room-search").va
 $("room-favs").onclick = () => { room.favs = !room.favs; roomLoadGallery(true); };
 $("room-more").onclick = () => roomLoadGallery(false);
 $("room-ref-btn").onclick = () => $("room-ref-file").click();
+setupVoice($("room-voice-btn"), $("room-prompt"));      // the same dictation as the chat's box
 $("room-ref-file").onchange = async () => {
   const file = $("room-ref-file").files[0];
   if (!file) return;
@@ -464,3 +466,4 @@ document.addEventListener("keydown", (e) => {
 });
 roomRestore();
 roomRenderChat();
+
