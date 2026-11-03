@@ -2386,8 +2386,7 @@ document.addEventListener("click", (e) => {
 // tool, a reader for one address, and the tool trail of the answer. The width, the view and whether it is open are
 // kept for this browser; the content is always the active chat's.
 const WB_STORE = "workbench";
-const ARTIFACT_LANGS = new Set(["html", "svg", "markdown", "md"]);
-let wb = {open: false, tab: "artifact", mode: "preview", width: 420, selected: null, autoFor: null};
+let wb = {open: false, tab: "artifact", mode: "preview", width: 420, selected: null, autoFor: null, autoKey: null};
 
 function wbSave() { store.set(WB_STORE, {open: wb.open, tab: wb.tab, mode: wb.mode, width: wb.width}); }
 function wbLoad() {
@@ -2405,7 +2404,9 @@ function wbOpen(open, tab) {
   $("workbench").dataset.open = String(wb.open);
   $("wb-toggle").setAttribute("aria-pressed", String(wb.open));
   $("wb-toggle").setAttribute("aria-label", wb.open ? "Close the workbench" : "Open the workbench");
-  if (wb.open) { wbShowTab(wb.tab); wbRender(); }
+  // opening it where the last session left it, unless that view has nothing to show and an answer has an artifact
+  if (wb.open && !tab && wb.tab === "files" && !wbFileList().length && wbArtifacts().length) wb.tab = "artifact";
+  if (wb.open) wbShowTab(wb.tab);
   wbSave();
 }
 function wbShowTab(tab) {
@@ -2420,27 +2421,57 @@ function wbShowTab(tab) {
 }
 function wbRender() { wbShowTab(wb.tab); }
 
-// ---- artifacts: the fenced HTML, SVG and Markdown blocks of the answers ----
+// ---- artifacts: a fenced block the browser can show. What counts is the content, not the label the model chose:
+// a ```xml block holding an <svg> is a drawing, and an unlabelled block that starts like a document is a page.
+function wbKind(lang, code) {
+  const label = String(lang || "").toLowerCase();
+  const head = String(code || "").slice(0, 4000);
+  if (label === "svg" || /^\s*(?:<\?xml[^>]*>\s*)?<svg[\s>]/i.test(head)) return "svg";
+  if (label === "html" || label === "xhtml" || label === "htm" ||
+      /^\s*<!doctype\s+html/i.test(head) || /<html[\s>]/i.test(head)) return "html";
+  if (label === "markdown" || label === "md") return "markdown";
+  if (label === "xml" || label === "") {                 // the model often labels neither, or calls SVG "xml"
+    if (/^\s*<(?:!doctype\s+html|html|head|body|svg|div|section|main|article|table|style|canvas|form)[\s>]/i.test(head)) {
+      return /^\s*(?:<\?xml[^>]*>\s*)?<svg[\s>]/i.test(head) ? "svg" : "html";
+    }
+  }
+  return null;
+}
 function wbArtifacts() {
   const out = [];
   messages.forEach((m, i) => {
     if (m.role !== "assistant" || !m.text) return;
-    const re = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
+    const re = /```([a-zA-Z0-9_+-]*)[ \t]*\r?\n([\s\S]*?)```/g;
     let match, n = 0;
     while ((match = re.exec(m.text))) {
       const lang = (match[1] || "").toLowerCase();
-      if (!ARTIFACT_LANGS.has(lang)) continue;
+      const kind = wbKind(lang, match[2]);
+      if (!kind) continue;
       n += 1;
-      out.push({id: `${i}-${n}`, lang: lang === "md" ? "markdown" : lang, code: match[2].trim(),
-                title: wbTitle(match[2], lang, n)});
+      out.push({id: `${i}-${n}`, lang: kind, code: match[2].trim(), title: wbTitle(match[2], kind, n)});
+    }
+    // a block still being written: the last fence is open, so show what there is of it while the answer streams
+    const fences = (m.text.match(/```/g) || []).length;
+    if (fences % 2 === 1) {
+      const after = m.text.slice(m.text.lastIndexOf("```") + 3);
+      const nl = after.indexOf("\n");
+      if (nl >= 0) {
+        const body = after.slice(nl + 1);
+        const kind = wbKind(after.slice(0, nl).trim(), body);
+        if (kind) {
+          n += 1;
+          out.push({id: `${i}-${n}-draft`, lang: kind, code: body.trim(), draft: true,
+                    title: `${wbTitle(body, kind, n)} (writing…)`});
+        }
+      }
     }
   });
   return out;
 }
 function wbTitle(code, lang, n) {
   const h = code.match(/<h1[^>]*>([^<]{1,80})<\/h1>/i) || code.match(/<title[^>]*>([^<]{1,80})<\/title>/i) ||
-            code.match(/^#\s+(.{1,80})$/m);
-  return h ? h[1].trim() : `${lang === "md" ? "Markdown" : lang.toUpperCase()} · ${n}`;
+            code.match(/^#\s+(.{1,80})$/m) || code.match(/<!--\s*([^->]{1,80})\s*-->/);
+  return h ? h[1].trim() : `${lang === "markdown" ? "Markdown" : lang.toUpperCase()} · ${n}`;
 }
 // The frame's own policy: no network at all, no access to this page, inline script and style only. Nothing the model
 // writes can reach the server, the user's other tabs or the internet through it.
@@ -2679,12 +2710,22 @@ document.addEventListener("keydown", (e) => {
   wbOpen(!wb.open);
 });
 // Live: the first fenced page or drawing in an answer opens the panel on it, once per message.
+// Live: a viewable block that appears in the answer being written opens the panel on it, and keeps it on the newest.
+// It re-reads the chat only when a fence opens or closes, never on every token.
 function wbMaybeAuto(m) {
-  if (!busy || busy.msg !== m) return;                 // only while that answer is being written
-  if (wb.open || !m || wb.autoFor === m) return;
-  if (!/```(html|svg|markdown|md)\b/i.test(m.text || "")) return;
+  if (!busy || busy.msg !== m || !m.text) return;
+  const fences = (m.text.match(/```/g) || []).length;
+  if (!fences) return;
+  const key = String(fences);
+  if (wb.autoFor === m && wb.autoKey === key) return;     // nothing new since the last look
   wb.autoFor = m;
-  wbOpen(true, "artifact");
+  wb.autoKey = key;
+  const list = wbArtifacts();
+  if (!list.length) return;
+  wb.selected = list[list.length - 1].id;                 // the block that just arrived
+  if (!wb.open) wbOpen(true, "artifact");
+  else if (wb.tab === "artifact") wbRenderArtifact();
+  else if (wb.tab === "files" && !wbFileList().length) wbShowTab("artifact");
 }
 wbLoad();
 wbShowTab(wb.tab);

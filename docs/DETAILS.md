@@ -2386,8 +2386,10 @@ name). AryaInfer ignores them; they are how the page draws the same card next ti
 **The Workbench** is the panel on the right of the chat (the header button, or Ctrl/Cmd+Shift+B). It shows what
 the conversation produced, beside it:
 
-- **Artifact** - the first HTML, SVG or Markdown block in an answer opens the panel while it is being written. The
-  block is rendered in a frame with `sandbox="allow-scripts"` and no `allow-same-origin`, and with its own policy
+- **Artifact** - a fenced block the browser can show opens the panel while the answer is being written. What counts is
+  the content, not the label: a block labelled `xml` that holds an `<svg>` is a drawing, an unlabelled block that
+  starts like a document is a page, and Markdown is Markdown. The block is rendered in a frame with
+  `sandbox="allow-scripts"` and no `allow-same-origin`, and with its own policy
   (`default-src 'none'`, inline style and script only): a page the model wrote cannot read this page, call this
   server, or reach the network. Preview and Source switch between the rendering and the code, and the block can be
   copied, downloaded or opened in a tab of its own.
