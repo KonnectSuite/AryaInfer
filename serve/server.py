@@ -68,6 +68,7 @@ from serve.frontend import (THINK_END, EFFORT, ChatTemplate, Event, OutputParser
 from serve.mcp import McpCancelled, check_name, check_server, hub_for, merge_config  # noqa: E402
 from serve.toolhub import ToolHub  # noqa: E402
 from serve import websearch  # noqa: E402
+from serve import comfyui  # noqa: E402
 from serve import runconfig  # noqa: E402
 from serve import webconf  # noqa: E402
 from serve import models as registry  # noqa: E402
@@ -3280,6 +3281,8 @@ class Service:
         self.mcp = None                                  # serve/mcp.py's McpHub (always set: the page adds servers)
         self.search = None                               # serve/websearch.py's SearchHub when SearXNG is set up
         self.search_path = None                          # the web search settings file (websearch.json, or --search-config)
+        self.comfy = None                                # serve/comfyui.py's ComfyHub (images through ComfyUI)
+        self.comfy_path = None                           # its settings file (comfyui.json, beside the run config)
         # sharing the GPU with other programs (all off by default): unload the engine after this many idle seconds,
         # only start it again when this much VRAM is free, and run this command first (e.g. to unload another
         # server's model); the next request after an unload starts the engine again
@@ -5432,7 +5435,10 @@ def run_with_mcp(svc: Service, hub, messages, tools, kw, ids, thinking, max_new,
             print(f"[strata] tool {c.name}: {'ok' if r['ok'] else 'error'}, {r['chars']:,} characters in "
                   f"{r['ms'] / 1000:.1f} s{' (truncated for the model)' if r['truncated'] else ''}", flush=True)
             results.append(r["text"])
-            yield "mcp", {"event": "result", "id": c.id, **{k: r[k] for k in ("ok", "text", "chars", "truncated", "ms")}}
+            event = {"event": "result", "id": c.id, **{k: r[k] for k in ("ok", "text", "chars", "truncated", "ms")}}
+            if r.get("images"):
+                event["images"] = r["images"]          # the page shows what an image tool made
+            yield "mcp", event
         if cancel.is_set() or len(results) < len(calls):
             done = {**done, "finish": "cancel"}
             break
@@ -6088,10 +6094,45 @@ def make_handler(svc: Service):
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+            elif path == "/comfy":
+                # the ComfyUI dialog and the Images room: settings (headers masked), workflows, server state, gallery
+                if self._authorized():
+                    view = self._comfy_view()
+                    query = parse_qs(self.path.partition("?")[2])
+                    if svc.comfy is not None:
+                        if query.get("job"):
+                            view["job"] = svc.comfy.job(query["job"][0])
+                        if query.get("gallery"):
+                            page = svc.comfy.gallery.list(
+                                limit=int(query.get("limit", ["60"])[0] or 60),
+                                before=int(query["before"][0]) if query.get("before") else None,
+                                favorites=query.get("favorites", ["0"])[0] == "1",
+                                query=query.get("q", [""])[0])
+                            page["items"] = [svc.comfy.image_view(r) for r in page["items"]]
+                            view["page"] = page
+                    self._json(200, view, headers={"Cache-Control": "no-store"})
+            elif path.startswith("/comfy/files/"):
+                record = svc.comfy.gallery.get(path[len("/comfy/files/"):].rsplit(".", 1)[0]) \
+                    if svc.comfy is not None else None
+                f = svc.comfy.gallery.file(path[len("/comfy/files/"):]) if svc.comfy is not None else None
+                if f is None or record is None:
+                    self._json(404, {"error": {"message": "not found (the gallery keeps the newest images only)"}})
+                    return
+                body = f.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", comfyui._sniff_image(body) or "image/png")
+                self.send_header("Cache-Control", "private, max-age=86400")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
             elif path in ("/health", "/api/health"):
+                reachable = svc.comfy.reach() if svc.comfy is not None else {"up": False, "version": None}
                 self._json(200, {"status": "ok", "max_context": svc.reported_ctx(), "model": svc.model,
                                  "images": svc.vision is not None, "api_key": bool(svc.api_key),
                                  "image_generation": svc.images is not None,
+                                 "comfyui": {"configured": bool(svc.comfy is not None and svc.comfy.configured()),
+                                             "reachable": bool(reachable.get("up")),
+                                             "version": reachable.get("version")},
                                  "loaded": svc.loaded(), "service": "strata"})
             elif path.startswith("/v1/images/files/"):
                 # response_format url: the name (32 random hex digits) is the access, as an OpenAI image URL is
@@ -6184,6 +6225,9 @@ def make_handler(svc: Service):
                 return
             if path == "/mcp":
                 self._mcp_post()
+                return
+            if path == "/comfy":
+                self._comfy_post()
                 return
             if path == "/search":
                 self._search_post()
@@ -6765,6 +6809,102 @@ def make_handler(svc: Service):
                              "text": text, "chars": chars, "truncated": truncated,
                              "ms": int((time.monotonic() - started) * 1000)})
 
+        def _comfy_view(self) -> dict:
+            """GET /comfy: what the dialog and the room need before any image is listed."""
+            if svc.comfy is None:
+                return {"configured": False, "reachable": False, "workflows": [], "gallery": {"files": 0}, "jobs": []}
+            return svc.comfy.status()
+
+        def _comfy_post(self):
+            """POST /comfy: one action from the Images dialog or the room.  JSON from this page only, as /search."""
+            body = self._body()
+            if not self._own_page("images can be changed"):
+                return
+            try:
+                req = json.loads(body or b"{}")
+                if not isinstance(req, dict):
+                    raise ValueError("send a JSON object")
+                answer = self._comfy_change(req)
+            except (ValueError, comfyui.WorkflowError) as e:
+                self._json(400, {"error": {"type": "invalid_request_error", "message": str(e)}})
+                return
+            except comfyui.ComfyError as e:
+                self._json(502, {"error": {"type": "server_error", "message": str(e)}})
+                return
+            except OSError as e:
+                self._json(500, {"error": {"type": "server_error",
+                                           "message": f"the ComfyUI settings or gallery cannot be written: {e}"}})
+                return
+            self._json(202 if "job" in answer else 200, answer)
+
+        def _comfy_change(self, req: dict) -> dict:
+            """One action, validated -> what the page gets back.  ValueError/WorkflowError: the 400 sentence."""
+            hub = svc.comfy
+            if hub is None:
+                raise ValueError("this server has no ComfyUI support")
+            actions = [k for k in ("set", "check", "import", "remove_workflow", "start", "stop", "restart",
+                                   "generate", "cancel", "delete", "favorite", "gallery", "upload") if k in req]
+            if len(actions) != 1:
+                raise ValueError('send one of: {"set": {...}}, {"check": true}, {"import": {"name","json"}}, '
+                                 '{"remove_workflow": "<name>"}, {"start"|"stop"|"restart": true}, '
+                                 '{"generate": {...}}, {"cancel": "<job>"}, {"delete": ["<id>"]}, '
+                                 '{"favorite": {"id","on"}}, {"gallery": {...}}, {"upload": {"data_url"}}')
+            action, value = actions[0], req[actions[0]]
+            if action == "set":
+                if not isinstance(value, dict):
+                    raise ValueError('"set" is an object of settings')
+                settings = hub.save(value)
+                print(f"[strata] images: ComfyUI at {settings['base_url']} (Settings > Tools)", flush=True)
+                return {"ok": True, "settings": comfyui.public_settings(settings), "workflows": hub.workflows()}
+            if action == "check":
+                result = hub.check()
+                return {"ok": result["ok"], "check": result}
+            if action == "import":
+                if not isinstance(value, dict):
+                    raise ValueError('"import" is {"name": "<name>", "json": "<API-format graph>"}')
+                workflow = hub.import_workflow(value.get("name"), value.get("json"))
+                return {"ok": True, "workflow": workflow, "workflows": hub.workflows()}
+            if action == "remove_workflow":
+                return {"ok": True, "removed": hub.remove_workflow(str(value)), "workflows": hub.workflows()}
+            if action in ("start", "stop", "restart"):
+                if hub.manager.busy:
+                    raise ValueError("a ComfyUI server action is already running")
+                result = getattr(hub.manager, action)()
+                return {"ok": True, "server": result}
+            if action == "generate":
+                if not isinstance(value, dict):
+                    raise ValueError('"generate" is an object: prompt, workflow, width, height, seed, count, references')
+                return {"ok": True, "job": hub.start_job({**value, "take_turn": True})}
+            if action == "cancel":
+                job = hub.cancel_job(str(value))
+                if job is None:
+                    raise ValueError(f"there is no job named {value!r}")
+                return {"ok": True, "job": job}
+            if action == "delete":
+                ids = value if isinstance(value, list) else [value]
+                return {"ok": True, "deleted": hub.gallery.delete([str(i) for i in ids])}
+            if action == "favorite":
+                if not isinstance(value, dict):
+                    raise ValueError('"favorite" is {"id": "<id>", "on": true|false}')
+                item = hub.gallery.favorite(str(value.get("id")),
+                                            value.get("on") if isinstance(value.get("on"), bool) else None)
+                if item is None:
+                    raise ValueError(f"there is no image {value.get('id')!r} in the gallery")
+                return {"ok": True, "item": hub.image_view(item)}
+            if action == "gallery":
+                spec = value if isinstance(value, dict) else {}
+                page = hub.gallery.list(limit=int(spec.get("limit") or 60),
+                                        before=int(spec["before"]) if spec.get("before") else None,
+                                        favorites=bool(spec.get("favorites")),
+                                        query=str(spec.get("query") or ""))
+                page["items"] = [hub.image_view(r) for r in page["items"]]
+                return {"ok": True, "page": page}
+            if action == "upload":
+                if not isinstance(value, dict) or not value.get("data_url"):
+                    raise ValueError('"upload" is {"data_url": "data:image/png;base64,..."}')
+                return {"ok": True, "item": hub.upload_image(str(value["data_url"]), str(value.get("prompt") or ""))}
+            raise ValueError(f"unknown image action {action!r}")
+
         def _foreign_origin(self) -> bool:
             """A web page of another origin sent this.  The Origin must be this server's own address (host and port),
             or an origin the config trusts (trusted_origins: the web app behind a reverse proxy or tunnel); no Origin
@@ -6900,14 +7040,17 @@ def make_handler(svc: Service):
             max_req = max_new = int(req.get("max_completion_tokens") or req.get("max_tokens") or 0)   # 0/-1: the rest
             bias_api.validate_request(req, svc.engine, len(getattr(svc.tok, "tokens", ())) or None)
             # The web app's opt-in: "strata_mcp" for the MCP servers (serve/mcp.py), "strata_search" for the SearXNG
-            # tools (serve/websearch.py).  Either, both or neither; nothing is offered to a request that asks for none.
+            # tools (serve/websearch.py), "strata_images" for the ComfyUI image tool (serve/comfyui.py).  Any, all or
+            # none; nothing is offered to a request that asks for none.
             use_mcp = req.get("strata_mcp") is True and svc.mcp is not None
             use_search = req.get("strata_search") is True and svc.search is not None and svc.search.configured()
+            use_images = (req.get("strata_images") is True and svc.comfy is not None and svc.comfy.configured())
             own = {t.get("name") for t in tools or [] if isinstance(t, dict)}   # #592: a second line of defence
-            providers = [p for p in (svc.mcp if use_mcp else None, svc.search if use_search else None) if p is not None]
+            providers = [p for p in (svc.mcp if use_mcp else None, svc.search if use_search else None,
+                                     svc.comfy if use_images else None) if p is not None]
             hub, extra = None, []
             if providers:
-                if not self._own_page("MCP tools and web search can be used"):   # they run with the user's rights
+                if not self._own_page("MCP tools, web search and images can be used"):   # they run with the user's rights
                     return
                 for p in providers:
                     p.wait(10)                                        # servers still starting (right after start only)
@@ -8073,6 +8216,19 @@ def main() -> int:
     svc.apply_settings(settings)
     svc.search_path = str(search_path)                  # the settings file the page's card edits
     svc.search = websearch.SearchHub(search_settings) if search_settings else None
+    # ComfyUI (serve/comfyui.py): a page-managed comfyui.json beside the run config, always created so the page can
+    # configure and start a server later; it offers the chat nothing until a base URL is set.
+    comfy_path = comfyui.path_for(a.config)
+    try:
+        comfy_settings = comfyui.normalize({**comfyui.read_settings(comfy_path)})
+    except ValueError as e:
+        raise SystemExit(f"[strata] ComfyUI settings: {e}")
+    svc.comfy = comfyui.ComfyHub(comfy_settings, svc=svc,
+                                 log=open(cfg["log"], "a", encoding="utf-8") if cfg.get("log") else None,
+                                 settings_path=comfy_path)
+    svc.comfy_path = str(comfy_path)
+    print(f"[strata] images: ComfyUI at {comfy_settings['base_url']} ({len(svc.comfy.workflows())} workflows)"
+          if comfy_settings["base_url"] else "[strata] images: ComfyUI not set up", flush=True)
     if a.engine != "strata":                            # the mock engine: no model card's sampling
         svc.model_arch = None
     if cfg.get("images"):                               # image generation (serve/images.py), set up by setup --images

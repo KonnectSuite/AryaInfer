@@ -194,6 +194,10 @@ class ImageGen:
     def missing(self) -> list[str]:
         return [self.cfg[k] for k in ("exe", "diffusion_model", "vae", "llm") if not Path(self.cfg[k]).exists()]
 
+    def need_mib(self, job: dict) -> int:
+        """What the GPU turn should reserve for this job: the model files plus the working buffers."""
+        return need_mib(self.cfg, job["width"], job["height"])
+
     def _say(self, text: str) -> None:
         print(f"[strata] {text}", flush=True)
         if self.log is not None:
@@ -326,146 +330,6 @@ class ImageGen:
 
 
 # ------------------------------------------------------------------------------------------- the GPU turn
-def resolve_policy(svc, gen: ImageGen, need: int) -> str:
-    """auto -> keep / shrink / unload for this job (see the module's docstring); a fixed policy is kept, except that
-    an engine that is not running has nothing to give back (keep)."""
-    eng = svc.engine
-    running = not hasattr(eng, "alive") or eng.alive()
-    if not running or not hasattr(eng, "unload"):
-        return "keep"
-    if gen.policy != "auto":
-        return gen.policy
-    if gen.cfg.get("uma"):
-        return "keep"                         # an APU: the image job and the engine share the RAM either way
-    free = svc.free_vram_mib()
-    if free is None or free >= need:
-        return "keep"
-    if engine_elastic(eng):
-        return "shrink"
-    return "unload"
-
-
-def engine_elastic(eng) -> bool:
-    """An engine that resizes its expert cache on request (--vram-elastic, #533)."""
-    if not hasattr(eng, "vram"):
-        return False
-    if (getattr(eng, "info", None) or {}).get("vram_elastic"):
-        return True
-    spawn = getattr(eng, "spawn", None)
-    args = spawn[1] if isinstance(spawn, (list, tuple)) and len(spawn) > 1 else []
-    return "--vram-elastic" in (args or [])
-
-
-def _client_gone(svc) -> Exception:
-    """The server module's ClientGone (it may run as __main__, so not imported by name)."""
-    import sys
-    return getattr(sys.modules.get(type(svc).__module__), "ClientGone", RuntimeError)()
-
-
-@contextlib.contextmanager
-def gpu_turn(svc, gen: ImageGen, job: dict, cancel: threading.Event | None = None):
-    """The image job's turn on the GPU: the service's FIFO (and, with parallel requests, the engine's control lines
-    once no slot is generating), and the text engine made room for it per the policy.  Yields the policy used."""
-    with svc.status_lock:
-        svc.status["queued"] += 1
-    queued = True
-    try:
-        with svc._turn(cancel):
-            with svc.status_lock:
-                svc.status["queued"] -= 1
-            queued = False
-            ctl = getattr(svc.engine, "ctl", None) if getattr(svc.engine, "batch", 0) else None
-            if ctl is not None:
-                while not ctl.acquire(timeout=0.25):
-                    if cancel is not None and cancel.is_set():
-                        raise _client_gone(svc)
-            try:
-                if ctl is not None:                   # running parallel requests finish first
-                    while getattr(svc, "live_reqs", None):
-                        if cancel is not None and cancel.is_set():
-                            raise _client_gone(svc)
-                        time.sleep(0.25)
-                need = need_mib(gen.cfg, job["width"], job["height"])
-                policy = resolve_policy(svc, gen, need)
-                with svc.status_lock:
-                    svc.status.update(busy=True, phase="generating an image", started=time.time(),
-                                      first_token=None, prompt_tokens=None, generated=None, max_tokens=None)
-                restore = _make_room(svc, gen, policy, need)
-                try:
-                    yield policy
-                finally:
-                    _give_back(svc, gen, policy, restore)
-                    with svc.status_lock:
-                        svc.status["busy"] = False
-                    svc.last_request_at = time.time()
-            finally:
-                if ctl is not None:
-                    ctl.release()
-    finally:
-        if queued:
-            with svc.status_lock:
-                svc.status["queued"] -= 1
-
-
-def _make_room(svc, gen: ImageGen, policy: str, need: int):
-    """Do what `policy` says before the job; -> what _give_back needs."""
-    eng = svc.engine
-    if policy == "shrink":
-        try:
-            out = eng.vram(need)
-            gen._say(f"image job: the engine's expert cache gave VRAM back ({out.get('vram_free_mib')} MiB free)")
-            return "shrunk"
-        except Exception as e:                       # noqa: BLE001 - the job still runs, with what is free
-            gen._say(f"image job: the engine could not give VRAM back ({e}); the job runs with what is free")
-            return None
-    if policy == "unload":
-        saved = None
-        if hasattr(eng, "session_file") and not getattr(eng, "batch", 0):
-            path = str(gen.dir / f"llm-session-{secrets.token_hex(6)}.bin")
-            try:
-                r = eng.session_file("save", path)
-                saved = path
-                gen._say(f"image job: the conversation ({r.get('tokens')} tokens) saved; unloading the model")
-            except Exception as e:                   # noqa: BLE001 - unloading still frees the GPU
-                gen._say(f"image job: the conversation could not be saved ({e}); unloading the model")
-                with contextlib.suppress(OSError):
-                    os.unlink(path)
-        eng.unload()
-        if svc.vision is not None and hasattr(svc.vision, "unload"):
-            svc.vision.unload()
-        return saved or "unloaded"
-    return None
-
-
-def _give_back(svc, gen: ImageGen, policy: str, restore) -> None:
-    eng = svc.engine
-    if restore == "shrunk":
-        try:
-            eng.vram(svc.vram_reserve)               # the reserve asked for last (None: the start's)
-        except Exception as e:                       # noqa: BLE001
-            gen._say(f"image job: the expert cache did not grow back ({e}); POST /v1/vram can retry")
-    elif policy == "unload" and restore:
-        if restore != "unloaded":
-            svc.restore_after_load = restore         # Service.ensure_loaded restores it after the next start
-        if gen.reload == "eager":
-            try:
-                svc.ensure_loaded()                  # the caller still holds the FIFO
-            except Exception as e:                   # noqa: BLE001 - the next request tries again
-                gen._say(f"image job: the model did not load again yet ({e}); the next request loads it")
-
-
-def restore_session(svc) -> None:
-    """After an engine start: restore the conversation an image job saved before it unloaded the engine."""
-    path = getattr(svc, "restore_after_load", None)
-    if not path:
-        return
-    svc.restore_after_load = None
-    try:
-        r = svc.engine.session_file("restore", path)
-        print(f"[strata] the conversation from before the image job is back ({r.get('tokens')} tokens)", flush=True)
-    except Exception as e:                           # noqa: BLE001 - the engine runs, without the old cache
-        print(f"[strata] the conversation from before the image job was not restored ({e}); the next request "
-              "reads its prompt again", flush=True)
-    finally:
-        with contextlib.suppress(OSError):
-            os.unlink(path)
+# The policy and the turn itself live in serve/gputurn.py, so a ComfyUI job (serve/comfyui.py) goes through the same
+# one.  They stay importable from here: the server and the tests call them by this module's name.
+from serve.gputurn import engine_elastic, gpu_turn, resolve_policy, restore_session  # noqa: E402,F401

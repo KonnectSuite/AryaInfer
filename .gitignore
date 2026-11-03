@@ -87,3 +87,6 @@ dist-hip/
 /mcp-servers.json.*
 /websearch.json
 /websearch.json.*
+# the ComfyUI settings the page keeps beside the run config (may hold a proxy token)
+/comfyui.json
+/comfyui.json.*

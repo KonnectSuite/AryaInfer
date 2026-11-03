@@ -1,0 +1,142 @@
+﻿{
+    "1":  {
+              "inputs":  {
+                             "unet_name":  "qwen_image_2.1_turbo_int8_convrot.safetensors",
+                             "weight_dtype":  "default"
+                         },
+              "class_type":  "UNETLoader"
+          },
+    "2":  {
+              "inputs":  {
+                             "clip_name":  "qwen3vl_8b_w4a8.safetensors",
+                             "type":  "qwen_image",
+                             "device":  "default"
+                         },
+              "class_type":  "CLIPLoader"
+          },
+    "3":  {
+              "inputs":  {
+                             "vae_name":  "qwen_image_2.1_vae_bf16.safetensors"
+                         },
+              "class_type":  "VAELoader"
+          },
+    "5":  {
+              "inputs":  {
+                             "model":  [
+                                           "1",
+                                           0
+                                       ],
+                             "device":  "cpu",
+                             "dtype":  "default"
+                         },
+              "class_type":  "QwenImage21Cache"
+          },
+    "14":  {
+               "inputs":  {
+                              "clip":  [
+                                           "2",
+                                           0
+                                       ],
+                              "vae":  [
+                                          "3",
+                                          0
+                                      ],
+                              "prompt":  "{{prompt}}",
+                              "negative_prompt":  "",
+                              "resolution":  1024
+                          },
+               "class_type":  "TextEncodeQwenImage21"
+           },
+    "6":  {
+              "inputs":  {
+                             "model":  [
+                                           "5",
+                                           0
+                                       ],
+                             "positive":  [
+                                              "14",
+                                              0
+                                          ],
+                             "negative":  [
+                                              "14",
+                                              1
+                                          ],
+                             "cfg":  1.0
+                         },
+              "class_type":  "CFGGuider"
+          },
+    "7":  {
+              "inputs":  {
+                             "noise_seed":  "{{seed}}"
+                         },
+              "class_type":  "RandomNoise"
+          },
+    "8":  {
+              "inputs":  {
+                             "sampler_name":  "euler"
+                         },
+              "class_type":  "KSamplerSelect"
+          },
+    "9":  {
+              "inputs":  {
+                             "sigmas":  "1.0, 0.978453, 0.95418, 0.926626, 0.89508, 0.845148, 0.704534, 0.414568, 0"
+                         },
+              "class_type":  "ManualSigmas"
+          },
+    "11":  {
+               "inputs":  {
+                              "noise":  [
+                                            "7",
+                                            0
+                                        ],
+                              "guider":  [
+                                             "6",
+                                             0
+                                         ],
+                              "sampler":  [
+                                              "8",
+                                              0
+                                          ],
+                              "sigmas":  [
+                                             "9",
+                                             0
+                                         ],
+                              "latent_image":  [
+                                                   "10",
+                                                   0
+                                               ]
+                          },
+               "class_type":  "SamplerCustomAdvanced"
+           },
+    "12":  {
+               "inputs":  {
+                              "samples":  [
+                                              "11",
+                                              0
+                                          ],
+                              "vae":  [
+                                          "3",
+                                          0
+                                      ]
+                          },
+               "class_type":  "VAEDecode"
+           },
+    "13":  {
+               "inputs":  {
+                              "images":  [
+                                             "12",
+                                             0
+                                         ],
+                              "filename_prefix":  "AryaQwen21-create"
+                          },
+               "class_type":  "SaveImage"
+           },
+    "10":  {
+               "inputs":  {
+                              "width":  1024,
+                              "height":  1024,
+                              "batch_size":  1
+                          },
+               "class_type":  "EmptyLatentImage"
+           }
+}
