@@ -747,3 +747,27 @@ Negative results, measured the same way:
 
 So the decode side is at its practical ceiling for this file on this card until the recurrent rows get cheaper; the
 reading side is what improved this week (batch 512 for the long-context spill, CPU vision for another 14%).
+## The chunked GDN MMA kernel: +8-9% reading, for free in aryainfer (2026-11-03)
+
+The model's recurrent layers are Gated DeltaNet, and the engine has a CUDA tensor-core kernel for a prompt's GDN
+recurrence in 16-token chunks (`STRATA_GDN_MMA=1`, `src/kernels/cuda/gdn_mma.cu`, compiled into the build by
+`strata_poly_mmq`'s `STRATA_POLY_GDN_MMA=1`).  The **installed** 0.1.45 build does not carry it; the repository build
+and `aryainfer` do, so it is a good first piece of work for the fork's own binary.  Same file, q4_0, batch 512, a free
+card, one engine at a time (`nvidia-smi` checked empty before each arm):
+
+| context, prompt | stock | `STRATA_GDN_MMA=1` | reading |
+| --- | --- | --- | --- |
+| 8K, 8,000 tokens | 1,190.0 / 75.2 | **1,287.8** / 71.8 | +8.2% |
+| 32K, 32,000 tokens | 1,021.4 / 69.6 | **1,114.5** / 72.3 | +9.1% |
+| 64K, 62,000 tokens | 854.9 / 82.5 | **917.8** / 66.9 | +7.4% |
+
+The engine reports the scope itself: "prefill through chunked GDN MMA; decode and snapshots unchanged".  The decode
+numbers move both ways between runs (64-128 token samples), so they are noise; the reading gain is consistent across
+the three lengths.  Through the server, the arya model (its config carries `"env": {"STRATA_GDN_MMA": "1"}`) read a
+12,371-token prompt at **1,235.0 tok/s** with the kernel line in its log, against the ~1,100 the stock path would give
+at that length.  `strata-poly` (upstream's installed binary) cannot use it; `aryainfer` can, which is exactly the split
+the fork wants: upstream stays untouched, our binary carries the fork's settings.
+
+The kernel is opt-in upstream because its chunked arithmetic rounds differently from the stock recurrence; the state
+parity test (`poly_gdn_mma_state_test`, and `STRATA_FREEZE_EXPERTS=1`) is what checks it on a model, and the fork's
+model entry says it is on.
