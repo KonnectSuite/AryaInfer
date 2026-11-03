@@ -716,3 +716,34 @@ sizes its arena to the free VRAM, and a 61,787-token prompt then read at **826.0
 722.2 (+14%), with decode unchanged (~70) and 14.7 GiB used.  An image turn (a 768-pixel PNG, 1,024 image tokens)
 took 9.9 s end to end, its prompt read in 1,238 ms at 87.2 tok/s of writing, 13 of 13 drafts accepted.  It is the
 default now for text-first work; `"gpu": true` buys faster image encoding for those 14 points of reading speed.
+## Where the decode time goes, and why more guesses do not buy more speed (2026-11-03)
+
+The draft block's window as the only variable, 8K prompt, 128 tokens, q4_0, batch 512, the repository build, a free
+card (`--report-drafts`, so the rounds are counted):
+
+| `--window` | decode | tokens a round | ms a pass | marginal ms a row | accepted |
+| --- | --- | --- | --- | --- | --- |
+| 1 (no guesses) | 44.1 | 1.00 | 22.7 | - | - |
+| 2 | 64.6 | 1.83 | 28.3 | 12.8 | 57/66 |
+| 4 | **74.0** | 2.84 | 38.4 | 13.5 | 82/102 |
+| 8 | 70.9 | 3.28 | 46.3 | 14.1 | 89/108 |
+
+A single-row pass is 22.7 ms: the 9.7 GB of weights read at 427 GB/s, about 64% of the card's 672.  Each row added to
+the window costs 13-14 ms more, so it only pays if its acceptance beats 13/22.7 = 57%; the guesses are at 83% and up,
+yet the measured decode peaks at a window of four rather than eight because the last rows add cost faster than they
+add accepted tokens.  The ceiling this implies is arithmetic: seven perfect rows would be 22.7 + 6 x 13 = 100 ms for
+seven tokens, about 70 tok/s - the same place the adaptive policy already is.  capy-flash's 139 tok/s at 8K on an RTX
+5070 Ti therefore does not come from deeper guesses but from a **cheaper row**: their card has 1.33x this one's
+bandwidth, and the rest has to be the per-row compute.  The rows' cost here is the recurrent layers' state updates
+(this model is a GDN hybrid, 65 blocks with full attention every fourth), which the engine's own notes name as the
+remaining work: a batched recurrence for a window's rows over a state table, instead of the per-row copies.
+
+Negative results, measured the same way:
+
+* `--tree 2,2` (seven rows in one pass) is **23.5 tok/s at 8K and 19.6 at 32K**, against 74.9 and 69.0 for the policy's
+  chain; its acceptance was 78 of 300.  `--tree 2,1` is 28.3 / 23.4.  Off.
+* `--draft-window 2048` / `4096` at 32K and 62K: 65.2 / 67.0 / 82.1 / 84.3 against 62.5 / 84.3 - within the run-to-run
+  noise of a 64-128 token sample.  Not a lever either.
+
+So the decode side is at its practical ceiling for this file on this card until the recurrent rows get cheaper; the
+reading side is what improved this week (batch 512 for the long-context spill, CPU vision for another 14%).
