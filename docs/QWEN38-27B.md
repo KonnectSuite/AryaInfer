@@ -555,6 +555,12 @@ With those flags and requests that name no sampling, the same set then measured 
 adherence and 0.92 distinct-4: the defaults alone behave like the calibrated set.  OpenAI tool calling was checked on
 the same server: `finish_reason: tool_calls`, with `get_weather({"city":"Paris"})`.
 
-One gap to know: AryaStrata's per-effort thinking budgets (off/low/medium/high) are request-level fields on the strata
-path and are not rewritten for forwarded Ninfer requests; the Ninfer server applies its own
-`--default-thinking-budget 8000` and whatever thinking control a client sends in its own dialect.
+Thinking follows the request: the proxy writes the request's effort (top level or in `chat_template_kwargs`) into the
+dialect Ninfer reads - `none`/`low`/`medium`/`xhigh` for Chat Completions and `reasoning.effort` for Responses, and
+`thinking: {"type": "enabled" | "disabled"}` for Anthropic - mapping AryaStrata's `off`/`low`/`medium`/`high` to
+`none`/`low`/`medium`/`xhigh` (Ninfer's ladder has no "high").  An explicit Anthropic `thinking.budget_tokens` passes
+through; a named effort without one takes the run config's `reasoning_budget_by_effort`.  A request that names no
+effort is forwarded without one: the backend's `--default-thinking-budget 8000` and its template default apply, which
+is what the calibration measured.  Measured through the proxy on 2026-11-02 with the same coding prompt: 68 output
+tokens with 51 in reasoning by default, **16 tokens with 0 reasoning at `off`**, and 65 with 48 at `high` (xhigh); an
+Anthropic request with `thinking.budget_tokens 1024` was accepted.
