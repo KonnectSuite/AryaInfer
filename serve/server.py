@@ -3673,6 +3673,7 @@ class Service:
                                            f"({again}): no model is loaded") from None
                     raise SwitchFailed(f"{target['id']} did not start ({e}); {old_name} is loaded again") from None
                 self.ninfer, self.engine, self.vision = backend, None, None
+                self.known_ctx = int(cfg.get("max_context") or 0)   # /health, /props and /v1/status report it
                 import atexit
                 atexit.register(backend.close)          # a shutdown ends the backend (and its distro) too
                 self.ninfer_budgets = dict(cfg.get("reasoning_budget_by_effort") or {})
@@ -3955,7 +3956,8 @@ class Service:
         """The context the endpoints report (/v1/status, /v1/models, /props, /health, /slots, /metrics): the engine's,
         or the last one it reported while it restarts (max_context is 0 until READY, and a client that sizes its
         prompt from it would send nothing, #351).  Reporting only: requests are checked in prepare()."""
-        return int(getattr(self.engine, "max_context", 0) or getattr(self.engine, "known_ctx", 0) or 0)
+        return int(getattr(self.engine, "max_context", 0) or getattr(self.engine, "known_ctx", 0)
+                   or getattr(self, "known_ctx", 0) or 0)
 
     def request_effort(self, req) -> str | None:
         """The effort level this request runs at, as one of EFFORT_LEVELS: its own effort, thinking or template
@@ -8086,6 +8088,7 @@ def main() -> int:
         import atexit
         atexit.register(ninfer.close)
         svc.ninfer = ninfer
+        svc.known_ctx = int(cfg.get("max_context") or 0)
         svc.ninfer_budgets = dict(cfg.get("reasoning_budget_by_effort") or {})
         svc.effort_end = False
     if a.engine != "strata":                            # the mock engine: no model card's sampling
