@@ -516,6 +516,15 @@ on the Ninfer config itself (`--config strata-qwen3.8-27b-ninfer-gsq3.json`): it
 the first request answers without a switch (measured 1.1 s on 2026-11-02); starting on it and switching away works
 too (7.2 s to the GGUF, 37.5 s back).
 
+Stopping ends everything, including the WSL side.  The WSL client's stdin is a guard pipe: it closes when the
+AryaStrata server does - even when the server is killed - and the guard then ends `ninfer-serve`, so no Ninfer
+process outlives the server and the card is freed (measured: 15.2 GB to 0.8 GB within 8 s of a hard kill).  A
+graceful stop (the tray's `POST /api/shutdown`) also runs `wsl --shutdown` when no other distro is running, so the
+`vmmemWSL` utility VM does not outlive the server either (measured: no `vmmemWSL`, distro Stopped, about 1 GB of the
+card in use after the stop).  A hard-killed server leaves only WSL's own VM idling out.  Keys in the `ninfer` block:
+`"distro"` (the distro to end), `"guard": true` (the stdin guard) and `"shutdown_wsl": true` (the VM shutdown; set it
+to false to keep WSL for other work).
+
 Reproduced on this host against the recorded head-to-head (the same 20,051-token prompt and 64 greedy tokens):
 
 | | measured 2026-11-02 | recorded head-to-head |

@@ -3215,9 +3215,13 @@ class NinferBackend:
     it whole; the process is stopped when another model loads, so the card holds one engine at a time."""
 
     def __init__(self, spec: dict, log: str | None = None):
-        self.command = [str(x) for x in spec.get("command") or []]
-        if not self.command:
+        command = [str(x) for x in spec.get("command") or []]
+        if not command:
             raise ValueError("the config's ninfer block has no command")
+        self.distro = str(spec.get("distro") or "")
+        self.guard = spec.get("guard", True) is not False
+        self.shutdown_wsl = spec.get("shutdown_wsl", True) is not False
+        self.command = self._guard(command) if self.guard else command
         self.host = str(spec.get("host") or "127.0.0.1")
         self.port = int(spec.get("port") or 8097)
         self.model_id = str(spec.get("model_id") or "qwen3.8-27b-ninfer-gsq3")
@@ -3226,6 +3230,20 @@ class NinferBackend:
         self.log_path = log
         self.proc: subprocess.Popen | None = None
         self.log = None
+
+    @staticmethod
+    def _guard(command: list[str]) -> list[str]:
+        """The WSL command behind a stdin-EOF guard: the client's stdin is a pipe from the server, and when the
+        server ends - even when it is killed - the pipe closes, the guard ends ninfer-serve, and nothing of Ninfer
+        outlives AryaStrata.  A command that is not `wsl -e ...` is left as it is."""
+        if len(command) < 3 or Path(command[0]).name.lower() not in ("wsl", "wsl.exe") or command[1] != "-e":
+            return command
+        script = ('"$@" & child=$!\n'
+                  'trap \'kill -TERM "$child" 2>/dev/null\' EXIT TERM INT\n'
+                  'while IFS= read -r _; do :; done\n'
+                  'kill -TERM "$child" 2>/dev/null\n'
+                  'wait "$child" 2>/dev/null')
+        return command[:2] + ["bash", "-c", script, "ninfer"] + command[2:]
 
     @property
     def base(self) -> str:
@@ -3239,7 +3257,8 @@ class NinferBackend:
             self.log = open(self.log_path, "ab")
         print(f"[strata] starting the Ninfer backend on {self.base}", flush=True)
         self.proc = subprocess.Popen(self.command, stdout=self.log if self.log is not None else subprocess.DEVNULL,
-                                     stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+                                     stderr=subprocess.STDOUT,
+                                     stdin=subprocess.PIPE if self.guard else subprocess.DEVNULL)
         deadline = time.time() + self.ready_s
         while time.time() < deadline:
             if self.proc.poll() is not None:
@@ -3257,6 +3276,9 @@ class NinferBackend:
     def stop(self) -> None:
         proc, self.proc = self.proc, None
         if proc is not None:
+            if proc.stdin is not None:                   # the guard's EOF: ninfer-serve ends with the pipe
+                with contextlib.suppress(OSError):
+                    proc.stdin.close()
             with contextlib.suppress(OSError):
                 proc.terminate()
             try:
@@ -3267,6 +3289,26 @@ class NinferBackend:
         # a WSL client's exit does not always end the server inside the distro
         with contextlib.suppress(OSError, subprocess.SubprocessError):
             subprocess.run(["wsl", "-e", "pkill", "-f", "ninfer-serve"], timeout=25, capture_output=True)
+        if self.distro:                                 # end the distro: its processes go with it
+            with contextlib.suppress(OSError, subprocess.SubprocessError):
+                subprocess.run(["wsl", "--terminate", self.distro], timeout=30, capture_output=True)
+        if self.shutdown_wsl and self._no_other_distro_running():
+            # `wsl --terminate` stops the distro but leaves the utility VM (vmmemWSL) alive; --shutdown ends it,
+            # and only when nothing else uses WSL (Docker, another distro) is left running
+            with contextlib.suppress(OSError, subprocess.SubprocessError):
+                subprocess.run(["wsl", "--shutdown"], timeout=30, capture_output=True)
+
+    def _no_other_distro_running(self) -> bool:
+        """True when no WSL distro other than this backend's is running (`wsl -l -v`), so ending the VM is safe."""
+        try:
+            out = subprocess.run(["wsl", "-l", "-v"], timeout=20, capture_output=True, text=True).stdout
+        except (OSError, subprocess.SubprocessError):
+            return False
+        for line in out.replace("\0", "").splitlines():
+            parts = line.split()
+            if len(parts) >= 2 and parts[1].lower() == "running" and parts[0] != self.distro:
+                return False
+        return True
 
     unload = stop
 
@@ -3631,6 +3673,8 @@ class Service:
                                            f"({again}): no model is loaded") from None
                     raise SwitchFailed(f"{target['id']} did not start ({e}); {old_name} is loaded again") from None
                 self.ninfer, self.engine, self.vision = backend, None, None
+                import atexit
+                atexit.register(backend.close)          # a shutdown ends the backend (and its distro) too
                 self.ninfer_budgets = dict(cfg.get("reasoning_budget_by_effort") or {})
                 self.tok, self.template = tok, template
                 self.model = cfg.get("model_name", target["id"])

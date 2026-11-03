@@ -83,7 +83,7 @@ class NinferBackendTest(unittest.TestCase):
         threading.Thread(target=srv.serve_forever, daemon=True).start()
         try:
             b = NinferBackend({"host": "127.0.0.1", "port": port, "model_id": "m", "ready_s": 15,
-                               "command": [sys.executable, "-c", "import time; time.sleep(30)"]})
+                               "command": [sys.executable, "-c", "import time; time.sleep(30)"], "shutdown_wsl": False})
             b.start()
             self.assertIsNotNone(b.proc)
             self.assertIsNone(b.proc.poll())
