@@ -53,38 +53,121 @@ async function copyText(text, btn) {
   toast("success", "Copied to clipboard", "", 1800);
 }
 
-// ------------------------------------------------------------------ theme and tabs
-// the system's theme until the user picks one (only a click is saved)
-function setTheme(t, save) {
-  document.documentElement.dataset.theme = t;
-  if (save) try { localStorage.setItem("strata.theme", t); } catch (e) { /* ignore */ }
-  $("theme-icon").setAttribute("href", `${SPRITE}#i-${t === "dark" ? "sun" : "moon"}`);
-  $("dark-toggle").setAttribute("aria-checked", String(t === "dark"));
+// ------------------------------------------------------------------ theme
+// "system" is the default and is never written: the stored value is only a choice the user made.
+function savedTheme() { try { return localStorage.getItem("strata.theme"); } catch (e) { return null; } }
+function resolveTheme(mode) { return mode === "dark" || mode === "light" ? mode : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); }
+function setTheme(mode, save) {
+  const choice = ["system", "light", "dark"].includes(mode) ? mode : "system";
+  const shown = resolveTheme(choice);
+  document.documentElement.dataset.theme = shown;
+  if (save) try {
+    if (choice === "system") localStorage.removeItem("strata.theme");
+    else localStorage.setItem("strata.theme", choice);
+  } catch (e) { /* ignore */ }
+  $("theme-icon").setAttribute("href", `${SPRITE}#i-${shown === "dark" ? "sun" : "moon"}`);
+  for (const b of $("theme-seg").children) b.setAttribute("aria-checked", String(b.dataset.v === choice));
 }
-const flipTheme = () => setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark", true);
+const flipTheme = () => setTheme(resolveTheme(savedTheme()) === "dark" ? "light" : "dark", true);
 $("theme-btn").onclick = flipTheme;
-$("dark-toggle").onclick = flipTheme;
-setTheme(document.documentElement.dataset.theme || "light", false);
-matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
-  let saved = null;
-  try { saved = localStorage.getItem("strata.theme"); } catch (err) { /* ignore */ }
-  if (!saved) setTheme(e.matches ? "dark" : "light", false);
+for (const b of $("theme-seg").children) b.onclick = () => setTheme(b.dataset.v, true);
+setTheme(savedTheme() || "system", false);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+  if (!savedTheme()) setTheme("system", false);
 });
 
+// ------------------------------------------------------------------ views, sidebar, overlays
+const VIEWS = ["chat", "images", "monitor", "about"];
+const VIEW_TITLES = {chat: "Chat", images: "Images", monitor: "Monitor", about: "About"};
 let tab = "chat";
 function showTab(name) {
-  tab = ["chat", "images", "monitor", "about"].includes(name) ? name : "chat";
-  for (const b of document.querySelectorAll(".st-tab")) b.setAttribute("aria-selected", String(b.dataset.tab === tab));
-  for (const v of ["chat", "images", "monitor", "about"]) $(`view-${v}`).hidden = v !== tab;
+  tab = VIEWS.includes(name) ? name : "chat";
+  for (const b of document.querySelectorAll(".st-nav[data-tab]"))
+    b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false");
+  for (const v of VIEWS) $(`view-${v}`).hidden = v !== tab;
+  $("view-title").textContent = VIEW_TITLES[tab];
   if (tab === "images") $("img-prompt").focus();
   if (location.hash.slice(1) !== tab) history.replaceState(null, "", tab === "chat" ? location.pathname : `#${tab}`);
   if (tab === "chat") $("input").focus();
   if (tab === "monitor") loadMcp();
-  if (tab === "about") loadConfig();
   if (lastMetrics) render(lastMetrics);
+  closeSidebar();
+  closeSettings();
 }
-for (const b of document.querySelectorAll(".st-tab")) b.onclick = () => showTab(b.dataset.tab);
+for (const b of document.querySelectorAll(".st-nav[data-tab]")) b.onclick = () => showTab(b.dataset.tab);
 window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+
+// One scrim, one stack: the sampling drawer, the settings popover and the narrow sidebar share it, and Escape
+// closes whatever was opened last.
+const overlayStack = [];
+const overlayClose = {drawer: () => openDrawer(false), settings: () => closeSettings(), sidebar: () => closeSidebar()};
+function syncScrim() { $("scrim").hidden = overlayStack.length === 0; }
+function openOverlay(name) {
+  const at = overlayStack.indexOf(name);
+  if (at >= 0) overlayStack.splice(at, 1);
+  overlayStack.push(name);
+  syncScrim();
+}
+function closeOverlay(name) {
+  const at = overlayStack.indexOf(name);
+  if (at >= 0) overlayStack.splice(at, 1);
+  syncScrim();
+}
+function closeTopOverlay() {
+  const name = overlayStack[overlayStack.length - 1];
+  if (name && overlayClose[name]) overlayClose[name]();
+  return Boolean(name);
+}
+
+// The sidebar: collapsed on a wide window, an overlay drawer below 900px. Both are remembered in this browser.
+const NARROW = matchMedia("(max-width: 900px)");
+function setSidebar(collapsed, save) {
+  document.querySelector(".app").dataset.collapsed = String(collapsed);
+  $("sidebar").dataset.collapsed = String(collapsed);
+  $("sidebar-collapse").setAttribute("aria-label", collapsed ? "Expand the sidebar" : "Collapse the sidebar");
+  $("sidebar-collapse").title = collapsed ? "Expand" : "Collapse";
+  if (save) store.set("sidebar", collapsed);
+}
+function openSidebar(open) {
+  const shown = NARROW.matches && open;
+  document.querySelector(".app").dataset.sidebarOpen = String(shown);
+  $("sidebar-toggle").setAttribute("aria-expanded", String(shown));
+  if (shown) openOverlay("sidebar");
+  else closeOverlay("sidebar");
+}
+function closeSidebar() { openSidebar(false); }
+function syncNarrow() {
+  $("sidebar-toggle").hidden = !NARROW.matches;
+  if (!NARROW.matches) closeSidebar();
+}
+$("sidebar-collapse").onclick = () => setSidebar(document.querySelector(".app").dataset.collapsed !== "true", true);
+$("sidebar-toggle").onclick = () => openSidebar(document.querySelector(".app").dataset.sidebarOpen !== "true");
+setSidebar(store.get("sidebar", false) === true, false);
+syncNarrow();
+NARROW.addEventListener("change", syncNarrow);
+
+// A popover anchored to its trigger; on a narrow window the CSS puts it across the top instead.
+function placePopover(el, anchor) {
+  if (NARROW.matches || !anchor) { el.removeAttribute("style"); return; }
+  const r = anchor.getBoundingClientRect();
+  const left = Math.min(r.right + 10, innerWidth - el.offsetWidth - 12);
+  el.style.left = `${Math.max(12, left)}px`;
+  el.style.bottom = `${Math.max(12, innerHeight - r.bottom)}px`;
+}
+function settingsOpen() { return !$("settings-pop").hidden; }
+function openSettings(open) {
+  $("settings-pop").hidden = !open;
+  $("settings-btn").setAttribute("aria-expanded", String(open));
+  if (!open) { closeOverlay("settings"); return; }
+  closeModelMenu();
+  loadConfig();
+  openOverlay("settings");
+  placePopover($("settings-pop"), $("settings-btn"));
+}
+function closeSettings() { if (settingsOpen()) openSettings(false); }
+$("settings-btn").onclick = () => openSettings(!settingsOpen());
+$("settings-close").onclick = () => openSettings(false);
+$("about-link").onclick = () => { openSettings(false); showTab("about"); };
 
 // ------------------------------------------------------------------ server access
 function headers(json = false) {
@@ -104,15 +187,16 @@ async function loadHealth() {
     $("attach-btn").title = health.images ? "Attach a text file or a picture (or drop it here)"
                                           : "Attach a text file (or drop it here)";
     $("chat-empty-sub").textContent = `${health.model} runs on this PC. Nothing leaves it.`;
-    $("tab-btn-images").hidden = !health.image_generation;
+    $("nav-images").hidden = !health.image_generation;
     if (location.hash === "#images" && health.image_generation) showTab("images");
   } catch (e) {
     setTimeout(loadHealth, 2000);
   }
 }
 
-// The installed models (GET api/models).  The list is shown when there is more than one to choose from; choosing
-// one switches the server to it, which stops the model in memory first and starts a new chat.
+// The installed models (GET api/models). The picker sits in the composer, and the sidebar's Models row opens the same
+// menu. Choosing one switches the server to it, which stops the model in memory first and starts a new chat.
+function modelLabel(m) { return m.display_name && m.display_name !== m.id ? `${m.display_name} (${m.id})` : m.id; }
 async function loadModels() {
   const sel = $("model-select");
   let models = [];
@@ -120,17 +204,51 @@ async function loadModels() {
     const r = await fetch("api/models", {headers: headers()});
     if (r.ok) models = (await r.json()).models || [];
   } catch (e) { return; }
+  const current = models.find((m) => m.current);
   sel.innerHTML = models.map((m) =>
     `<option value="${esc(m.id)}"${m.current ? " selected" : ""}${m.status === "unavailable" ? " disabled" : ""}>` +
-    `${esc(m.display_name && m.display_name !== m.id ? `${m.display_name} (${m.id})` : m.id)}` +
-    `${m.status === "unavailable" ? " - unavailable" : ""}</option>`).join("");
-  sel.hidden = models.length < 2;
-  sel.dataset.current = (models.find((m) => m.current) || {}).id || "";
+    `${esc(modelLabel(m))}${m.status === "unavailable" ? " - unavailable" : ""}</option>`).join("");
+  sel.hidden = true;                                 // the chip (and the menu) is what the page shows; this keeps the state
+  sel.dataset.current = (current || {}).id || "";
+  $("model-btn-name").textContent = current ? (current.display_name || current.id) : "Model";
+  $("model-btn").hidden = models.length < 2;
+  $("models-nav-sub").textContent = current ? (current.display_name || current.id) : `${models.length} models`;
+  $("model-menu").innerHTML = models.map((m) =>
+    `<button class="st-menu__item" role="menuitemradio" aria-checked="${m.current ? "true" : "false"}"` +
+    ` data-model="${esc(m.id)}"${m.status === "unavailable" ? " disabled" : ""}>` +
+    `${icon("check", m.current ? "st-icon st-icon--sm" : "st-icon st-icon--sm invisible-ink")}` +
+    `<span>${esc(modelLabel(m))}</span>` +
+    `${m.status === "unavailable" ? `<span class="st-menu__note">unavailable</span>` : ""}</button>`).join("");
 }
-$("model-select").onchange = async () => {
-  const sel = $("model-select"), name = sel.value, before = sel.dataset.current;
+function closeModelMenu() {
+  $("model-menu").hidden = true;
+  $("model-btn").setAttribute("aria-expanded", "false");
+}
+function openModelMenu(anchor) {
+  const wasOpen = !$("model-menu").hidden;
+  closeModelMenu();
+  if (wasOpen && anchor === $("model-btn")) return;
+  $("model-menu").hidden = false;
+  $("model-btn").setAttribute("aria-expanded", String(anchor === $("model-btn")));
+  placePopover($("model-menu"), anchor);
+}
+$("model-btn").onclick = () => openModelMenu($("model-btn"));
+$("models-nav").onclick = () => { closeSidebar(); openModelMenu($("models-nav")); };
+$("model-menu").onclick = (e) => {
+  const b = e.target.closest("[data-model]");
+  if (!b || b.disabled) return;
+  $("model-select").value = b.dataset.model;
+  closeModelMenu();
+  switchModel(b.dataset.model);
+};
+$("model-select").onchange = () => switchModel($("model-select").value);
+
+async function switchModel(name) {
+  const sel = $("model-select"), before = sel.dataset.current;
+  if (!name || name === before) return;
   if (busy) { toast("warn", "Still writing", "Stop the answer first."); sel.value = before; return; }
   sel.disabled = true;
+  $("model-btn").disabled = true;
   toast("info", `Switching to ${name}`, "The model in memory is stopped first, then this one is loaded.", 8000);
   let message = "";
   try {
@@ -138,6 +256,7 @@ $("model-select").onchange = async () => {
     if (!r.ok) message = ((await r.json()).error || {}).message || `the server answered ${r.status}`;
   } catch (e) { message = String(e); }
   sel.disabled = false;
+  $("model-btn").disabled = false;
   await loadHealth();
   await loadModels();
   if (message) { toast("error", "The model was not switched", message, 10000); return; }
@@ -145,7 +264,7 @@ $("model-select").onchange = async () => {
   saveChat();
   renderChat();
   toast("success", `${name} is loaded`, "A new chat was started.");
-};
+}
 
 // ------------------------------------------------------------------ Monitor
 const METRICS = [
@@ -218,7 +337,7 @@ const COMPANION_BY_PILL = {idle: "idle", reading: "researching", generating: "wr
 const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 let companionFlash = null;
 function setCompanion(state) {
-  for (const el of [$("companion-corner"), $("monitor-companion")]) {
+  for (const el of [$("header-companion"), $("monitor-companion")]) {
     if (!el || el.dataset.state === state) continue;
     el.dataset.state = state;
     el.src = `web/companion-${state}${reducedMotion.matches ? "-reduced.png" : ".webp"}`;
@@ -485,6 +604,8 @@ function renderMcp() {
   $("mcp-sum").textContent = servers.length
     ? `${fmt(mcpInfo.tools)} tools · ${ready.length} of ${servers.length} servers connected` : "none yet";
   $("mcp-row").hidden = !mcpInfo.tools;
+  $("mcp-nav-badge").textContent = String(ready.length);
+  $("mcp-nav-badge").hidden = !ready.length;
   $("mcp-row-sub").textContent = mcpInfo.tools ? `${fmt(mcpInfo.tools)} tools from ${ready.map((s) => s.name).join(", ")}; the model calls them when it decides to`
                                                : "no server is connected yet (see the Monitor)";
   $("mcp-list").innerHTML = servers.map((s) => {
@@ -601,6 +722,12 @@ $("mcp-list").onclick = async (e) => {
     if (!confirm(`Remove the MCP server "${b.dataset.mcpRemove}"? Its tools are no longer offered to the model.`)) return;
     await mcpSend({remove: [b.dataset.mcpRemove]}, `Removed ${b.dataset.mcpRemove}`);
   }
+};
+// the sidebar's MCP row: today it opens the Monitor's card; the dialog replaces it in the next change
+$("mcp-nav").onclick = () => {
+  showTab("monitor");
+  $("mcp-card").scrollIntoView({block: "start"});
+  if (!(mcpInfo.servers || []).length) openMcpForm();
 };
 
 // ------------------------------------------------------------------ Web search (GET / POST /search)
@@ -1388,8 +1515,13 @@ $("input").addEventListener("paste", (e) => {
 function openDrawer(open) {
   $("drawer").dataset.open = String(open);
   $("drawer").setAttribute("aria-hidden", String(!open));
-  $("scrim").hidden = !open;
-  if (open) { loadDrawer(); loadShared(); loadMcp(); loadSearch(); }
+  if (open) {
+    closeSettings();
+    closeModelMenu();
+    closeSidebar();
+    loadDrawer(); loadShared(); loadMcp(); loadSearch();
+    openOverlay("drawer");
+  } else closeOverlay("drawer");
 }
 function loadDrawer(s = settings) {
   for (const b of $("s-thinking").children) b.setAttribute("aria-checked", String(b.dataset.v === s.thinking));
@@ -1478,8 +1610,19 @@ $("s-apply").onclick = async () => {
 };
 $("sampling-btn").onclick = () => openDrawer(true);
 $("drawer-close").onclick = () => openDrawer(false);
-$("scrim").onclick = () => openDrawer(false);
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("drawer").dataset.open === "true") openDrawer(false); });
+$("scrim").onclick = () => { if (!closeTopOverlay()) { openDrawer(false); openSettings(false); closeSidebar(); } };
+// Escape: the model menu first, then whatever overlay is on top
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!$("model-menu").hidden) { closeModelMenu(); $("model-btn").focus(); return; }
+  closeTopOverlay();
+});
+// a click outside an anchored panel closes it
+document.addEventListener("click", (e) => {
+  if (!$("model-menu").hidden && !$("model-menu").contains(e.target) &&
+      !$("model-btn").contains(e.target) && !$("models-nav").contains(e.target)) closeModelMenu();
+  if (settingsOpen() && !$("settings-pop").contains(e.target) && !$("settings-btn").contains(e.target)) openSettings(false);
+});
 
 // ------------------------------------------------------------------ start
 setBusy(false);

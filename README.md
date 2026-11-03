@@ -789,8 +789,10 @@ All twelve models are used the same way: the same app, the same API.
 <p align="center"><img src="docs/media/runpagoda.png" width="900" alt="The app's Monitor tab next to a coding agent"><br>
 <sub>The app's <b>Monitor</b> (left) while a coding agent writes the pagoda garden from the video (right). A screenshot from <a href="https://github.com/Niko1221/Strata">Strata</a>.</sub></p>
 
-- **In the browser:** open `http://127.0.0.1:8080`. It has **Chat**, a live **Monitor** of the model and your
-  GPU/CPU/RAM, and **About** with the settings and addresses.
+- **In the browser:** open `http://127.0.0.1:8080`. The left sidebar holds **New chat**, your chats, the views
+  (**Chat**, **Monitor** of the model and GPU/CPU/RAM, **About**), the MCP servers, the model list and **Settings**.
+  The model that answers is picked in the message box; Settings is a panel over the page with the theme, the API key
+  and the model's run-config values.
 - **Your apps and coding agents:** add an "OpenAI-compatible" provider with the base URL
   **`http://127.0.0.1:8080/v1`**. Use the configured model ID and the server’s configured key, if authentication is enabled. Our local model ID is `qwen3.8-flash-next-iq3_xxs`.
   - Apps that use Anthropic's API: `http://127.0.0.1:8080/v1/messages` (Claude Code:

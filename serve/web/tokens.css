@@ -22,7 +22,11 @@
   --st-s-6:24px; --st-s-8:32px; --st-s-10:40px; --st-s-12:48px; --st-s-16:64px;
 
   /* radius */
-  --st-r-sm:8px; --st-r-md:14px; --st-r-lg:20px; --st-r-xl:24px; --st-r-pill:9999px;
+  --st-r-sm:8px; --st-r-md:14px; --st-r-lg:20px; --st-r-xl:24px; --st-r-2xl:28px; --st-r-pill:9999px;
+
+  /* layout (derived) */
+  --st-sidebar-w:280px; --st-sidebar-w-min:72px; --st-header-h:56px;
+  --st-panel-w:420px; --st-col:860px; --st-z-scrim:39; --st-z-pop:45; --st-z-toast:50;
 
   /* motion (derived) */
   --st-ease:cubic-bezier(.2,.7,.2,1); --st-dur:160ms;

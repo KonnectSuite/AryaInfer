@@ -2345,6 +2345,21 @@ Structured SSE buffers the answer while sending keep-alive comments. It emits co
 then usage/timings and `[DONE]`; failures emit an SSE error and `[DONE]` without invalid content deltas.
 `/v1/status.structured_output` advertises the formats, validation method and buffered streaming behavior.
 
+### The chat page
+
+One page, a sidebar and the view it selects. The sidebar carries **New chat**, the recent chats, the four views
+(Chat, Images when the model makes pictures, Monitor, About), the MCP servers, the model list and Settings. It
+collapses to its icons and remembers that choice per browser; below about 900 pixels it becomes a drawer behind the
+header's menu button. The header names the view, shows the model's state and the companion, and switches the theme.
+
+The model that answers is chosen in the message box: the chip on its left opens the list of installed models, and the
+sidebar's **Models** row opens the same list. Switching stops the model in memory, loads the other one and starts a
+new chat, as it always did.
+
+**Settings** is a panel over the page, opened from the sidebar rather than a view of its own: appearance (system,
+light or dark), the API key, and the model's run-config values for every client, which take effect the next time the
+model starts. Esc closes it, as it closes the sampling drawer and the drawer's narrow-window form.
+
 ### API request monitor
 
 Off by default, since it keeps prompts and answers in memory: turn it on with `"api_monitor": true` in

@@ -18,387 +18,473 @@
 </script>
 </head>
 <body>
-<header class="st-header">
-  <span class="st-header__brand"><img class="st-header__mark" src="web/brand-mark.svg" alt="AryaInfer mark">AryaInfer</span>
-  <nav class="st-tabs" role="tablist" aria-label="Views">
-    <button class="st-tab" role="tab" id="tab-btn-chat" aria-controls="view-chat" aria-selected="true" data-tab="chat">
-      <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-chat"/></svg>Chat</button>
-    <button class="st-tab" role="tab" id="tab-btn-images" aria-controls="view-images" aria-selected="false" data-tab="images" hidden>
-      <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-image"/></svg>Images</button>
-    <button class="st-tab" role="tab" id="tab-btn-monitor" aria-controls="view-monitor" aria-selected="false" data-tab="monitor">
-      <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-activity"/></svg>Monitor</button>
-    <button class="st-tab" role="tab" id="tab-btn-about" aria-controls="view-about" aria-selected="false" data-tab="about">
-      <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-info"/></svg>About</button>
-  </nav>
-  <span class="st-header__spacer"></span>
-  <select class="model-select" id="model-select" title="The model that answers. One is in memory at a time."
-          aria-label="Model" hidden></select>
-  <span class="st-pill" id="pill" data-state="idle" role="status" aria-live="polite">
-    <span class="st-pill__dot"></span><span id="pill-text">Connecting&hellip;</span></span>
-  <button class="st-btn st-btn--icon" id="theme-btn" title="Light / dark" aria-label="Switch between light and dark">
-    <svg class="st-icon"><use id="theme-icon" href="web/sprite.svg#i-moon"/></svg></button>
-</header>
+<div class="app">
 
-<main>
-  <!-- ============================ Chat ============================ -->
-  <section class="view view--chat" id="view-chat" role="tabpanel" aria-labelledby="tab-btn-chat">
-    <div class="chat-scroll" id="chat-scroll">
-      <div class="chat" id="chat">
-        <div class="chat-empty" id="chat-empty">
-          <img class="chat-empty__hero" src="web/companion-greeting.webp" alt="The Arya companion">
-          <div class="chat-empty__title">Ask anything</div>
-          <div class="chat-empty__sub" id="chat-empty-sub">The model runs on this PC. Nothing leaves it.</div>
-        </div>
-      </div>
+  <!-- ============================ Sidebar ============================ -->
+  <aside class="st-sidebar" id="sidebar" data-collapsed="false" aria-label="AryaInfer">
+    <div class="st-sidebar__head">
+      <span class="st-sidebar__brand">
+        <img class="st-sidebar__mark" src="web/brand-mark.svg" alt="">
+        <span class="st-sidebar__name">AryaInfer</span>
+      </span>
+      <button class="st-btn st-btn--icon st-sidebar__collapse" id="sidebar-collapse" type="button"
+              aria-label="Collapse the sidebar" title="Collapse">
+        <svg class="st-icon"><use href="web/sprite.svg#i-panel-left"/></svg></button>
     </div>
-    <img class="companion-corner" id="companion-corner" src="web/companion-idle.webp" data-state="idle" alt="The Arya companion">
-    <div class="composer-wrap">
-      <form class="st-composer" id="composer">
-        <div class="attachments" id="attachments" hidden></div>
-        <textarea id="input" rows="2" placeholder="Ask anything&hellip;" aria-label="Message"></textarea>
-        <div class="st-composer__bar">
-          <button type="button" class="st-btn st-btn--icon" id="attach-btn" title="Attach a text file (or drop it here)" aria-label="Attach a file">
-            <svg class="st-icon"><use href="web/sprite.svg#i-attach"/></svg></button>
-          <input type="file" id="file" multiple hidden>
-          <button type="button" class="st-btn st-btn--icon" id="new-btn" title="New chat" aria-label="New chat">
-            <svg class="st-icon"><use href="web/sprite.svg#i-new-chat"/></svg></button>
-          <button type="button" class="st-btn st-btn--icon" id="export-btn" title="Save this chat as Markdown" aria-label="Save this chat">
-            <svg class="st-icon"><use href="web/sprite.svg#i-download"/></svg></button>
-          <button type="button" class="st-btn st-btn--icon" id="sampling-btn" title="Sampling and thinking" aria-label="Sampling and thinking">
-            <svg class="st-icon"><use href="web/sprite.svg#i-settings"/></svg></button>
-          <span class="spacer"></span>
-          <span class="composer-hint" id="composer-hint"></span>
-          <button type="button" class="st-btn st-btn--secondary" id="stop-btn" hidden>
-            <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-stop"/></svg>Stop</button>
-          <button type="submit" class="st-btn st-btn--primary st-btn--send" id="send-btn" aria-label="Send">
-            <svg class="st-icon"><use href="web/sprite.svg#i-send"/></svg></button>
-        </div>
-      </form>
+
+    <button class="st-btn st-btn--primary st-sidebar__new" id="new-btn" type="button" title="New chat">
+      <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-plus"/></svg>
+      <span class="st-sidebar__label">New chat</span></button>
+
+    <nav class="st-nav-group" aria-label="Views">
+      <button class="st-nav" type="button" id="nav-chat" data-tab="chat" aria-controls="view-chat" aria-current="page" title="Chat">
+        <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-chat"/></svg>
+        <span class="st-sidebar__label">Chat</span></button>
+      <button class="st-nav" type="button" id="nav-images" data-tab="images" aria-controls="view-images" title="Images" hidden>
+        <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-image"/></svg>
+        <span class="st-sidebar__label">Images</span></button>
+      <button class="st-nav" type="button" id="nav-monitor" data-tab="monitor" aria-controls="view-monitor" title="Monitor">
+        <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-activity"/></svg>
+        <span class="st-sidebar__label">Monitor</span></button>
+      <button class="st-nav" type="button" id="nav-about" data-tab="about" aria-controls="view-about" title="About">
+        <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-info"/></svg>
+        <span class="st-sidebar__label">About</span></button>
+    </nav>
+
+    <section class="st-sidebar__conversations" id="conversations" aria-label="Recent chats">
+      <div class="st-sidebar__section-head">
+        <span class="st-sidebar__label st-sidebar__section-title">Recent</span>
+      </div>
+      <div class="st-sidebar__search">
+        <svg class="st-icon st-icon--sm" aria-hidden="true"><use href="web/sprite.svg#i-search"/></svg>
+        <input id="chat-search" type="search" placeholder="Search chats" aria-label="Search chats" autocomplete="off">
+      </div>
+      <div class="st-chat-list" id="chat-list" role="list"></div>
+    </section>
+
+    <div class="st-sidebar__foot">
+      <button class="st-nav" type="button" id="mcp-nav" title="MCP servers">
+        <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-server"/></svg>
+        <span class="st-sidebar__label">MCP servers</span>
+        <span class="st-nav__badge" id="mcp-nav-badge" hidden></span></button>
+      <button class="st-nav" type="button" id="models-nav" title="Models">
+        <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-cube"/></svg>
+        <span class="st-sidebar__label">Models</span>
+        <span class="st-nav__sub" id="models-nav-sub"></span></button>
+      <button class="st-nav" type="button" id="settings-btn" title="Settings" aria-haspopup="dialog">
+        <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-settings"/></svg>
+        <span class="st-sidebar__label">Settings</span></button>
     </div>
-  </section>
+  </aside>
 
-  <!-- ============================ Images ============================ -->
-  <section class="view view--images" id="view-images" role="tabpanel" aria-labelledby="tab-btn-images" hidden>
-    <div class="about">
-      <form class="st-card img-form" id="img-form">
-        <span class="card-title" id="img-title">Make an image</span>
-        <textarea class="st-input img-prompt" id="img-prompt" rows="3" placeholder="Describe the image&hellip;" aria-label="Prompt"></textarea>
-        <div class="img-row">
-          <label class="st-field">Size
-            <select class="st-input" id="img-size">
-              <option>1024x1024</option><option>1536x1024</option><option>1024x1536</option>
-              <option>768x768</option><option>512x512</option></select></label>
-          <label class="st-field">Seed
-            <input class="st-input" id="img-seed" type="number" min="0" placeholder="random"></label>
-          <button type="submit" class="st-btn st-btn--primary" id="img-go">Generate</button>
-        </div>
-        <span class="composer-hint" id="img-hint">One image at a time; a chat request waits for it (and the other way round).</span>
-      </form>
-      <div class="img-results" id="img-results"></div>
-    </div>
-  </section>
+  <!-- ============================ Main column ============================ -->
+  <div class="app-main">
+    <header class="st-header">
+      <button class="st-btn st-btn--icon" id="sidebar-toggle" type="button" aria-label="Open the sidebar" hidden>
+        <svg class="st-icon"><use href="web/sprite.svg#i-menu"/></svg></button>
+      <h1 class="st-header__title" id="view-title">Chat</h1>
+      <span class="st-header__spacer"></span>
+      <img class="st-header__companion" id="header-companion" src="web/companion-idle.webp" data-state="idle" alt="">
+      <span class="st-pill" id="pill" data-state="idle" role="status" aria-live="polite">
+        <span class="st-pill__dot"></span><span id="pill-text">Connecting&hellip;</span></span>
+      <button class="st-btn st-btn--icon" id="theme-btn" title="Light / dark" aria-label="Switch between light and dark">
+        <svg class="st-icon"><use id="theme-icon" href="web/sprite.svg#i-moon"/></svg></button>
+    </header>
 
-  <!-- ============================ Monitor ============================ -->
-  <section class="view view--monitor" id="view-monitor" role="tabpanel" aria-labelledby="tab-btn-monitor" hidden>
-    <div class="monitor">
-      <div class="st-card state-card">
-        <div class="state-card__head">
-          <img class="companion-badge" id="monitor-companion" src="web/companion-idle.webp" data-state="idle" alt="The Arya companion">
-          <span class="card-title">Model state</span>
-          <span class="badges" id="state-badges">
-            <span class="st-badge" data-s="idle">Idle</span>
-            <span class="st-badge st-badge--reading" data-s="reading">Reading</span>
-            <span class="st-badge st-badge--generating" data-s="generating">Generating</span>
-            <span class="st-badge st-badge--queued" data-s="queued">Queued</span>
-            <span class="st-badge st-badge--error" data-s="error">Error</span>
-          </span>
+    <main>
+      <!-- ============================ Chat ============================ -->
+      <section class="view view--chat" id="view-chat">
+        <div class="chat-scroll" id="chat-scroll">
+          <div class="chat" id="chat">
+            <div class="chat-empty" id="chat-empty">
+              <img class="chat-empty__hero" src="web/companion-greeting.webp" alt="The Arya companion">
+              <div class="chat-empty__title">Ask anything</div>
+              <div class="chat-empty__sub" id="chat-empty-sub">The model runs on this PC. Nothing leaves it.</div>
+            </div>
+          </div>
         </div>
-        <div class="state-card__row"><span id="state-label">Waiting for a request</span><span class="muted" id="state-detail"></span></div>
-        <div class="st-progress" id="state-progress"><div class="st-progress__bar" id="state-bar" style="width:0%"></div></div>
-      </div>
+        <div class="composer-wrap">
+          <form class="st-composer" id="composer">
+            <div class="attachments" id="attachments" hidden></div>
+            <textarea id="input" rows="2" placeholder="Ask anything&hellip;" aria-label="Message"></textarea>
+            <div class="st-composer__bar">
+              <div class="model-pick">
+                <button type="button" class="st-chip-btn" id="model-btn" aria-haspopup="menu" aria-expanded="false"
+                        title="The model that answers. One is in memory at a time." hidden>
+                  <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-cube"/></svg>
+                  <span id="model-btn-name">Model</span>
+                  <svg class="st-icon st-icon--sm st-chip-btn__chev"><use href="web/sprite.svg#i-chevron"/></svg>
+                </button>
+                <select class="model-select" id="model-select" title="The model that answers. One is in memory at a time."
+                        aria-label="Model" hidden></select>
+              </div>
+              <button type="button" class="st-btn st-btn--icon" id="attach-btn" title="Attach a text file (or drop it here)" aria-label="Attach a file">
+                <svg class="st-icon"><use href="web/sprite.svg#i-attach"/></svg></button>
+              <input type="file" id="file" multiple hidden>
+              <button type="button" class="st-btn st-btn--icon" id="export-btn" title="Save this chat as Markdown" aria-label="Save this chat">
+                <svg class="st-icon"><use href="web/sprite.svg#i-download"/></svg></button>
+              <button type="button" class="st-btn st-btn--icon" id="sampling-btn" title="Sampling and thinking" aria-label="Sampling and thinking">
+                <svg class="st-icon"><use href="web/sprite.svg#i-settings"/></svg></button>
+              <span class="spacer"></span>
+              <span class="composer-hint" id="composer-hint"></span>
+              <button type="button" class="st-btn st-btn--secondary" id="stop-btn" hidden>
+                <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-stop"/></svg>Stop</button>
+              <button type="submit" class="st-btn st-btn--primary st-btn--send" id="send-btn" aria-label="Send">
+                <svg class="st-icon"><use href="web/sprite.svg#i-send"/></svg></button>
+            </div>
+          </form>
+        </div>
+      </section>
 
-      <div class="metrics" id="metrics">
-        <!-- filled by app.js: Speed, GPU load, VRAM, GPU temp, Power, PCIe, CPU, Disk read -->
-      </div>
+      <!-- ============================ Images ============================ -->
+      <section class="view view--images" id="view-images" hidden>
+        <div class="about">
+          <form class="st-card img-form" id="img-form">
+            <span class="card-title" id="img-title">Make an image</span>
+            <textarea class="st-input img-prompt" id="img-prompt" rows="3" placeholder="Describe the image&hellip;" aria-label="Prompt"></textarea>
+            <div class="img-row">
+              <label class="st-field">Size
+                <select class="st-input" id="img-size">
+                  <option>1024x1024</option><option>1536x1024</option><option>1024x1536</option>
+                  <option>768x768</option><option>512x512</option></select></label>
+              <label class="st-field">Seed
+                <input class="st-input" id="img-seed" type="number" min="0" placeholder="random"></label>
+              <button type="submit" class="st-btn st-btn--primary" id="img-go">Generate</button>
+            </div>
+            <span class="composer-hint" id="img-hint">One image at a time; a chat request waits for it (and the other way round).</span>
+          </form>
+          <div class="img-results" id="img-results"></div>
+        </div>
+      </section>
 
-      <div class="monitor-row">
-        <div class="st-card ctx-card">
-          <span class="card-title">Context fill</span>
-          <div class="ctx-gauge">
-            <svg class="st-gauge" viewBox="0 0 120 120" aria-hidden="true">
-              <circle class="st-gauge__track" cx="60" cy="60" r="50" fill="none" stroke-width="10" stroke-linecap="round"
-                      stroke-dasharray="235.6 314.2" transform="rotate(135 60 60)"/>
-              <circle class="st-gauge__fill" id="ctx-fill" cx="60" cy="60" r="50" fill="none" stroke-width="10"
-                      stroke-linecap="round" stroke-dasharray="0 314.2" transform="rotate(135 60 60)"/>
-            </svg>
-            <div class="ctx-gauge__label"><span class="ctx-gauge__pct" id="ctx-pct">0%</span><span class="muted" id="ctx-sub">&ndash;</span></div>
+      <!-- ============================ Monitor ============================ -->
+      <section class="view view--monitor" id="view-monitor" hidden>
+        <div class="monitor">
+          <div class="st-card state-card">
+            <div class="state-card__head">
+              <img class="companion-badge" id="monitor-companion" src="web/companion-idle.webp" data-state="idle" alt="The Arya companion">
+              <span class="card-title">Model state</span>
+              <span class="badges" id="state-badges">
+                <span class="st-badge" data-s="idle">Idle</span>
+                <span class="st-badge st-badge--reading" data-s="reading">Reading</span>
+                <span class="st-badge st-badge--generating" data-s="generating">Generating</span>
+                <span class="st-badge st-badge--queued" data-s="queued">Queued</span>
+                <span class="st-badge st-badge--error" data-s="error">Error</span>
+              </span>
+            </div>
+            <div class="state-card__row"><span id="state-label">Waiting for a request</span><span class="muted" id="state-detail"></span></div>
+            <div class="st-progress" id="state-progress"><div class="st-progress__bar" id="state-bar" style="width:0%"></div></div>
           </div>
-          <div class="bar-row"><span>Experts in VRAM</span><span class="muted" id="slots-text">&ndash;</span></div>
-          <div class="st-progress"><div class="st-progress__bar" id="slots-bar" style="width:0%"></div></div>
-          <div class="bar-row"><span>System RAM</span><span class="muted" id="ram-text">&ndash;</span></div>
-          <div class="st-progress" id="ram-progress"><div class="st-progress__bar" id="ram-bar" style="width:0%"></div></div>
-          <div class="bar-row"><span>GPU temperature</span><span class="muted" id="temp-text">&ndash;</span></div>
-          <div class="st-progress" data-tone="warn"><div class="st-progress__bar" id="temp-bar" style="width:0%"></div></div>
-        </div>
-        <div class="st-card req-card">
-          <div class="req-head"><span class="card-title">Recent requests</span>
-            <button class="st-btn st-btn--secondary" id="req-all" hidden>Show all</button></div>
-          <div class="table-wrap" id="req-wrap">
-            <table class="st-table">
-              <thead><tr><th>Time</th><th>Status</th><th class="num">Prompt</th><th class="num">Reused</th><th class="num">Output</th>
-                <th class="num" title="New prompt tokens per second, excluding reused cache tokens (engine prompt time)">Prefill t/s</th><th class="num">Decode t/s</th><th class="num" title="While writing the answer: the share of the experts looked up that were already in VRAM. Experts the GPU read over PCIe (--pcie-frac) are not counted in it; their share of all routed experts is shown after it (+N% PCIe)">VRAM hit rate</th><th class="num">Duration</th></tr></thead>
-              <tbody id="req-body"><tr><td colspan="9" class="muted">No requests yet</td></tr></tbody>
-            </table>
-          </div>
-          <p class="muted req-totals" id="req-totals"></p>
-        </div>
-      </div>
 
-      <div class="st-card cc-card" id="cc-card">
-        <div class="req-head"><span class="card-title">Conversation cache</span><span class="muted small" id="cc-sum"></span></div>
-        <div class="cc-bars" id="cc-bars" hidden>
-          <div><div class="bar-row"><span>Parked conversations</span><span class="muted" id="cc-slots-text">&ndash;</span></div>
-            <div class="st-progress"><div class="st-progress__bar" id="cc-slots-bar" style="width:0%"></div></div></div>
-          <div><div class="bar-row"><span>Their memory (RAM)</span><span class="muted" id="cc-mem-text">&ndash;</span></div>
-            <div class="st-progress"><div class="st-progress__bar" id="cc-mem-bar" style="width:0%"></div></div></div>
-        </div>
-        <dl class="facts" id="cc-facts"></dl>
-        <p class="muted small cc-note" id="cc-note"></p>
-      </div>
+          <div class="metrics" id="metrics">
+            <!-- filled by app.js: Speed, GPU load, VRAM, GPU temp, Power, PCIe, CPU, Disk read -->
+          </div>
 
-      <div class="st-card mcp-card" id="mcp-card">
-        <div class="req-head"><span class="card-title">MCP servers</span><span class="muted small" id="mcp-sum"></span></div>
-        <div class="mcp-list" id="mcp-list"></div>
-        <form class="mcp-form" id="mcp-form" hidden>
-          <div class="st-field">
-            <label class="st-label" for="mcp-name">Name</label>
-            <input class="st-input" id="mcp-name" placeholder="files" autocomplete="off" spellcheck="false">
-            <span class="muted small">Letters, digits, "-" and "_"; the model sees it in front of each tool</span>
-          </div>
-          <div class="st-field">
-            <label class="st-label" for="mcp-kind">How AryaInfer reaches it</label>
-            <select class="st-input" id="mcp-kind">
-              <option value="stdio">A program it starts (stdio)</option>
-              <option value="http">An address (Streamable HTTP)</option>
-            </select>
-          </div>
-          <div id="mcp-stdio">
-            <div class="st-field">
-              <label class="st-label" for="mcp-command">Program</label>
-              <input class="st-input" id="mcp-command" placeholder="npx" autocomplete="off" spellcheck="false">
-              <span class="muted small">Found on PATH as usual; <code>npx</code> servers need Node.js</span>
+          <div class="monitor-row">
+            <div class="st-card ctx-card">
+              <span class="card-title">Context fill</span>
+              <div class="ctx-gauge">
+                <svg class="st-gauge" viewBox="0 0 120 120" aria-hidden="true">
+                  <circle class="st-gauge__track" cx="60" cy="60" r="50" fill="none" stroke-width="10" stroke-linecap="round"
+                          stroke-dasharray="235.6 314.2" transform="rotate(135 60 60)"/>
+                  <circle class="st-gauge__fill" id="ctx-fill" cx="60" cy="60" r="50" fill="none" stroke-width="10"
+                          stroke-linecap="round" stroke-dasharray="0 314.2" transform="rotate(135 60 60)"/>
+                </svg>
+                <div class="ctx-gauge__label"><span class="ctx-gauge__pct" id="ctx-pct">0%</span><span class="muted" id="ctx-sub">&ndash;</span></div>
+              </div>
+              <div class="bar-row"><span>Experts in VRAM</span><span class="muted" id="slots-text">&ndash;</span></div>
+              <div class="st-progress"><div class="st-progress__bar" id="slots-bar" style="width:0%"></div></div>
+              <div class="bar-row"><span>System RAM</span><span class="muted" id="ram-text">&ndash;</span></div>
+              <div class="st-progress" id="ram-progress"><div class="st-progress__bar" id="ram-bar" style="width:0%"></div></div>
+              <div class="bar-row"><span>GPU temperature</span><span class="muted" id="temp-text">&ndash;</span></div>
+              <div class="st-progress" data-tone="warn"><div class="st-progress__bar" id="temp-bar" style="width:0%"></div></div>
             </div>
-            <div class="st-field">
-              <label class="st-label" for="mcp-args">Arguments <output>one per line</output></label>
-              <textarea class="st-input" id="mcp-args" rows="4" spellcheck="false"
-                        placeholder="-y&#10;@modelcontextprotocol/server-filesystem&#10;C:\Users\me\Documents\notes"></textarea>
-            </div>
-            <div class="st-field">
-              <label class="st-label" for="mcp-env">Environment <output>KEY=VALUE, one per line</output></label>
-              <textarea class="st-input" id="mcp-env" rows="3" spellcheck="false" placeholder="MCP_TOKEN=..."></textarea>
-              <span class="muted small">A value shown as ******** stays as it is</span>
-            </div>
-            <div class="st-field">
-              <label class="st-label" for="mcp-cwd">Working folder <output>optional</output></label>
-              <input class="st-input" id="mcp-cwd" placeholder="Where the program starts" autocomplete="off" spellcheck="false">
+            <div class="st-card req-card">
+              <div class="req-head"><span class="card-title">Recent requests</span>
+                <button class="st-btn st-btn--secondary" id="req-all" hidden>Show all</button></div>
+              <div class="table-wrap" id="req-wrap">
+                <table class="st-table">
+                  <thead><tr><th>Time</th><th>Status</th><th class="num">Prompt</th><th class="num">Reused</th><th class="num">Output</th>
+                    <th class="num" title="New prompt tokens per second, excluding reused cache tokens (engine prompt time)">Prefill t/s</th><th class="num">Decode t/s</th><th class="num" title="While writing the answer: the share of the experts looked up that were already in VRAM. Experts the GPU read over PCIe (--pcie-frac) are not counted in it; their share of all routed experts is shown after it (+N% PCIe)">VRAM hit rate</th><th class="num">Duration</th></tr></thead>
+                  <tbody id="req-body"><tr><td colspan="9" class="muted">No requests yet</td></tr></tbody>
+                </table>
+              </div>
+              <p class="muted req-totals" id="req-totals"></p>
             </div>
           </div>
-          <div id="mcp-http" hidden>
-            <div class="st-field">
-              <label class="st-label" for="mcp-url">Address</label>
-              <input class="st-input" id="mcp-url" placeholder="http://127.0.0.1:3000/mcp" autocomplete="off" spellcheck="false">
-            </div>
-            <div class="st-field">
-              <label class="st-label" for="mcp-headers">Headers <output>Name: value, one per line</output></label>
-              <textarea class="st-input" id="mcp-headers" rows="3" spellcheck="false"
-                        placeholder="Authorization: Bearer ..."></textarea>
-            </div>
-          </div>
-          <div class="toggle-row"><span>Disabled<br><span class="muted small">kept here, not offered to the model</span></span>
-            <button class="st-toggle" id="mcp-disabled" role="switch" aria-checked="false" aria-label="Disabled"></button></div>
-        </form>
-        <div class="cfg-actions">
-          <button class="st-btn st-btn--secondary" id="mcp-add" type="button">Add a server</button>
-          <button class="st-btn st-btn--primary" id="mcp-save" type="button" hidden>Save</button>
-          <button class="st-btn st-btn--secondary" id="mcp-cancel" type="button" hidden>Cancel</button>
-          <span class="muted small" id="mcp-msg" role="status"></span>
-        </div>
-        <p class="muted small mcp-note">Their tools run on this PC with your rights, when the model decides to call them
-          (in this page's chat only; switch it off in Sampling). A server added here starts at once, without a restart;
-          the list is kept in <code>mcp-servers.json</code> beside the run config.</p>
-      </div>
 
-      <div class="st-card mcp-card" id="search-card">
-        <div class="req-head"><span class="card-title">Web search (SearXNG)</span>
-          <span class="muted small" id="search-sum"></span></div>
-        <p class="muted small">Your own <a href="https://docs.searxng.org" target="_blank" rel="noopener noreferrer">SearXNG</a>
-          instance, on this PC or a remote one. With it set up and on, the model gets <code>web_search</code> (a query,
-          then titles, addresses and snippets) and <code>read_page</code> (the text of one address from those results).
-          The instance must answer JSON: <code>search.formats</code> in its <code>settings.yml</code> needs
-          <code>json</code> next to <code>html</code>.</p>
-        <form class="mcp-form" id="search-form">
-          <div class="toggle-row"><span>Use web search<br><span class="muted small">offered in this page's chat</span></span>
-            <button class="st-toggle" id="search-enabled" role="switch" aria-checked="false" aria-label="Use web search"></button></div>
-          <div class="st-field">
-            <label class="st-label" for="search-url">Instance URL</label>
-            <input class="st-input" id="search-url" placeholder="http://127.0.0.1:8080" autocomplete="off" spellcheck="false">
-          </div>
-          <div class="st-field">
-            <label class="st-label" for="search-auth">Authentication</label>
-            <select class="st-input" id="search-auth">
-              <option value="none">None (a LAN or Tailnet instance)</option>
-              <option value="bearer">Bearer token</option>
-              <option value="basic">User name and password</option>
-              <option value="header">Custom headers</option>
-            </select>
-          </div>
-          <div id="search-bearer" hidden>
-            <div class="st-field">
-              <label class="st-label" for="search-token">Token</label>
-              <input class="st-input" id="search-token" type="password" autocomplete="off" placeholder="********">
-              <span class="muted small">A value shown as ******** stays as it is</span>
+          <div class="st-card cc-card" id="cc-card">
+            <div class="req-head"><span class="card-title">Conversation cache</span><span class="muted small" id="cc-sum"></span></div>
+            <div class="cc-bars" id="cc-bars" hidden>
+              <div><div class="bar-row"><span>Parked conversations</span><span class="muted" id="cc-slots-text">&ndash;</span></div>
+                <div class="st-progress"><div class="st-progress__bar" id="cc-slots-bar" style="width:0%"></div></div></div>
+              <div><div class="bar-row"><span>Their memory (RAM)</span><span class="muted" id="cc-mem-text">&ndash;</span></div>
+                <div class="st-progress"><div class="st-progress__bar" id="cc-mem-bar" style="width:0%"></div></div></div>
             </div>
+            <dl class="facts" id="cc-facts"></dl>
+            <p class="muted small cc-note" id="cc-note"></p>
           </div>
-          <div id="search-basic" hidden>
-            <div class="st-field">
-              <label class="st-label" for="search-user">User name</label>
-              <input class="st-input" id="search-user" autocomplete="off">
-            </div>
-            <div class="st-field">
-              <label class="st-label" for="search-pass">Password</label>
-              <input class="st-input" id="search-pass" type="password" autocomplete="off" placeholder="********">
-            </div>
-          </div>
-          <div id="search-headers" hidden>
-            <div class="st-field">
-              <label class="st-label" for="search-headers-text">Headers <output>Name: value, one per line</output></label>
-              <textarea class="st-input" id="search-headers-text" rows="3" spellcheck="false"
-                        placeholder="Authorization: Bearer ..."></textarea>
-            </div>
-          </div>
-          <div class="st-field">
-            <label class="st-label" for="search-language">Language <output>empty = the instance's</output></label>
-            <input class="st-input" id="search-language" placeholder="en" autocomplete="off" spellcheck="false">
-          </div>
-          <div class="st-field">
-            <label class="st-label" for="search-safe">Safe search</label>
-            <select class="st-input" id="search-safe">
-              <option value="">The instance’s default</option>
-              <option value="0">Off</option>
-              <option value="1">Moderate</option>
-              <option value="2">Strict</option>
-            </select>
-          </div>
-          <div class="st-field">
-            <label class="st-label" for="search-categories">Categories <output>empty = general</output></label>
-            <input class="st-input" id="search-categories" placeholder="general, news" autocomplete="off">
-          </div>
-          <div class="st-field">
-            <label class="st-label" for="search-time">Time range</label>
-            <select class="st-input" id="search-time">
-              <option value="">Any time</option>
-              <option value="day">Past day</option>
-              <option value="week">Past week</option>
-              <option value="month">Past month</option>
-              <option value="year">Past year</option>
-            </select>
-          </div>
-          <div class="st-field">
-            <label class="st-label" for="search-timeout">Timeout <output>seconds</output></label>
-            <input class="st-input" id="search-timeout" type="number" min="2" max="60" step="1" placeholder="20">
-          </div>
-          <div class="st-field">
-            <label class="st-label" for="search-max">Results per search <output>1-20</output></label>
-            <input class="st-input" id="search-max" type="number" min="1" max="20" step="1" placeholder="8">
-          </div>
-          <div class="toggle-row"><span>Offer the page reader<br><span class="muted small"><code>read_page</code>: one
-            address from a search result, as readable text</span></span>
-            <button class="st-toggle" id="search-readpage" role="switch" aria-checked="true" aria-label="Offer the page reader"></button></div>
-          <div class="toggle-row"><span>Read pages on this PC and the LAN<br><span class="muted small">otherwise only
-            public addresses are read (safer)</span></span>
-            <button class="st-toggle" id="search-local" role="switch" aria-checked="false" aria-label="Read pages on this PC and the LAN"></button></div>
-        </form>
-        <div class="cfg-actions">
-          <button class="st-btn st-btn--primary" id="search-save" type="button">Save</button>
-          <button class="st-btn st-btn--secondary" id="search-test" type="button">Test</button>
-          <span class="muted small" id="search-msg" role="status"></span>
-        </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- ============================ About ============================ -->
-  <section class="view view--about" id="view-about" role="tabpanel" aria-labelledby="tab-btn-about" hidden>
-    <div class="about">
-      <div class="st-card">
-        <span class="card-title">Model and engine</span>
-        <dl class="facts" id="facts-engine"></dl>
-      </div>
-      <div class="st-card">
-        <span class="card-title">This PC</span>
-        <dl class="facts" id="facts-hw"></dl>
-      </div>
-      <div class="st-card">
-        <span class="card-title">Connect your tools</span>
-        <p class="muted">Any OpenAI- or Anthropic-compatible client works with these addresses.</p>
-        <dl class="facts" id="facts-api"></dl>
-      </div>
-      <div class="st-card">
-        <span class="card-title">Settings</span>
-        <div class="st-field">
-          <label class="st-label" for="api-key">API key <output>only if the server was started with one</output></label>
-          <input class="st-input" id="api-key" type="password" autocomplete="off" placeholder="Not needed">
+          <div class="st-card mcp-card" id="mcp-card">
+            <div class="req-head"><span class="card-title">MCP servers</span><span class="muted small" id="mcp-sum"></span></div>
+            <div class="mcp-list" id="mcp-list"></div>
+            <form class="mcp-form" id="mcp-form" hidden>
+              <div class="st-field">
+                <label class="st-label" for="mcp-name">Name</label>
+                <input class="st-input" id="mcp-name" placeholder="files" autocomplete="off" spellcheck="false">
+                <span class="muted small">Letters, digits, "-" and "_"; the model sees it in front of each tool</span>
+              </div>
+              <div class="st-field">
+                <label class="st-label" for="mcp-kind">How AryaInfer reaches it</label>
+                <select class="st-input" id="mcp-kind">
+                  <option value="stdio">A program it starts (stdio)</option>
+                  <option value="http">An address (Streamable HTTP)</option>
+                </select>
+              </div>
+              <div id="mcp-stdio">
+                <div class="st-field">
+                  <label class="st-label" for="mcp-command">Program</label>
+                  <input class="st-input" id="mcp-command" placeholder="npx" autocomplete="off" spellcheck="false">
+                  <span class="muted small">Found on PATH as usual; <code>npx</code> servers need Node.js</span>
+                </div>
+                <div class="st-field">
+                  <label class="st-label" for="mcp-args">Arguments <output>one per line</output></label>
+                  <textarea class="st-input" id="mcp-args" rows="4" spellcheck="false"
+                            placeholder="-y&#10;@modelcontextprotocol/server-filesystem&#10;C:\Users\me\Documents\notes"></textarea>
+                </div>
+                <div class="st-field">
+                  <label class="st-label" for="mcp-env">Environment <output>KEY=VALUE, one per line</output></label>
+                  <textarea class="st-input" id="mcp-env" rows="3" spellcheck="false" placeholder="MCP_TOKEN=..."></textarea>
+                  <span class="muted small">A value shown as ******** stays as it is</span>
+                </div>
+                <div class="st-field">
+                  <label class="st-label" for="mcp-cwd">Working folder <output>optional</output></label>
+                  <input class="st-input" id="mcp-cwd" placeholder="Where the program starts" autocomplete="off" spellcheck="false">
+                </div>
+              </div>
+              <div id="mcp-http" hidden>
+                <div class="st-field">
+                  <label class="st-label" for="mcp-url">Address</label>
+                  <input class="st-input" id="mcp-url" placeholder="http://127.0.0.1:3000/mcp" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="st-field">
+                  <label class="st-label" for="mcp-headers">Headers <output>Name: value, one per line</output></label>
+                  <textarea class="st-input" id="mcp-headers" rows="3" spellcheck="false"
+                            placeholder="Authorization: Bearer ..."></textarea>
+                </div>
+              </div>
+              <div class="toggle-row"><span>Disabled<br><span class="muted small">kept here, not offered to the model</span></span>
+                <button class="st-toggle" id="mcp-disabled" type="button" role="switch" aria-checked="false" aria-label="Disabled"></button></div>
+            </form>
+            <div class="cfg-actions">
+              <button class="st-btn st-btn--secondary" id="mcp-add" type="button">Add a server</button>
+              <button class="st-btn st-btn--primary" id="mcp-save" type="button" hidden>Save</button>
+              <button class="st-btn st-btn--secondary" id="mcp-cancel" type="button" hidden>Cancel</button>
+              <span class="muted small" id="mcp-msg" role="status"></span>
+            </div>
+            <p class="muted small mcp-note">Their tools run on this PC with your rights, when the model decides to call them
+              (in this page's chat only; switch it off in Sampling). A server added here starts at once, without a restart;
+              the list is kept in <code>mcp-servers.json</code> beside the run config.</p>
+          </div>
+
+          <div class="st-card mcp-card" id="search-card">
+            <div class="req-head"><span class="card-title">Web search (SearXNG)</span>
+              <span class="muted small" id="search-sum"></span></div>
+            <p class="muted small">Your own <a href="https://docs.searxng.org" target="_blank" rel="noopener noreferrer">SearXNG</a>
+              instance, on this PC or a remote one. With it set up and on, the model gets <code>web_search</code> (a query,
+              then titles, addresses and snippets) and <code>read_page</code> (the text of one address from those results).
+              The instance must answer JSON: <code>search.formats</code> in its <code>settings.yml</code> needs
+              <code>json</code> next to <code>html</code>.</p>
+            <form class="mcp-form" id="search-form">
+              <div class="toggle-row"><span>Use web search<br><span class="muted small">offered in this page's chat</span></span>
+                <button class="st-toggle" id="search-enabled" type="button" role="switch" aria-checked="false" aria-label="Use web search"></button></div>
+              <div class="st-field">
+                <label class="st-label" for="search-url">Instance URL</label>
+                <input class="st-input" id="search-url" placeholder="http://127.0.0.1:8080" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="st-field">
+                <label class="st-label" for="search-auth">Authentication</label>
+                <select class="st-input" id="search-auth">
+                  <option value="none">None (a LAN or Tailnet instance)</option>
+                  <option value="bearer">Bearer token</option>
+                  <option value="basic">User name and password</option>
+                  <option value="header">Custom headers</option>
+                </select>
+              </div>
+              <div id="search-bearer" hidden>
+                <div class="st-field">
+                  <label class="st-label" for="search-token">Token</label>
+                  <input class="st-input" id="search-token" type="password" autocomplete="off" placeholder="********">
+                  <span class="muted small">A value shown as ******** stays as it is</span>
+                </div>
+              </div>
+              <div id="search-basic" hidden>
+                <div class="st-field">
+                  <label class="st-label" for="search-user">User name</label>
+                  <input class="st-input" id="search-user" autocomplete="off">
+                </div>
+                <div class="st-field">
+                  <label class="st-label" for="search-pass">Password</label>
+                  <input class="st-input" id="search-pass" type="password" autocomplete="off" placeholder="********">
+                </div>
+              </div>
+              <div id="search-headers" hidden>
+                <div class="st-field">
+                  <label class="st-label" for="search-headers-text">Headers <output>Name: value, one per line</output></label>
+                  <textarea class="st-input" id="search-headers-text" rows="3" spellcheck="false"
+                            placeholder="Authorization: Bearer ..."></textarea>
+                </div>
+              </div>
+              <div class="st-field">
+                <label class="st-label" for="search-language">Language <output>empty = the instance's</output></label>
+                <input class="st-input" id="search-language" placeholder="en" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="st-field">
+                <label class="st-label" for="search-safe">Safe search</label>
+                <select class="st-input" id="search-safe">
+                  <option value="">The instance’s default</option>
+                  <option value="0">Off</option>
+                  <option value="1">Moderate</option>
+                  <option value="2">Strict</option>
+                </select>
+              </div>
+              <div class="st-field">
+                <label class="st-label" for="search-categories">Categories <output>empty = general</output></label>
+                <input class="st-input" id="search-categories" placeholder="general, news" autocomplete="off">
+              </div>
+              <div class="st-field">
+                <label class="st-label" for="search-time">Time range</label>
+                <select class="st-input" id="search-time">
+                  <option value="">Any time</option>
+                  <option value="day">Past day</option>
+                  <option value="week">Past week</option>
+                  <option value="month">Past month</option>
+                  <option value="year">Past year</option>
+                </select>
+              </div>
+              <div class="st-field">
+                <label class="st-label" for="search-timeout">Timeout <output>seconds</output></label>
+                <input class="st-input" id="search-timeout" type="number" min="2" max="60" step="1" placeholder="20">
+              </div>
+              <div class="st-field">
+                <label class="st-label" for="search-max">Results per search <output>1-20</output></label>
+                <input class="st-input" id="search-max" type="number" min="1" max="20" step="1" placeholder="8">
+              </div>
+              <div class="toggle-row"><span>Offer the page reader<br><span class="muted small"><code>read_page</code>: one
+                address from a search result, as readable text</span></span>
+                <button class="st-toggle" id="search-readpage" type="button" role="switch" aria-checked="true" aria-label="Offer the page reader"></button></div>
+              <div class="toggle-row"><span>Read pages on this PC and the LAN<br><span class="muted small">otherwise only
+                public addresses are read (safer)</span></span>
+                <button class="st-toggle" id="search-local" type="button" role="switch" aria-checked="false" aria-label="Read pages on this PC and the LAN"></button></div>
+            </form>
+            <div class="cfg-actions">
+              <button class="st-btn st-btn--primary" id="search-save" type="button">Save</button>
+              <button class="st-btn st-btn--secondary" id="search-test" type="button">Test</button>
+              <span class="muted small" id="search-msg" role="status"></span>
+            </div>
+          </div>
         </div>
-        <div class="toggle-row"><span>Dark theme</span>
-          <button class="st-toggle" id="dark-toggle" role="switch" aria-checked="false" aria-label="Dark theme"></button></div>
-        <p class="muted small">Chats, settings and the key are kept in this browser only.
-          <a href="https://github.com/KonnectSuite/AryaInfer" target="_blank" rel="noopener noreferrer">AryaInfer on GitHub</a></p>
+      </section>
+
+      <!-- ============================ About ============================ -->
+      <section class="view view--about" id="view-about" hidden>
+        <div class="about">
+          <div class="st-card">
+            <span class="card-title">Model and engine</span>
+            <dl class="facts" id="facts-engine"></dl>
+          </div>
+          <div class="st-card">
+            <span class="card-title">This PC</span>
+            <dl class="facts" id="facts-hw"></dl>
+          </div>
+          <div class="st-card">
+            <span class="card-title">Connect your tools</span>
+            <p class="muted">Any OpenAI- or Anthropic-compatible client works with these addresses.</p>
+            <dl class="facts" id="facts-api"></dl>
+          </div>
+          <div class="st-card">
+            <span class="card-title">Credits and host findings</span>
+            <p class="muted">The interface, wordmark, fonts and colors come from the AryaAI brand kit.
+              AryaInfer is a fork of <a href="https://github.com/VecSzn/PolyStrata" target="_blank" rel="noopener noreferrer">PolyStrata</a>,
+              which is a fork of <a href="https://github.com/Niko1221/Strata" target="_blank" rel="noopener noreferrer">Niko1221’s original Strata</a>.
+              Thanks to both projects and their contributors.
+              <a href="https://github.com/KonnectSuite/AryaInfer" target="_blank" rel="noopener noreferrer">AryaInfer on GitHub</a>.
+              Chats, settings and the API key are kept in this browser only.</p>
+            <p class="muted">Configured for our i9-14900KF, RTX 4070 Ti SUPER 16 GB, 64 GB RAM, Windows 11 host.
+              We benchmark against this setup and update the docs with our findings as measurements become available.</p>
+            <p class="muted">Qwen3.8 Flash Next: the earlier text-only measurements were 86.1 tokens/s for short chat
+              and 95.6 tokens/s in agent-style speed sessions (medians). All three recall trials at 258,300 input tokens,
+              18 small coding-agent sessions and 3 development DSH adapter checks passed. Vision was enabled and checked
+              separately afterward; those speed measurements do not include vision.</p>
+            <p class="muted" id="qwen36-host-findings">Qwen3.6 Q4 and Q8: 262,144-token context with GPU vision enabled.
+              Each quant passed 36 bounded coding sessions, 12 image checks, 6 recall trials and 3 combined
+              long-context coding/image sessions. Each also passed 3 development DSH adapter checks.
+              Q4 offers more memory headroom on this host; Q8 briefly left about 0.1 GiB of system RAM available.
+              These fixtures do not establish general coding accuracy or full desktop-workflow qualification.
+              <a href="https://github.com/KonnectSuite/AryaInfer/blob/main/docs/QWEN36_HOST_RESULTS.md" target="_blank" rel="noopener noreferrer">Host benchmark details</a>.</p>
+            <p class="muted" id="minicpmv-host-findings">MiniCPM-V 4.7 Q4: 262,144-token context with GPU vision.
+              Low reasoning passed 18/18 bounded coding sessions; both reasoning modes passed all 3 long coding/image sessions.
+              All 12 image checks, 6 recall trials and 3 development DSH adapter checks passed.
+              Coding scores use the corrected validator; original records remain archived.
+              <a href="https://github.com/KonnectSuite/AryaInfer/blob/main/docs/MINICPMV_HOST_RESULTS.md" target="_blank" rel="noopener noreferrer">MiniCPM host results</a>.</p>
+            <p class="muted" id="model-roster-host-findings">Ornith APEX-I-QUALITY: 262,144-token context with GPU vision.
+              Low reasoning passed 18/18 bounded coding sessions and 3/3 long coding/image sessions, including all image IDs.
+              All 12 image checks, 6 recall trials and 3 development DSH adapter checks passed.
+              <a href="https://github.com/KonnectSuite/AryaInfer/blob/main/docs/MODEL_ROSTER_HOST_RESULTS.md" target="_blank" rel="noopener noreferrer">All model host results</a>.</p>
+            <p class="muted" id="gemma4-host-findings">Gemma 4 26B-A4B UD-Q4_K_M: 262,144-token capacity, GPU vision. Bounded coding off 16/18, low 13/18; recall 6/6, long coding 2/3, development adapter 3/3. Low reasoning at 4K output passed 18/18 short and 2/3 long coding/image sessions. See the separate budget comparison.
+              <a href="https://github.com/KonnectSuite/AryaInfer/blob/main/docs/MODEL_ROSTER_HOST_RESULTS.md" target="_blank" rel="noopener noreferrer">Measured results and limits</a>.</p>
+            <p class="muted" id="tiel-host-findings">Tiel Coder 35B-A3B UD-Q4_K_XL: 262,144-token capacity, GPU vision. Bounded coding off 16/18, low 18/18; recall 6/6, long coding 3/3, development adapter 3/3. Image checks 8/12; build-ID transcription misses are retained.
+              <a href="https://github.com/KonnectSuite/AryaInfer/blob/main/docs/MODEL_ROSTER_HOST_RESULTS.md" target="_blank" rel="noopener noreferrer">Measured results and limits</a>.</p>
+            <p class="muted" id="lfm25-host-findings">LFM2.5-24B-A2B UD-Q4_K_XL: 131,072-token capacity, text only. Native-thinking coding at 4K output 18/18; recall 2/6, long coding 0/3, development adapter 3/3. Initial forced-off failures are archived.
+              <a href="https://github.com/KonnectSuite/AryaInfer/blob/main/docs/MODEL_ROSTER_HOST_RESULTS.md" target="_blank" rel="noopener noreferrer">Measured results and limits</a>.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- ============================ Settings popover ============================ -->
+<div class="st-pop" id="settings-pop" role="dialog" aria-labelledby="settings-title" hidden>
+  <div class="st-pop__head">
+    <span class="card-title" id="settings-title">Settings</span>
+    <button class="st-btn st-btn--icon" id="settings-close" type="button" aria-label="Close settings">
+      <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-x"/></svg></button>
+  </div>
+  <div class="st-pop__body">
+    <section class="st-pop__section">
+      <span class="st-label">Appearance</span>
+      <div class="seg" id="theme-seg" role="radiogroup" aria-label="Appearance">
+        <button type="button" role="radio" data-v="system" aria-checked="false">System</button>
+        <button type="button" role="radio" data-v="light" aria-checked="false">Light</button>
+        <button type="button" role="radio" data-v="dark" aria-checked="false">Dark</button>
       </div>
-      <div class="st-card">
-        <span class="card-title">Credits and host findings</span>
-        <p class="muted">The interface, wordmark, fonts and colors come from the AryaAI brand kit.
-          AryaInfer is a fork of <a href="https://github.com/VecSzn/PolyStrata" target="_blank" rel="noopener noreferrer">PolyStrata</a>,
-          which is a fork of <a href="https://github.com/Niko1221/Strata" target="_blank" rel="noopener noreferrer">Niko1221â€™s original Strata</a>.
-          Thanks to both projects and their contributors.</p>
-        <p class="muted">Configured for our i9-14900KF, RTX 4070 Ti SUPER 16 GB, 64 GB RAM, Windows 11 host.
-          We benchmark against this setup and update the docs with our findings as measurements become available.</p>
-        <p class="muted">Qwen3.8 Flash Next: the earlier text-only measurements were 86.1 tokens/s for short chat
-          and 95.6 tokens/s in agent-style speed sessions (medians). All three recall trials at 258,300 input tokens,
-          18 small coding-agent sessions and 3 development DSH adapter checks passed. Vision was enabled and checked
-          separately afterward; those speed measurements do not include vision.</p>
-        <p class="muted" id="qwen36-host-findings">Qwen3.6 Q4 and Q8: 262,144-token context with GPU vision enabled.
-          Each quant passed 36 bounded coding sessions, 12 image checks, 6 recall trials and 3 combined
-          long-context coding/image sessions. Each also passed 3 development DSH adapter checks.
-          Q4 offers more memory headroom on this host; Q8 briefly left about 0.1 GiB of system RAM available.
-          These fixtures do not establish general coding accuracy or full desktop-workflow qualification.
-          <a href="https://github.com/KonnectSuite/AryaInfer/blob/main/docs/QWEN36_HOST_RESULTS.md" target="_blank" rel="noopener noreferrer">Host benchmark details</a>.</p>
-        <p class="muted" id="minicpmv-host-findings">MiniCPM-V 4.7 Q4: 262,144-token context with GPU vision.
-          Low reasoning passed 18/18 bounded coding sessions; both reasoning modes passed all 3 long coding/image sessions.
-          All 12 image checks, 6 recall trials and 3 development DSH adapter checks passed.
-          Coding scores use the corrected validator; original records remain archived.
-          <a href="https://github.com/KonnectSuite/AryaInfer/blob/main/docs/MINICPMV_HOST_RESULTS.md" target="_blank" rel="noopener noreferrer">MiniCPM host results</a>.</p>
-        <p class="muted" id="model-roster-host-findings">Ornith APEX-I-QUALITY: 262,144-token context with GPU vision.
-          Low reasoning passed 18/18 bounded coding sessions and 3/3 long coding/image sessions, including all image IDs.
-          All 12 image checks, 6 recall trials and 3 development DSH adapter checks passed.
-          <a href="https://github.com/KonnectSuite/AryaInfer/blob/main/docs/MODEL_ROSTER_HOST_RESULTS.md" target="_blank" rel="noopener noreferrer">All model host results</a>.</p>
-        <p class="muted" id="gemma4-host-findings">Gemma 4 26B-A4B UD-Q4_K_M: 262,144-token capacity, GPU vision. Bounded coding off 16/18, low 13/18; recall 6/6, long coding 2/3, development adapter 3/3. Low reasoning at 4K output passed 18/18 short and 2/3 long coding/image sessions. See the separate budget comparison.
-          <a href="https://github.com/KonnectSuite/AryaInfer/blob/main/docs/MODEL_ROSTER_HOST_RESULTS.md" target="_blank" rel="noopener noreferrer">Measured results and limits</a>.</p>
-        <p class="muted" id="tiel-host-findings">Tiel Coder 35B-A3B UD-Q4_K_XL: 262,144-token capacity, GPU vision. Bounded coding off 16/18, low 18/18; recall 6/6, long coding 3/3, development adapter 3/3. Image checks 8/12; build-ID transcription misses are retained.
-          <a href="https://github.com/KonnectSuite/AryaInfer/blob/main/docs/MODEL_ROSTER_HOST_RESULTS.md" target="_blank" rel="noopener noreferrer">Measured results and limits</a>.</p>
-        <p class="muted" id="lfm25-host-findings">LFM2.5-24B-A2B UD-Q4_K_XL: 131,072-token capacity, text only. Native-thinking coding at 4K output 18/18; recall 2/6, long coding 0/3, development adapter 3/3. Initial forced-off failures are archived.
-          <a href="https://github.com/KonnectSuite/AryaInfer/blob/main/docs/MODEL_ROSTER_HOST_RESULTS.md" target="_blank" rel="noopener noreferrer">Measured results and limits</a>.</p>
-      </div>
-      <div class="st-card cfg-card" id="cfg-card" hidden>
-        <div class="req-head"><span class="card-title">Model settings</span><span class="muted small" id="cfg-file"></span></div>
-        <p class="muted small">Kept in the model's run config for every client. An empty field is the default. They
-          take effect the next time the model starts (close AryaInfer's window and start it again).</p>
-        <form class="cfg-form" id="cfg-form"></form>
-        <div class="cfg-actions"><button class="st-btn st-btn--primary" id="cfg-save" type="button">Save</button>
-          <span class="muted small" id="cfg-msg" role="status"></span></div>
-      </div>
-    </div>
-  </section>
-</main>
+      <span class="muted small">System follows this PC's light or dark setting.</span>
+    </section>
+    <section class="st-pop__section">
+      <label class="st-label" for="api-key">API key <output>only if the server was started with one</output></label>
+      <input class="st-input" id="api-key" type="password" autocomplete="off" placeholder="Not needed">
+      <span class="muted small">Kept in this browser only, like the chats.</span>
+    </section>
+    <section class="st-pop__section cfg-card" id="cfg-card" hidden>
+      <span class="st-label">Model settings</span>
+      <span class="muted small cfg-file" id="cfg-file"></span>
+      <p class="muted small">Kept in the model's run config for every client. An empty field is the default. They
+        take effect the next time the model starts (close AryaInfer's window and start it again).</p>
+      <form class="cfg-form" id="cfg-form"></form>
+      <div class="cfg-actions"><button class="st-btn st-btn--primary" id="cfg-save" type="button">Save</button>
+        <span class="muted small" id="cfg-msg" role="status"></span></div>
+    </section>
+    <section class="st-pop__section">
+      <button class="st-nav" type="button" id="about-link">
+        <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-info"/></svg>
+        <span>About this PC and credits</span></button>
+    </section>
+  </div>
+</div>
+
+<!-- ============================ Model menu ============================ -->
+<div class="st-menu" id="model-menu" role="menu" aria-label="Models" hidden></div>
 
 <!-- ============================ Sampling drawer ============================ -->
 <aside class="st-drawer" id="drawer" data-open="false" aria-label="Sampling and thinking" aria-hidden="true">
