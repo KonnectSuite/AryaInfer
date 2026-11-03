@@ -24,17 +24,28 @@ function roomTab(tab) {
   roomRender();
 }
 // The room's instructions: the agent owns the prompt and the graph, and only what it is told about this server.
-function roomSystem() {
+async function roomSystem() {
   const workflows = (comfyInfo.workflows || []).map((w) => {
     const shape = w.baked_size ? `${w.baked_size.width}x${w.baked_size.height}` : "the source's size";
     return `${w.name} (${w.role.replace("-", " ")}, ${shape})`;
   }).join("; ");
-  const last = room.last
-    ? `The most recent picture in this room is id ${room.last.id} (${room.last.workflow}, ` +
-      `${room.last.width || "?"}x${room.last.height || "?"}); to change or restyle it, call generate_image with ` +
-      `reference_id = ${room.last.id} and an image-to-image workflow. Keep what the user liked and change only what ` +
-      `they asked about.`
-    : "No picture has been made in this room yet.";
+  let made = roomMade();
+  if (!made.length && comfyInfo.configured) {
+    // the browser may have thrown the thread away (a phone, a reload): the gallery still knows the newest pictures
+    try {
+      const j = await (await fetch("comfy?gallery=1&limit=3", {headers: headers()})).json();
+      made = ((j.page && j.page.items) || []).map((x) => ({id: x.id, workflow: x.workflow, prompt: x.prompt}));
+    } catch (e) { /* the room still works without it */ }
+  }
+  const last = made.length
+    ? `Pictures already made in this room, newest first: ` +
+      made.map((m) => `${m.id} (${m.workflow || "a workflow"})`).join(", ") +
+      `. To change or restyle one, call generate_image with reference_id = <that id> and an image-to-image workflow; ` +
+      `keep what the user liked and change only what they asked about. If you do not have an id, an image-to-image ` +
+      `workflow with no reference_id edits the newest picture in the gallery.`
+    : "No picture is in this room's gallery yet. If the user asks to change 'the last picture' anyway, call " +
+      "generate_image with an image-to-image workflow and no reference_id: the server edits the newest picture or " +
+      "says there is none.";
   const refs = room.refs.map((r) => r.id).filter(Boolean);
   return [
     "You are the picture room of AryaInfer, running on this PC. You make and edit pictures with ComfyUI through the " +
@@ -200,7 +211,7 @@ async function roomSend(event) {
   roomRender();
   const history = room.messages.slice(0, -1).map((x) => ({role: x.role, content: x.text}));
   const body = {model: health.model, stream: true, reasoning_effort: settings.thinking, max_tokens: 1600,
-                messages: [{role: "system", content: roomSystem()}, ...history]};
+                messages: [{role: "system", content: await roomSystem()}, ...history]};
   if (settings.images !== false && comfyInfo.configured) body.strata_images = true;
   if (settings.search !== false && searchInfo.configured) body.strata_search = true;
   room.abort = new AbortController();
@@ -245,11 +256,35 @@ function roomPersist() {
       error: m.error || ""})), last: room.last});
   } catch (e) { /* a full storage keeps this visit's thread only */ }
 }
+// Every picture this room made, newest first: the transcript is the memory, and the gallery backs it when a phone
+// evicts the browser's storage between visits.
+function roomMade() {
+  const out = [], seen = new Set();
+  const add = (image, workflow) => {
+    if (!image || !image.id || seen.has(image.id)) return;
+    seen.add(image.id);
+    out.push({id: image.id, workflow: workflow || image.workflow || "", url: image.url,
+              width: image.width, height: image.height, seed: image.seed, prompt: image.prompt});
+  };
+  if (room.last) add(room.last, room.last.workflow);
+  for (let i = room.messages.length - 1; i >= 0 && out.length < 5; i -= 1) {
+    const m = room.messages[i];
+    if (!m || m.role !== "assistant") continue;
+    for (const t of (m.tools || []).slice().reverse()) {
+      for (const image of (t.images || []).slice().reverse()) add(image, t.tool);
+    }
+  }
+  return out.slice(0, 5);
+}
 function roomRestore() {
   const saved = store.get(ROOM_KEY, null);
   if (!saved || !Array.isArray(saved.messages)) return;
   room.messages = saved.messages.filter((m) => m && (m.role === "user" || m.role === "assistant"));
   room.last = saved.last || null;
+  if (!room.last) {
+    const made = roomMade();
+    if (made.length) room.last = made[0];
+  }
 }
 function roomNew() {
   if (room.messages.length && !confirm("Start a new picture conversation? The pictures stay in My images.")) return;

@@ -987,8 +987,9 @@ IMAGE_TOOL_DESCRIPTION = (
     "Create or edit a picture with ComfyUI, the image engine on this PC. You write the image prompt yourself from what "
     "the user asks - subject, style, light, composition - in the language that fits the picture, and you pick the "
     "workflow by the shape and the job it is for. For an edit or a restyle of an existing picture in this room, pass "
-    "its id as reference_id and an image-to-image workflow. An image-to-image workflow only runs together with "
-    "reference_id: a call with one and not the other fails, so pass both or neither.")
+    "its id as reference_id and an image-to-image workflow; naming an image-to-image workflow without reference_id "
+    "edits the newest picture in the gallery. A reference_id with a text-to-image workflow fails, so pass both or "
+    "neither.")
 IMAGE_TOOL = {
     "name": "generate_image",
     "description": IMAGE_TOOL_DESCRIPTION,
@@ -1392,11 +1393,28 @@ class ComfyHub:
             if name != IMAGE_TOOL["name"]:
                 raise WorkflowError(f"there is no tool named {name!r}")
             reference = str(arguments.get("reference_id") or "").strip()
+            named = str(arguments.get("workflow") or "").strip()
+            borrowed = None
+            if not reference and named:
+                # "change the last picture" is well defined for this room even when the page has lost its thread (a
+                # phone that evicted its storage, a reload): the gallery is on the server and is the record.  Only an
+                # image-to-image call borrows it - a text-to-image graph must never edit something by surprise.
+                try:
+                    asked = find_workflow(self.workflows(), named)
+                except WorkflowError:
+                    asked = None
+                if asked is not None and asked["role"] == "image-to-image":
+                    newest = self.gallery.list(limit=1)["items"]
+                    if newest:
+                        reference, borrowed = newest[0]["id"], newest[0]
             result = self.generate({"prompt": arguments.get("prompt"), "count": arguments.get("count") or 1,
                                     "workflow": arguments.get("workflow"), "source": "chat",
                                     "references": [{"id": reference}] if reference else []},
                                    cancel=cancel, take_turn=False)
             lines = [f"Generated {len(result['images'])} image(s) with {result['workflow']} (seed {result['seed']})."]
+            if borrowed is not None:
+                made = borrowed.get("prompt") or "the previous picture"
+                lines.append(f"Edited the newest picture in the gallery, id {borrowed['id']} ({made[:80]}).")
             for image in result["images"]:
                 lines.append(f"{image['url']}")
             text = "\n".join(lines)

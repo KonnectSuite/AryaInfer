@@ -320,6 +320,20 @@ class ToolCall(unittest.TestCase):
         self.assertTrue(result["ok"], result)
         self.assertEqual(len(self.httpd.uploads), 1)
 
+    def test_an_edit_without_a_reference_edits_the_newest_picture(self):
+        # a phone can lose the room's thread (storage evicted, tab reloaded): the gallery is the record
+        record = self.hub.gallery.add(fake.PNG, {"prompt": "the earlier picture"})
+        result = self.hub.call("generate_image", {"prompt": "make it blue", "workflow": EDIT})
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(len(self.httpd.uploads), 1)
+        self.assertIn(record["id"], result["text"])
+
+    def test_a_text_workflow_without_a_reference_makes_a_new_picture(self):
+        self.hub.gallery.add(fake.PNG, {"prompt": "the earlier picture"})
+        result = self.hub.call("generate_image", {"prompt": "a new picture", "workflow": SQUARE})
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(len(self.httpd.uploads), 0)          # nothing was borrowed to edit
+
     def test_the_card_is_handed_back_to_the_engine(self):
         # the text engine and ComfyUI share one GPU: loading the engine asks ComfyUI to let go first
         self.hub.free_memory()

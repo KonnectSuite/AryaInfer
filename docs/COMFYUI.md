@@ -55,7 +55,9 @@ policy and the gallery limits are there too.
 **Images** in the sidebar is the room. It is a conversation, not a form: you say what you want, the model writes the
 image prompt and picks the workflow itself (the tool description lists every graph with its role and size), and asks
 ComfyUI for it. A follow-up ("warmer light", "put a croissant on the saucer") is an edit: the model passes the id of the
-last picture as `reference_id` with an image-to-image graph, so the composition carries over. When the chat has web
+last picture as `reference_id` with an image-to-image graph, so the composition carries over. The thread lives in the
+browser, so when a phone has thrown it away the room reads the newest pictures from the gallery instead, and an
+image-to-image call with no `reference_id` edits the newest picture - "change the last one" survives a reload. When the chat has web
 search on, the model may search for a factual reference and turn what it finds into the prompt; web pictures cannot be
 downloaded into ComfyUI, and the room never pretends otherwise.
 
@@ -154,4 +156,5 @@ does to MCP and web search: the image endpoints answer JSON from this page only,
 | a job ends with a workflow error | ComfyUI's own message is shown as-is | read it: a missing model and a bad node link look different there |
 | generation is slow or fails on a big prompt | the card ran out of room | lower `need_mib` won't help; unload other GPU users, or use a smaller graph |
 | a create graph refuses a size | its size is baked | use the graph for that size, or add `{{width}}`/`{{height}}` and re-import |
+
 
