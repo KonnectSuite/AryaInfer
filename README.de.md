@@ -476,7 +476,7 @@ Was jedes der fünf braucht und wie es geprüft wurde: [docs/BACKENDS.md](docs/B
 Nutzt du einen KI-Coding-Assistenten (Claude Code, Cursor, Codex, GitHub Copilot, ...)? Füge dort diesen Text ein:
 
 ```text
-Set up AryaStrata on this PC for me: https://github.com/VecSzn/PolyStrata - follow docs/AI_SETUP.md in that repository.
+Set up AryaInfer on this PC for me: https://github.com/KonnectSuite/AryaInfer - follow docs/AI_SETUP.md in that repository.
 ```
 
 Er prüft deine Grafikkarte, deinen RAM und deine Festplatte und wählt das passende Modell. Dann installiert und
@@ -485,7 +485,7 @@ startet er es und sagt dir, wie du deine Apps verbindest. KI-Tools können AryaI
 
 ### Oder mach es selbst
 
-[Lade AryaInfer herunter](https://github.com/KonnectSuite/AryaStrata/archive/refs/heads/main.zip) und entpacke es (oder nutze
+[Lade AryaInfer herunter](https://github.com/KonnectSuite/AryaInfer/archive/refs/heads/main.zip) und entpacke es (oder nutze
 `git clone`). **Windows:** Doppelklick auf **`START-HERE.bat`**. **Linux:** Führe im AryaInfer-Ordner **`./setup.sh`** aus.
 
 **Mac (Apple Silicon, M1 bis M5, macOS 15 oder neuer):** Installiere einmal Apples Command Line Tools (`xcode-select --install` im Terminal; Xcode selbst brauchst du nicht). Öffne dann das Terminal im AryaInfer-Ordner und führe **`./setup.sh`** aus. Es baut die Mac-Engine auf deinem Mac (etwa 7 Minuten), stellt dieselben Fragen, lädt das Modell und startet es. Beim nächsten Mal startet `./setup.sh` sofort. Welche Größe zu deinem Mac passt und wie schnell es ist: [docs/MAC.md](docs/MAC.md).
@@ -722,7 +722,7 @@ Starte AryaInfer danach neu (`START-HERE.bat` oder `./setup.sh`). Zum Rückgäng
 - **Es meldet, dass Port 8080 schon belegt ist.** AryaInfer läuft bereits. Such nach seinem Fenster.
 
 Weitere Probleme und ihre Lösungen: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md). Kommst du nicht weiter?
-Öffne ein [Issue](https://github.com/KonnectSuite/AryaStrata/issues) und hänge `strata-<model>.log` aus dem AryaInfer-Ordner
+Öffne ein [Issue](https://github.com/KonnectSuite/AryaInfer/issues) und hänge `strata-<model>.log` aus dem AryaInfer-Ordner
 an. Du hast ein Sicherheitsproblem gefunden? Melde es vertraulich: [SECURITY.md](SECURITY.md).
 
 ## Wie funktioniert es?

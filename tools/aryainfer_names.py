@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 r"""Update current product branding to AryaInfer; preserve lineage, URLs, identifiers and saved-data paths.
 
-AryaInfer is this fork's product name.  The repository it lives in is still KonnectSuite/AryaStrata, so a
+AryaInfer is this fork's product name.  The repository it lives in is still KonnectSuite/AryaInfer, so a
 pass over the docs renames the name *where it stands for the product* and leaves alone:
 
 - the two projects this fork came from (Strata, PolyStrata) and any github.com URL;
@@ -123,8 +123,8 @@ def demo():
     assert rename(rename("AryaStrata web app")) == "AryaInfer web app"       # a second pass changes nothing
     # the lineage and the repository are named by their URLs
     for text in ("fork of [PolyStrata](https://github.com/VecSzn/PolyStrata)",
-                 "clone https://github.com/KonnectSuite/AryaStrata",
-                 "an [issue](https://github.com/KonnectSuite/AryaStrata/issues)"):
+                 "clone https://github.com/KonnectSuite/AryaInfer",
+                 "an [issue](https://github.com/KonnectSuite/AryaInfer/issues)"):
         assert rename(text) == text
     # a folder the reader really has, a file name, and the tray script
     for text in ("run `./setup.sh` in the AryaStrata folder",

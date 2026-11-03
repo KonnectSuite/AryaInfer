@@ -71,10 +71,10 @@ If the PC does not meet them, say which part is missing and stop.
 ## 2. Get AryaInfer
 
 ```
-git clone https://github.com/KonnectSuite/AryaStrata.git
+git clone https://github.com/KonnectSuite/AryaInfer.git
 ```
 
-Without git: download https://github.com/KonnectSuite/AryaStrata/archive/refs/heads/main.zip and unzip it. Pick a drive with
+Without git: download https://github.com/KonnectSuite/AryaInfer/archive/refs/heads/main.zip and unzip it. Pick a drive with
 enough free space: the model files go to a `PolyStrata-data` folder **next to** the AryaStrata folder (or `--data-dir <path>`
 on another drive).
 
@@ -248,7 +248,7 @@ line when it is ready; the engine log is `strata-<model>.log` in the AryaStrata 
 | Python or build tools could not be installed | Install what the message names (links are printed), then rerun. |
 
 More: [TROUBLESHOOTING.md](TROUBLESHOOTING.md) and the [full table](DETAILS.md#troubleshooting). If it still fails,
-collect `strata-<model>.log` and the setup output, and suggest an issue at https://github.com/KonnectSuite/AryaStrata/issues.
+collect `strata-<model>.log` and the setup output, and suggest an issue at https://github.com/KonnectSuite/AryaInfer/issues.
 
 ## Alternative: the MCP server
 

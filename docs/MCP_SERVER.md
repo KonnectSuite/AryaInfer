@@ -23,7 +23,7 @@ direction: *your assistant* manages AryaInfer.
 
 ## Add it
 
-You need a copy of AryaInfer: the zip from GitHub, or `git clone https://github.com/KonnectSuite/AryaStrata`. Below,
+You need a copy of AryaInfer: the zip from GitHub, or `git clone https://github.com/KonnectSuite/AryaInfer`. Below,
 `C:\Users\you\AryaStrata` (Windows) and `/home/you/AryaStrata` (Linux) stand for that folder. Use `python3` on Linux. On
 Windows, use `py` if `python` is not on your PATH.
 

@@ -24,7 +24,8 @@ def rename(text):
 def files():
     names = subprocess.check_output(["git", "ls-files"], cwd=ROOT, text=True).splitlines()
     return [n for n in names if not n.startswith(SKIP) and n.endswith(KINDS)
-            and n not in ("tools/polystrata_names.py", "tools/test_polystrata_names.py")]
+            and n not in ("tools/polystrata_names.py", "tools/test_polystrata_names.py",
+                          "tools/aryainfer_names.py", "tools/test_aryainfer_names.py")]
 def read_text(path):
     # newline="": the launchers keep their platform line endings (.sh LF, .bat CRLF), a rename must not convert them
     with open(path, encoding="utf-8", newline="") as f:

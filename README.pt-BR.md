@@ -472,7 +472,7 @@ Do que cada um dos cinco precisa e como foi conferido: [docs/BACKENDS.md](docs/B
 Você usa um assistente de programação com IA (Claude Code, Cursor, Codex, GitHub Copilot, ...)? Cole isto nele:
 
 ```text
-Set up AryaStrata on this PC for me: https://github.com/VecSzn/PolyStrata - follow docs/AI_SETUP.md in that repository.
+Set up AryaInfer on this PC for me: https://github.com/KonnectSuite/AryaInfer - follow docs/AI_SETUP.md in that repository.
 ```
 
 Ele verifica sua placa de vídeo, RAM e disco e escolhe o modelo que cabe. Depois instala, inicia e explica como
@@ -481,7 +481,7 @@ conectar seus apps. Ferramentas de IA também podem instalar, iniciar e parar o 
 
 ### Ou faça você mesmo
 
-[Baixe o AryaInfer](https://github.com/KonnectSuite/AryaStrata/archive/refs/heads/main.zip) e descompacte (ou use `git clone`).
+[Baixe o AryaInfer](https://github.com/KonnectSuite/AryaInfer/archive/refs/heads/main.zip) e descompacte (ou use `git clone`).
 **Windows:** clique duas vezes em **`START-HERE.bat`**. **Linux:** rode **`./setup.sh`** na pasta do AryaInfer.
 
 **Mac (Apple Silicon, M1 a M5, macOS 15 ou mais recente):** instale uma vez as Command Line Tools da Apple (`xcode-select --install` no Terminal; o Xcode em si não é necessário). Depois abra o Terminal na pasta do AryaInfer e rode **`./setup.sh`**. Ele compila o motor do Mac no seu Mac (uns 7 minutos), faz as mesmas perguntas, baixa o modelo e o inicia. Da próxima vez, `./setup.sh` inicia na hora. Qual tamanho cabe no seu Mac e qual a velocidade: [docs/MAC.md](docs/MAC.md).
@@ -715,7 +715,7 @@ Reinicie o AryaInfer (`START-HERE.bat` ou `./setup.sh`) depois da mudança. Para
 - **Diz que a porta 8080 já está em uso.** O AryaInfer já está rodando. Procure a janela dele.
 
 Mais problemas e como resolver: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md). Ainda sem solução? Abra uma
-[issue](https://github.com/KonnectSuite/AryaStrata/issues) e anexe o `strata-<model>.log` da pasta do AryaInfer. Encontrou um
+[issue](https://github.com/KonnectSuite/AryaInfer/issues) e anexe o `strata-<model>.log` da pasta do AryaInfer. Encontrou um
 problema de segurança? Informe em particular: [SECURITY.md](SECURITY.md).
 
 ## Como funciona?

@@ -467,7 +467,7 @@ The full list: [docs/INSTALL.md](docs/INSTALL.md#what-you-need).
 
 The installer sets up everything else. It compiles the engine on your PC and offers to install what that needs
 (g++ and the CUDA toolkit). Not yet: AMD cards, two cards on Windows, three cards or more, pictures.
-A user runs it on Windows with one 24 GB card and 128 GB of RAM ([report](https://github.com/KonnectSuite/AryaStrata/issues/10)).
+A user runs it on Windows with one 24 GB card and 128 GB of RAM ([report](https://github.com/KonnectSuite/AryaInfer/issues/10)).
 
 The full list: [docs/GLM.md](docs/GLM.md#what-you-need).
 
@@ -481,7 +481,7 @@ The full list: [docs/GLM.md](docs/GLM.md#what-you-need).
 | **System** | Linux, and a current NVIDIA driver. |
 
 The installer sets up everything else, as it does for GLM 5.3 Flash. Not tried yet: AMD cards, two cards.
-It reads text only. A user runs it on Windows with one 24 GB card and 128 GB of RAM ([report](https://github.com/KonnectSuite/AryaStrata/issues/21)).
+It reads text only. A user runs it on Windows with one 24 GB card and 128 GB of RAM ([report](https://github.com/KonnectSuite/AryaInfer/issues/21)).
 
 The full list: [docs/DEEPSEEK.md](docs/DEEPSEEK.md#what-you-need).
 
@@ -584,7 +584,7 @@ What each of the five needs and how it was checked: [docs/BACKENDS.md](docs/BACK
 Do you use an AI coding assistant (Claude Code, Cursor, Codex, GitHub Copilot, ...)? Paste this into it:
 
 ```text
-Set up AryaStrata on this PC for me: https://github.com/KonnectSuite/AryaStrata - follow docs/AI_SETUP.md in that repository.
+Set up AryaInfer on this PC for me: https://github.com/KonnectSuite/AryaInfer - follow docs/AI_SETUP.md in that repository.
 ```
 
 It checks your graphics card, RAM and disk and picks the model that fits. Then it installs and starts it and tells
@@ -593,7 +593,7 @@ you how to connect your apps. AI tools can also install, start and stop AryaInfe
 
 ### Or do it yourself
 
-[Download AryaInfer](https://github.com/KonnectSuite/AryaStrata/archive/refs/heads/main.zip) and unzip it (or `git clone` it).
+[Download AryaInfer](https://github.com/KonnectSuite/AryaInfer/archive/refs/heads/main.zip) and unzip it (or `git clone` it).
 **Windows:** double-click **`START-HERE.bat`**. **Linux:** run **`./setup.sh`** in the AryaStrata folder.
 
 **Mac (Apple Silicon, M1 to M5, macOS 15 or newer):** install Apple's Command Line Tools once
@@ -1038,7 +1038,7 @@ Every part and its numbers: [docs/BACKENDS.md](docs/BACKENDS.md#how-a-backend-wo
 ## Support and contributing
 
 For AryaInfer setup, integration or reproducibility problems, open an
-[issue in this fork](https://github.com/KonnectSuite/AryaStrata/issues). Include
+[issue in this fork](https://github.com/KonnectSuite/AryaInfer/issues). Include
 your OS, CPU, GPU/VRAM, RAM, model and quantization, engine version, context and
 vision settings, reproduction steps, and relevant logs with secrets and private
 prompts removed. Security reporting: [SECURITY.md](SECURITY.md).

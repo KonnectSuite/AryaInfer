@@ -54,7 +54,7 @@ llama.cpp's `ggml` sources are pinned by this repository: CMake fetches the revi
 `STRATA_GGML_DIR` at a checkout of exactly that revision.
 
 ```sh
-git clone https://github.com/KonnectSuite/AryaStrata.git && cd AryaStrata
+git clone https://github.com/KonnectSuite/AryaInfer.git && cd AryaInfer
 cmake -S . -B build-halo -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DSTRATA_ENABLE_HIP=ON -DSTRATA_ENABLE_CUDA=OFF -DSTRATA_PREFILL_MMQ=ON \
   -DCMAKE_HIP_ARCHITECTURES=gfx1151 \

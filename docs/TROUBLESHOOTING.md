@@ -199,4 +199,4 @@ R9700) in the `env` block of the server JSON, then a restart. Experimental, one 
 ## Still stuck?
 
 Look in the [full troubleshooting table](DETAILS.md#troubleshooting), or open an
-[issue](https://github.com/KonnectSuite/AryaStrata/issues) and attach `strata-<model>.log` from the AryaStrata folder.
+[issue](https://github.com/KonnectSuite/AryaInfer/issues) and attach `strata-<model>.log` from the AryaStrata folder.

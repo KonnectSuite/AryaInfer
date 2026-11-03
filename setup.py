@@ -198,7 +198,7 @@ VISION_LLAMA_CPP_ZIP = f"https://github.com/ggml-org/llama.cpp/archive/{VISION_L
 
 # The ready-made engine: <PREBUILT_URL><asset>, a zip with strata(.exe), strata-vision(.exe) and BUILD.json, built
 # by tools/make_release.py.  Set this to the GitHub release download folder when publishing, e.g.
-# "https://github.com/<you>/AryaStrata/releases/latest/download/" (or pass --prebuilt / set STRATA_PREBUILT_URL).
+# "https://github.com/<you>/AryaInfer/releases/latest/download/" (or pass --prebuilt / set STRATA_PREBUILT_URL).
 # With the default, the release of this checkout's own version (PREBUILT_TAG_URL, CMakeLists.txt's version) is
 # tried first and the latest release is the fallback (#214): an older checkout keeps the engine it shipped with.
 # The Qwen engine is the Strata project's, unchanged, so its ready-made build comes from that project's releases.

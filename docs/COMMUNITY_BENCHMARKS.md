@@ -63,7 +63,7 @@ leaves out.
 Setup offers Tiel Coder now (`--family tiel`), and not the HauhauCS file. How to give setup such a file is in the
 [FAQ](FAQ.md#can-i-run-a-fine-tune-or-another-model-with-the-same-architecture).
 
-To add yours, open an issue at [VecSzn/AryaStrata](https://github.com/KonnectSuite/AryaStrata/issues) with what
+To add yours, open an issue at [VecSzn/AryaStrata](https://github.com/KonnectSuite/AryaInfer/issues) with what
 [What to record](#what-to-record) lists. `python aryastrata.py benchmark --model <name> --prompt-tokens 24000`
 gives the two speeds the README uses ([what it sends and prints](BACKENDS.md#benchmark)).
 

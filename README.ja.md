@@ -461,7 +461,7 @@ CUDA ツールキットでコンパイルし、足りなければインストー
 AI コーディングアシスタント（Claude Code、Cursor、Codex、GitHub Copilot など）を使っていますか？ これを貼り付けてください：
 
 ```text
-Set up AryaStrata on this PC for me: https://github.com/VecSzn/PolyStrata - follow docs/AI_SETUP.md in that repository.
+Set up AryaInfer on this PC for me: https://github.com/KonnectSuite/AryaInfer - follow docs/AI_SETUP.md in that repository.
 ```
 
 AI がグラフィックカード、RAM、ディスクを調べて、合うモデルを選びます。それからインストールして起動し、
@@ -470,7 +470,7 @@ AryaInfer のインストール、起動、停止もできます。
 
 ### 自分でやる
 
-[AryaInfer をダウンロード](https://github.com/KonnectSuite/AryaStrata/archive/refs/heads/main.zip)して展開します（または `git clone` します）。
+[AryaInfer をダウンロード](https://github.com/KonnectSuite/AryaInfer/archive/refs/heads/main.zip)して展開します（または `git clone` します）。
 **Windows：** **`START-HERE.bat`** をダブルクリック。**Linux：** AryaInfer フォルダーで **`./setup.sh`** を実行します。
 
 手順は NVIDIA でも AMD でも同じです。インストーラーがカードを見つけて、それに合うエンジンを用意します。
@@ -698,7 +698,7 @@ Q8_0 と比べると、256 トークンずつの 5 つのプロンプトで、�
 - **ポート 8080 がすでに使われていると表示される。** AryaInfer はもう動いています。そのウィンドウを探してください。
 
 ほかの問題と解決方法：[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)。それでも解決しない場合は
-[issue](https://github.com/KonnectSuite/AryaStrata/issues) を作成し、AryaInfer フォルダーにある `strata-<model>.log` を添付してください。
+[issue](https://github.com/KonnectSuite/AryaInfer/issues) を作成し、AryaInfer フォルダーにある `strata-<model>.log` を添付してください。
 セキュリティの問題を見つけたら、非公開で報告してください：[SECURITY.md](SECURITY.md)。
 
 ## しくみ

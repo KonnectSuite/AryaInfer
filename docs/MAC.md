@@ -41,7 +41,7 @@ with 32 GB and an M1 Max with 34 GB, where the experts stream from the SSD (the 
 ## Install
 
 ```
-git clone https://github.com/Niko1221/Strata && cd AryaStrata
+git clone https://github.com/KonnectSuite/AryaInfer && cd AryaInfer
 ./setup.sh                 # asks the size; --yes takes the recommended answers
 ```
 
