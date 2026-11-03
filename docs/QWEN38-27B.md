@@ -809,3 +809,24 @@ That is the week's bottom line on the original complaint.  The handoff recorded 
 tok/s and writing at 19.7 / 16.4 before the spill, and the first arm this session measured 722.2 tok/s at 61,833
 tokens with the vision encoder on the card.  The same prompt now reads at 911.9 (+26% over that arm, 2.8x the handoff's
 speed) and writes at 59-66 (3-4x), with 1.5 GB of headroom instead of the card's edge.
+## Forced draft depth (aryainfer, 2026-11-03)
+
+`STRATA_FORCE_GUESSES=N` (aryainfer build only, `Guesses::force_width`) gives every round the block is asked a window
+of N tokens, past the gate and the cost rule. Measured on this host (i9-14900KF, RTX 4070 Ti SUPER 16 GB), the
+ISTA-DASLab `GSQ-RCO-IQ3_XXS-mtp.gguf`, 8K context, q4_0 KV, `--prompt-batch 512`, `STRATA_GDN_MMA=1`, 256 tokens
+written greedily after a ~7.8K filler prompt (`tools/qwen38_force_bench.py`):
+
+| Window | Decode tok/s | Accepted / offered |
+|---|---:|---:|
+| policy (default) | 67.0 | 171 / 218 |
+| 3 | 65.9 | 155 / 227 |
+| 4 | 65.9 | 169 / 269 |
+| 5 | 58.5 | 177 / 319 |
+| 6 | 51.3 | 180 / 368 |
+| 8 | 42.6 | 184 / 460 |
+
+Deeper windows add almost no accepted tokens (171 -> 184) and cost a verify row each, so the default policy is
+already near its best with this MTP head. The handoff's step 1 is closed as a negative result: decode is limited by
+what a pass and a verify row cost, not by how many guesses are offered. Verify rows of up to 8 tokens go through
+`native_mmvq` (`Engine::lin`), which for IQ3_XXS does a grid lookup per weight per column; that is the likely reason
+an extra row costs 3.4-5.6 ms rather than near nothing. Not yet profiled (no Nsight on this host).

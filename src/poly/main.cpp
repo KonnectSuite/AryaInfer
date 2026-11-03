@@ -361,6 +361,9 @@ struct Session {
           chain_min(lookup_chain_min),
           repeats(std::max(lookup, 3), 64, (size_t) e.max_context() + 4096), policy(most) {
         guesses.measure_widths(spec_measured);
+#ifdef ARYAINFER_ENGINE
+        if (const char* fg = std::getenv("STRATA_FORCE_GUESSES")) guesses.force_width(std::atoi(fg));
+#endif
     }
 
     static CacheOptions with_floor(const CacheFlags& f) {

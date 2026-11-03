@@ -71,6 +71,9 @@ public:
 
     /// The window's width from the measured acceptance instead of the block's own probabilities (opt-in).
     void measure_widths(bool on) { by_measure_ = on; }
+    /// A fixed window of n tokens every round the block is asked, past the gate and the cost rule (0: off; aryainfer's
+    /// STRATA_FORCE_GUESSES, for measuring acceptance by position).
+    void force_width(int n) { force_ = std::clamp(n, 0, spec::DraftPolicy::kMaxT); }
 
     /// A round begins.  `blocks`: the block may be asked in it.  `limit`: the window the caller would allow.  Returns
     /// whether it is asked at all.
@@ -84,6 +87,10 @@ public:
         if (by_measure_ && knows(2) && ms_[2] > 0.0) one_ = std::min(one_, ms_[2]);
         limit_ = std::clamp(limit, 1, spec::DraftPolicy::kMaxT);
         width_ = by_measure_ ? choose_width() : limit_;
+        if (force_ > 1) {
+            width_ = std::min(force_, limit_);
+            return blocks && width_ > 1;
+        }
         // a probe now and then, so a width that fell to no guess can widen again on what the block says now
         if (by_measure_ && width_ <= 1 && round_ % 32 == 0) width_ = 2;
         return blocks && width_ > 1 && gate.ask();
@@ -91,7 +98,7 @@ public:
 
     /// Whether the block is asked for a guess more, the window having n of them.
     bool wants(int n) {
-        if (by_measure_) return n + 2 <= width_;
+        if (force_ > 1 || by_measure_) return n + 2 <= width_;
         const int to = n + 2;   // the window's tokens with this guess
         more_ = knows(to) ? std::clamp((ms_[to] - round_ms(to - 1)) / one_, 0.2, 0.8) : kUnmeasured;
         // asking takes time too: not when a guess the block were sure of would not pay for it
@@ -106,7 +113,7 @@ public:
         ask_ms_ = fresh(asked_at_) ? ask_ms_ + 0.1 * (std::min(ms, 2.0 * ask_ms_) - ask_ms_) : ms;
         asked_at_ = round_;
         ++asked_;
-        if (by_measure_) return n + 2 <= width_;
+        if (force_ > 1 || by_measure_) return n + 2 <= width_;
         sure_ *= p;
         if (sure_ * round_ms(n + 1) <= tokens_ * more_ * one_) return false;
         tokens_ += sure_;
@@ -176,6 +183,7 @@ private:
     double ask_ms_ = 0.0;                            // what one guess of the block takes
     long long asked_at_ = 0;
     bool measured_ = false;                          // some round's time is known: asking can be weighed against it
+    int force_ = 0;                                  // a fixed window (force_width)
     bool by_measure_ = false;                        // the width from the measured acceptance (measure_widths)
     int limit_ = spec::DraftPolicy::kMaxT;
     int width_ = 1;
