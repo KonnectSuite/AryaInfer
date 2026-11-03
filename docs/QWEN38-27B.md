@@ -893,3 +893,8 @@ measured 15.2 GB here.
 What is left for prefill is the instruction class, not the copy: the Q8_0 MMQ path is dp4a on the CUDA cores (about
 1,500 tok/s at 8K, and the per-token compute that remains after the copy).  An int8 `mma.sync` product over the AQ3
 codes, read directly with no expansion, is the next step.
+
+The batch ceiling is real: a 3072-row batch at 8K was tried and never finished (the run hit a 400 s cap), because its
+scratch is about 4.3 GB on top of the 10.25 GB of weights and the cache - the same spill the IQ3 file showed at 120K,
+and the card pages rather than running.  Batch 1024 is the safe point at 131K context and 2048 at 64K or less; do not
+take a batch above that on this card.
