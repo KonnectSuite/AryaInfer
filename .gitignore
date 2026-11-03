@@ -82,3 +82,8 @@ dist-hip/
 
 # scratch folders a test run leaves in the working directory (test_server's temp models)
 /tmp*/
+# the page's own settings files, written beside the run config: per machine, and they can hold tokens
+/mcp-servers.json
+/mcp-servers.json.*
+/websearch.json
+/websearch.json.*
