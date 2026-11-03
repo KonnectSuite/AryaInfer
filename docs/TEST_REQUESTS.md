@@ -1,8 +1,8 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # Test requests and hardware wanted
 
-Upstream Strata and PolyStrata were measured on the machines listed below. AryaStrata targets the host in our host record. Results from other hardware are welcome and are used: they tell us
+Upstream Strata and PolyStrata were measured on the machines listed below. AryaInfer targets the host in our host record. Results from other hardware are welcome and are used: they tell us
 what a setup really does and show where the engine picks something wrong. Write a report as described in
 [COMMUNITY_BENCHMARKS.md](COMMUNITY_BENCHMARKS.md): the build, the card and PCIe width, the CPU and RAM speed, the
 model file, the exact command, three runs per size, and what you did not test. Post it in an issue, or on the pull

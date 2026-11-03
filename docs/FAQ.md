@@ -1,4 +1,4 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # Questions people ask
 
@@ -46,10 +46,10 @@ RTX 4070 Ti with 12 GB, and a laptop's RTX 5060 with 8 GB. Yours can go there to
 
 ### How can I compare it with llama.cpp myself?
 
-With `bench/bench_vs_llama.py`, the script Strata used for its own comparison. It runs AryaStrata and llama.cpp's
+With `bench/bench_vs_llama.py`, the script Strata used for its own comparison. It runs AryaInfer and llama.cpp's
 `llama-server` in turns on the same GGUF and the same prompts and prints the medians of both
 ([how to run it](COMMUNITY_BENCHMARKS.md#comparing-with-llamacpp)). On the README's 8 GB laptop, with Qwen3.6
-and with Tiel Coder, AryaStrata read the prompts 2.7 to 3.5 times as fast as llama.cpp b11540 and wrote 1.5 to 1.8
+and with Tiel Coder, AryaInfer read the prompts 2.7 to 3.5 times as fast as llama.cpp b11540 and wrote 1.5 to 1.8
 times as fast (the two runs are linked there).
 
 ### Does it run on Radeon / AMD?
@@ -123,7 +123,7 @@ model, Q3 and Q4 run at about the same speed, so take Q4 if you have the memory.
 
 ### What about NVFP4?
 
-AryaStrata reads GGUF weight types only, so no NVFP4 for now. For GLM, NVFP4 would make the model around 204 GB,
+AryaInfer reads GGUF weight types only, so no NVFP4 for now. For GLM, NVFP4 would make the model around 204 GB,
 which doesn't fit in RAM on a normal PC; the 2- and 3-bit GGUFs (79 to 114 GB) are what lets the experts stay in RAM.
 
 ### Does it work on Windows?

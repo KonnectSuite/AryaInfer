@@ -1,8 +1,8 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # Intel Arc (experimental)
 
-AryaStrata 0.1.39 includes an **experimental Intel Arc engine**: the engine inherited from PolyStrata ported to SYCL (Intel oneAPI).
+AryaInfer 0.1.39 includes an **experimental Intel Arc engine**: the engine inherited from PolyStrata ported to SYCL (Intel oneAPI).
 maxfridbe wrote it in [#423](https://github.com/Niko1221/Strata/pull/423), with fixes from the people testing it.
 The code is in `sycl/`, and the port's own notes, measurements and maintenance procedure are in
 [docs/INTEL.md](INTEL.md). This page covers what you need, how to build it, and what has been tested.
@@ -66,7 +66,7 @@ images (not wired on Intel).
   `sycl/setup_intel.py` runs the engine in the `strata-sycl-dev` image built from `sycl/tools/Dockerfile`, and the
   engine is built in that image too ("Build with Docker" below). On Ubuntu: `sudo apt install docker.io git`, then
   `sudo usermod -aG docker,render $USER` and log in again. Note that the Dockerfile starts from a community
-  llama.cpp SYCL image (`ghcr.io/snailium/...`), not an Intel or AryaStrata image.
+  llama.cpp SYCL image (`ghcr.io/snailium/...`), not an Intel or AryaInfer image.
 - VRAM: the port keeps the experts on the card (`--stream-experts`). A 32 GB card holds the Coder IQ1_M or IQ2_XS.
   Smaller cards mirror part of the experts in RAM and are slower.
 

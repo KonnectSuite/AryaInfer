@@ -1,6 +1,6 @@
 # Qwen3.8 27B (ISTA-DASLab GSQ-RCO) on strata-poly
 
-A dense Qwen3.8 model for AryaStrata's second engine.  It is Qwen35's model with one dense FFN where the routed
+A dense Qwen3.8 model for AryaInfer's second engine.  It is Qwen35's model with one dense FFN where the routed
 experts are (llama.cpp calls the architecture `qwen35`), so the engine runs it through the same layers, the same
 gated delta net, the same 3-axis vision rope and the same block that guesses ahead - with no router anywhere.
 
@@ -168,7 +168,7 @@ nibble scalar-wise in the loop; doing the same integer-MMA layout is the next st
 
 The 27B had no sampling preset - the server serves greedy until a request or a config says otherwise - so two entries
 were built and calibrated rather than guessed: `qwen3.8-27b-iq3_xxs` (IQ3_XXS, 64K, q4_0) and `qwen3.8-27b-iq2_s`
-(IQ2_S, 200K, q4_0), named like the installed MoE entries ("AryaStrata <family> <size> <quant> - <N>K vision",
+(IQ2_S, 200K, q4_0), named like the installed MoE entries ("AryaInfer <family> <size> <quant> - <N>K vision",
 `reasoning_loop_recovery: recover`, the old ids kept as aliases).
 
 `tools/qwen38_calibrate.py` drives ten probes through the server - three Python tasks whose code is executed, a
@@ -348,8 +348,8 @@ Done and measured on this host:
 - Vision: the 27B mmproj loads in strata-vision (llama.cpp mtmd, --min-tokens 1024), the engine takes its .sve
   through --images/--image-pad, and the server answers picture questions on both caches.
 - Registry: serve/models.py knows qwen35; models.json lists the two entries; two run configs are in the repository
-  root, named the way the MoE families are - "AryaStrata Qwen3.8 27B IQ3_XXS - 128K vision"
-  (`strata-qwen3.8-27b-iq3_xxs.json`, 131,072 tokens on q4_0 with `--prompt-batch 256`) and "AryaStrata Qwen3.8 27B IQ2_S - 200K vision"
+  root, named the way the MoE families are - "AryaInfer Qwen3.8 27B IQ3_XXS - 128K vision"
+  (`strata-qwen3.8-27b-iq3_xxs.json`, 131,072 tokens on q4_0 with `--prompt-batch 256`) and "AryaInfer Qwen3.8 27B IQ2_S - 200K vision"
   (`strata-qwen3.8-27b-iq2_s.json`, 204,800 tokens, q4_0, `--prompt-batch 256`); the tokenizer was extracted from the
   file with `tools/strata_tokenizer.py`.
 

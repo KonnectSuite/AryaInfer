@@ -1,9 +1,9 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
-# AryaStrata on an Intel Arc
+# AryaInfer on an Intel Arc
 
-AryaStrata's engine is CUDA. On an Intel Arc it runs as **the engine inherited from PolyStrata, ported to SYCL** (`sycl/`, the
-section "The engine itself on Intel" below), behind the same AryaStrata server: OpenAI and Anthropic APIs, streaming,
+AryaInfer's engine is CUDA. On an Intel Arc it runs as **the engine inherited from PolyStrata, ported to SYCL** (`sycl/`, the
+section "The engine itself on Intel" below), behind the same AryaInfer server: OpenAI and Anthropic APIs, streaming,
 tool calls, MCP and the web app all unchanged. llama.cpp's SYCL backend is the comparison point in the tables (it
 runs the same GGUF at about a third of the speed).
 
@@ -16,7 +16,7 @@ PCIe 3.0 x8 slot (the card trains at Gen3 x8 there; it can do Gen5 x16).
 
 ## What you get (2026-10-01)
 
-| | NVIDIA (AryaStrata engine) | Intel Arc, AryaStrata SYCL port | Intel Arc, llama.cpp |
+| | NVIDIA (AryaInfer engine) | Intel Arc, AryaInfer SYCL port | Intel Arc, llama.cpp |
 |---|---|---|---|
 | models | all four | the Coder IQ1_M; the original IQ2_XS too (experts beyond VRAM in the host mirror: 58-64 tok/s) | the Coder (fits VRAM) |
 | model files | the same GGUFs | the same GGUFs + a native pack | the same GGUFs |
@@ -45,7 +45,7 @@ On Ubuntu 24.04 or newer, from nothing. The Intel GPU driver (the `xe` or `i915`
 
    Log out and in again (or reboot) so the groups apply. `docker ps` must work without `sudo`; the `render` group lets
    the container open the GPU.
-2. **Get AryaStrata and build the engine** ("How to build it" below, about 10 minutes the first time).
+2. **Get AryaInfer and build the engine** ("How to build it" below, about 10 minutes the first time).
 3. **Run setup:**
 
         ./setup.sh --backend sycl [setup.py's options, e.g. --model IQ3_S --context 32768 --port 8085]
@@ -78,7 +78,7 @@ questions are setup's own. What changes:
 
 If a future `setup.py` drops a step this relies on, it stops with a message instead of writing a wrong config.
 The models, packs and checkout must sit under the folder `strata-sycl.sh` mounts at `/work` (the one above the
-checkout, or `STRATA_SYCL_ROOT`). An earlier AryaStrata install on the same PC keeps its data folder in
+checkout, or `STRATA_SYCL_ROOT`). An earlier AryaInfer install on the same PC keeps its data folder in
 `~/.config/strata/settings.json`; pass `--data-dir <folder above the checkout>/PolyStrata-data` to put this one under the
 mount. A symlink to a folder outside the mount does not work in the container; a hard link does.
 
@@ -91,7 +91,7 @@ The engine is built in Docker, in the `strata-sycl-dev` image (oneAPI 2026.1 com
 community llama.cpp SYCL image), so the PC needs no oneAPI. From the checkout (its folder is called `AryaStrata` here; the
 folder above it is what the container mounts at `/work`):
 
-    cd AryaStrata
+    cd AryaInfer
     docker build -t strata-sycl-dev sycl/tools          # once: about 6 minutes, a 13 GB image
     H=$(basename "$PWD")
 
@@ -109,7 +109,7 @@ device ids). Ahead-of-time code, no compile at the first start:
 
 The build takes about 3 minutes and ends with `BUILD EXIT 0` and `errors: 0`. The binary is `build-sycl-aot/strata`
 (B-series) or `build-sycl/strata` (A-series); setup finds either one. Run the `docker build` again after pulling a
-AryaStrata update that changes `sycl/tools/Dockerfile`, and the `docker run` after every update of the engine (setup
+AryaInfer update that changes `sycl/tools/Dockerfile`, and the `docker run` after every update of the engine (setup
 says when the engine is older than it needs).
 
 ## Things that matter on this GPU
@@ -120,7 +120,7 @@ says when the engine is older than it needs).
   the single 28.8 GB tensor of shard 2. `--override-tensor per_layer_token_embd=CPU` keeps it in host
   memory, mmapped and paged from the SSD by row, which is how the model's authors serve it. Host RSS
   stays around 2 GB.
-- **Thinking.** The model reasons before it answers. AryaStrata's web app has the setting; for an API
+- **Thinking.** The model reasons before it answers. AryaInfer's web app has the setting; for an API
   client, put `{"reasoning_effort": "none"}` in `strata-<model>.shared-settings.json` next to the
   config, or send `chat_template_kwargs: {"enable_thinking": false}` per request. Without one of
   those a short `max_tokens` is spent entirely inside the think block and the answer looks empty.
@@ -186,7 +186,7 @@ migration tool.
 4. `sycl/tools/build.sh` - configure + build with icpx inside the image. Two compiler flags are load-bearing:
    `-fp-model=precise` (icpx defaults to a fast FP model) and `-cl-fp32-correctly-rounded-divide-sqrt`
    for the device compiler - the Arc's fp32 divide is not correctly rounded by default (OpenCL allows
-   2.5 ulp), and AryaStrata's quantizers are byte-exact against ggml through `amax / 127`. Measured: without
+   2.5 ulp), and AryaInfer's quantizers are byte-exact against ggml through `amax / 127`. Measured: without
    it `quantize_act_parity` has 303k mismatches, with it none.
 
 **Where it stands (2026-09-29).** The whole tree builds and links: the `strata` binary and 22 kernel
@@ -210,13 +210,13 @@ that returns the n-th Fibonacci number", greedy, 64 tokens:
 Measured on the same card, same 2,185-token prompt, 64 greedy tokens (AOT build, `--spec 2`,
 `--no-prefill-borrow`), against llama.cpp's SYCL build serving the same GGUF:
 
-| | llama.cpp SYCL | AryaStrata SYCL port |
+| | llama.cpp SYCL | AryaInfer SYCL port |
 |---|---|---|
 | prompt reading | 138-319 tok/s | **560 tok/s** (693 at 2,000 tokens, 180 at 300) |
 | decode, suffix drafter only (`--spec 2`) | 24.2-26.0 tok/s | 20.2-20.8 tok/s |
 | decode with the MTP draft layer (`--spec 4 --mtp`) | - | **42.7 tok/s** at the 2,185-token context (81% accepted, 2.9 tokens/round); 45.3 on a short prompt |
 
-Prompt reading is where AryaStrata's design pays (oneMKL GEMM over dequantised experts, the whole model on
+Prompt reading is where AryaInfer's design pays (oneMKL GEMM over dequantised experts, the whole model on
 the card). Decode is at ~80%: a speculative round costs ~53 ms whatever its size and the suffix drafter
 is accepted 9% of the time, so nearly every round yields one token; `--spec 4` (16.9 tok/s) was worse
 than `--spec 2` (20.8) for that reason. The kernels themselves run at 130-160 GB/s of weights on a card
@@ -252,7 +252,7 @@ build-sycl/strata --pack <iq pack> --native <shard1> --ple-gguf <shard2> \
 
 What the port had to get right beyond compiling (each is an entry in `sycl/tools/fixups.py` or a flag):
 
-- **Host-mapped flags.** AryaStrata's decode is a GPU/CPU handshake through host-mapped memory. `volatile`
+- **Host-mapped flags.** AryaInfer's decode is a GPU/CPU handshake through host-mapped memory. `volatile`
   device loads do not bypass the caches on Intel; system-scope atomics do, and they are the only thing
   measured to work (`sycl/probe/doorbell.cpp`, six variants). Host-to-device visibility *during* a kernel
   stays unreliable on this platform, which is why the all-resident path waits for the window instead.
@@ -763,7 +763,7 @@ Measured on an Arc A750 (8 GB, `i915`, PCIe 4.0) with the Flash-Next IQ3_XXS in 
 
 ## Not done
 
-- Images, on both Intel engines. AryaStrata's vision path encodes with `strata-vision` into embeddings the CUDA
+- Images, on both Intel engines. AryaInfer's vision path encodes with `strata-vision` into embeddings the CUDA
   engine reads; neither the SYCL port nor the llama.cpp config wires it yet.
 - Speculative decoding on the llama.cpp path (the GGUF carries no draft layer llama.cpp can use). The SYCL
   port has it (MTP draft layer, `--mtp`).

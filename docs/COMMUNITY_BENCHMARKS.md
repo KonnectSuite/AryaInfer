@@ -1,8 +1,8 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # Community benchmark results
 
-## Measured on the AryaStrata host, October 17, 2026
+## Measured on the AryaInfer host, October 17, 2026
 
 On the **i9-14900KF / RTX 4070 Ti SUPER 16 GB / 64 GB RAM / Windows 11** host,
 Qwen3.8 Flash Next **IQ3_XXS**, engine **0.1.45**, measured **86.1 tokens/s** for
@@ -16,7 +16,7 @@ coding-agent sessions** and **3/3 development DSH adapter replay trials** passed
 These are not general repository-level coding or native desktop acceptance scores.
 
 [Exact profile, raw records, ranges and limitations](../bench/results/2026-10-17-aryastrata-qwen38-iq3xxs/README.md) ·
-[Host setup](ARYASTRATA.md) · [AryaAI development DSH](ARYAAI_DSH.md).
+[Host setup](ARYAINFER.md) · [AryaAI development DSH](ARYAAI_DSH.md).
 
 The measurements below remain attributed upstream reference results unless
 explicitly marked as this host's findings.
@@ -32,7 +32,7 @@ includes hardware, settings, and per-run JSON. The
 [technical details](DETAILS.md#speed-measured) explain the published measurements
 and their limits. Report what you actually measured and label estimates separately.
 
-## The models AryaStrata inherits
+## The models AryaInfer inherits
 
 Qwen3.6-35B-A3B, Ornith 1.5, Gemma 4 26B-A4B and GLM 5.3 Flash run on the engine inherited from PolyStrata, `strata-poly`, so
 their reports are listed here, apart from Strata's. The three below were posted on Reddit by people who ran the
@@ -89,11 +89,11 @@ machine rather than recreating its old physical RAM.
 ### Comparing with llama.cpp
 
 `bench/bench_vs_llama.py` is the script Strata used for
-[its own comparison](../bench/results/2026-10-06-llamacpp-0.6.0/README.md). It starts AryaStrata and llama.cpp's
+[its own comparison](../bench/results/2026-10-06-llamacpp-0.6.0/README.md). It starts AryaInfer and llama.cpp's
 `llama-server` in turns on the same GGUF, one engine on the card at a time, sends both the same prompts and prints
 the medians. With a size that setup has installed:
 
-1. Stop AryaStrata and anything else that uses the card.
+1. Stop AryaInfer and anything else that uses the card.
 2. Download `llama-server` from llama.cpp's [releases](https://github.com/ggml-org/llama.cpp/releases), the CUDA
    build for an NVIDIA card. Qwen3.6's draft block needs `--spec-type draft-mtp`, which b11540 has.
 3. Make a folder for the run and copy `prompt-4k.txt` and `prompt-32k.txt` into it from
@@ -140,7 +140,7 @@ how Strata's comparison ran llama.cpp. The example is for Qwen3.6 UD-Q3_K_M.
 The README's laptop ran it on 2026-10-11 with the engine of 2ba29a383baf and llama.cpp b11540, for
 [Qwen3.6 UD-Q3_K_M](../bench/results/2026-10-11-laptop-qwen36-llamacpp-b11540/README.md) and
 [Tiel Coder UD-Q3_K_XL](../bench/results/2026-10-11-laptop-tiel-llamacpp-b11540/README.md). Against llama.cpp's
-fastest setting in each cell, AryaStrata read the prompts 2.7 to 3.5 times as fast and wrote 1.5 to 1.8 times as
+fastest setting in each cell, AryaInfer read the prompts 2.7 to 3.5 times as fast and wrote 1.5 to 1.8 times as
 fast.
 
 ## Community reports

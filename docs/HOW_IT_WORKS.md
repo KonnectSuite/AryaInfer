@@ -1,9 +1,9 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
-# How does AryaStrata work?
+# How does AryaInfer work?
 
 Models like Qwen3.8-Flash-Next normally run on servers with hundreds of gigabytes of graphics memory. Your graphics
-card has 12-24 GB. AryaStrata makes it fit by **sharing the work across your whole PC** - the same idea as a kitchen, where
+card has 12-24 GB. AryaInfer makes it fit by **sharing the work across your whole PC** - the same idea as a kitchen, where
 the things you use all the time stay on the counter and the rest waits in the pantry. Back to the
 [README](../README.md#how-does-it-work).
 
@@ -51,7 +51,7 @@ This works the same on NVIDIA (CUDA) and AMD (HIP) cards: the same engine, compi
 
 **Long texts are read in big pieces** (up to 8,192 tokens - pieces of words - at a time), which is why a long
 document or code base is read at over 1,000 tokens per second. The experts of the next layer stream to the GPU over
-PCIe while the current layer's attention runs. After the first message, AryaStrata keeps the conversation and reads only
+PCIe while the current layer's attention runs. After the first message, AryaInfer keeps the conversation and reads only
 what is new, so follow-ups start in seconds.
 
 ## More
@@ -61,8 +61,8 @@ The [details](DETAILS.md#how-it-works) explain every part and its numbers, and t
 
 ## Credits
 
-- AryaStrata is a fork of [PolyStrata](https://github.com/VecSzn/PolyStrata), which is a fork of [original Strata](https://github.com/Niko1221/Strata) by Niko1221 and its contributors. The Qwen
-  engine, the installer, the server and the web app are that project's work. AryaStrata inherits the engine from PolyStrata for GLM 5.3
+- AryaInfer is a fork of [PolyStrata](https://github.com/VecSzn/PolyStrata), which is a fork of [original Strata](https://github.com/Niko1221/Strata) by Niko1221 and its contributors. The Qwen
+  engine, the installer, the server and the web app are that project's work. AryaInfer inherits the engine from PolyStrata for GLM 5.3
   Flash ([GLM.md](GLM.md)), whose file is from
   [neuralll](https://huggingface.co/neuralll/GLM-5.3-Flash-GSQ-RCO-3.0bit-Q4Kattn-GGUF).
 - Model: [Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next) by the Qwen team; compressed versions by
@@ -77,7 +77,7 @@ The [details](DETAILS.md#how-it-works) explain every part and its numbers, and t
 
 ## License
 
-AryaStrata is open source under the [MIT License](../LICENSE). A few parts carry their own licenses: `third_party/ggml`
+AryaInfer is open source under the [MIT License](../LICENSE). A few parts carry their own licenses: `third_party/ggml`
 (MIT, llama.cpp / ggml), the web app's font (SIL Open Font License 1.1) and the experimental speed projection's
 vector in `data/experimental-speed-projection` (Qwen Community License 1.0, from the model's activations). The
 models are not part of this repository; each model's own license applies to its files.

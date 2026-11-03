@@ -1,16 +1,16 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
-# Installing AryaStrata for a user (instructions for AI agents)
+# Installing AryaInfer for a user (instructions for AI agents)
 
 This page is written for an AI coding assistant (Claude Code, Cursor, Codex, GitHub Copilot, ...) that a user asked to
-set up AryaStrata on their PC. AryaStrata runs the Qwen3.8-Flash-Next model locally on one NVIDIA or AMD graphics card plus
+set up AryaInfer on their PC. AryaInfer runs the Qwen3.8-Flash-Next model locally on one NVIDIA or AMD graphics card plus
 system RAM, and serves an OpenAI- and Anthropic-compatible API on `http://127.0.0.1:8080`. The human-oriented
 version of everything below is [INSTALL.md](INSTALL.md).
 
 Work through the steps in order. Tell the user what you are doing in plain words; they may not be technical.
 
-For the existing AryaStrata i9-14900KF / RTX 4070 Ti SUPER / 64 GB Windows host,
-use the installed profiles documented in [host findings](ARYASTRATA.md),
+For the existing AryaInfer i9-14900KF / RTX 4070 Ti SUPER / 64 GB Windows host,
+use the installed profiles documented in [host findings](ARYAINFER.md),
 [Qwen3.6 Q4/Q8](QWEN36_HOST_RESULTS.md), [the additional-model
 results](MODEL_ROSTER_HOST_RESULTS.md) and [the 8-bit model set](Q8_HOST_RESULTS.md).
 Those reports list completed measurements and actual context/vision settings. The
@@ -37,7 +37,7 @@ installs what the sections below describe, not the set on this host.
 ## 1. Check the PC
 
 The quickest way is setup's own check, which prints the GPU(s), driver, RAM, CPU, free disk and whether this PC can run
-AryaStrata, and installs nothing except Python and the `.venv` it needs to run (step 2 gets the repository first):
+AryaInfer, and installs nothing except Python and the `.venv` it needs to run (step 2 gets the repository first):
 
 ```
 Windows:  START-HERE.bat --check
@@ -68,7 +68,7 @@ Requirements (details: [INSTALL.md](INSTALL.md#what-you-need)):
 
 If the PC does not meet them, say which part is missing and stop.
 
-## 2. Get AryaStrata
+## 2. Get AryaInfer
 
 ```
 git clone https://github.com/KonnectSuite/AryaStrata.git
@@ -181,7 +181,7 @@ Notes:
 - It downloads about 70 GB from Hugging Face; how long depends on their connection (at 100 Mbit/s roughly 1.5-2
   hours). It can be stopped and continues where it left off.
 - Then it prepares the model for their PC (a few minutes) and, on AMD on Linux, compiles the engine.
-- **When the model starts, the PC can be slow or stop responding for 1-3 minutes** (longest the first time): AryaStrata
+- **When the model starts, the PC can be slow or stop responding for 1-3 minutes** (longest the first time): AryaInfer
   loads 35-55 GB into RAM and locks part of it for the graphics card. That is normal; they should not close the window.
 - Nothing leaves their PC: the model runs locally.
 
@@ -227,11 +227,11 @@ line when it is ready; the engine log is `strata-<model>.log` in the AryaStrata 
 - **Codex CLI and other Responses API apps:** `http://127.0.0.1:8080/v1/responses` (stateless; Codex's
   `config.toml`: [DETAILS.md](DETAILS.md#the-responses-api-and-codex-cli)).
 - **Claude Code:** `ANTHROPIC_BASE_URL=http://127.0.0.1:8080`, `ANTHROPIC_MODEL` set to a Claude model name it knows
-  (AryaStrata ignores the name), and any `ANTHROPIC_AUTH_TOKEN` (or the configured key). Add
+  (AryaInfer ignores the name), and any `ANTHROPIC_AUTH_TOKEN` (or the configured key). Add
   `"fit_max_tokens": true` to `strata-<model>.json`: Claude Code asks for 32,000 tokens of answer in every request,
   and the server refuses a request whose prompt leaves less room than that in the context.
 - **Thinking level:** `"reasoning_effort": "none" | "low" | "medium" | "high"` (default high).
-- AryaStrata answers one request at a time; `"parallel": N` in the model's config (or setup `--parallel N`) decodes up to
+- AryaInfer answers one request at a time; `"parallel": N` in the model's config (or setup `--parallel N`) decodes up to
   N together ([BATCHING.md](BATCHING.md)). API details: [DETAILS.md](DETAILS.md#using-it).
 
 ## 9. When something fails
@@ -240,7 +240,7 @@ line when it is ready; the engine log is `strata-<model>.log` in the AryaStrata 
 | --- | --- |
 | `the NVIDIA driver is too old` | The user updates the driver (NVIDIA App or nvidia.com/drivers) and restarts; rerun setup. |
 | Download or install stopped | Rerun the same setup command; it continues. |
-| `port 8080 is already in use` | AryaStrata is already running (check `/health`), or use `--port 8081`. |
+| `port 8080 is already in use` | AryaInfer is already running (check `/health`), or use `--port 8081`. |
 | Very slow, disk busy, or "the engine stopped unexpectedly" | Not enough free RAM: close programs, or set up a smaller size (`--setup --model Q2_0` or IQ2_XS). |
 | `ExpertCache: cudaMalloc(...) failed: out of memory` with free VRAM (Windows) | The page file is off or tiny: set a fixed size (Custom size, the same initial and maximum size, e.g. 65536 MB) and restart; a page file Windows grows on demand ("System managed") may not grow in time (#60). |
 | `prompt ... exceeds the context` | Rerun setup with `--setup --context <bigger>`. |
@@ -252,6 +252,6 @@ collect `strata-<model>.log` and the setup output, and suggest an issue at https
 
 ## Alternative: the MCP server
 
-AryaStrata also has an MCP server, so an AI tool can check, install, start and stop AryaStrata through tool calls
+AryaInfer also has an MCP server, so an AI tool can check, install, start and stop AryaInfer through tool calls
 (`strata_status`, `strata_models`, `strata_install`, `strata_start`, `strata_stop`, `strata_logs`) instead of the
 shell commands above. See [MCP_SERVER.md](MCP_SERVER.md).

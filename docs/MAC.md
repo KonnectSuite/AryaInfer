@@ -1,8 +1,8 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
-# AryaStrata on a Mac (Apple Silicon, Metal)
+# AryaInfer on a Mac (Apple Silicon, Metal)
 
-AryaStrata runs on Apple Silicon Macs through its own engine on Metal. This is the same engine as on a PC. The NVIDIA
+AryaInfer runs on Apple Silicon Macs through its own engine on Metal. This is the same engine as on a PC. The NVIDIA
 kernels are replaced by Metal ones (`metal/`), and the host code and the server are the PC's. `./setup.sh` sets it up the way
 `START-HERE.bat` does on Windows. There is no ready-made Mac engine: setup builds it from source on your Mac
 (about 1-15 minutes). The NVIDIA, AMD and Intel engines are unchanged.

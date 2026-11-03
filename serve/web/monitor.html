@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AryaCode API Monitor</title>
+<title>AryaInfer API Monitor</title>
 <link rel="icon" href="/web/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/web/tokens.css">
 <style>
@@ -14,7 +14,7 @@ header{height:70px;padding:0 32px;display:flex;align-items:center;justify-conten
 <script defer src="/web/monitor.js"></script>
 </head>
 <body>
-<header><div class="brand"><img src="/web/brand-mark.svg" alt="AryaCode mark">AryaCode <span>Local inference</span></div><div class="controls"><button id="key">API key</button><button id="theme" aria-label="Switch color theme">Light / dark</button></div></header>
+<header><div class="brand"><img src="/web/brand-mark.svg" alt="AryaInfer mark">AryaInfer <span>Local inference</span></div><div class="controls"><button id="key">API key</button><button id="theme" aria-label="Switch color theme">Light / dark</button></div></header>
 <main>
 <div class="top"><div><h1>API Monitor</h1><p class="sub">Model status and every request, in one place.</p></div><div class="controls"><button id="load" class="primary" disabled>Load model</button><button id="unload" disabled>Unload model</button></div></div>
 <div id="error" class="notice" role="status" hidden></div>
@@ -33,6 +33,6 @@ header{height:70px;padding:0 32px;display:flex;align-items:center;justify-conten
 <div id="detail-error" class="detail-error" hidden></div><div class="tabs" role="tablist" aria-label="Request content"><button role="tab" data-pane="input" aria-selected="true">Input</button><button role="tab" data-pane="output" aria-selected="false">Output</button><button role="tab" data-pane="reasoning" aria-selected="false">Reasoning</button><button role="tab" data-pane="response" aria-selected="false">API response</button><button id="copy">Copy</button></div>
 <div id="content-note" class="small" style="margin-top:10px"></div><pre id="content" role="tabpanel" aria-label="Request content"></pre></div>
 </div></div></section>
-<footer><span>Last 100 requests kept in memory until restart. Inputs and outputs stay on this machine.<br>AryaStrata is a fork of <a href="https://github.com/VecSzn/PolyStrata" target="_blank" rel="noopener noreferrer">PolyStrata</a>, a fork of <a href="https://github.com/Niko1221/Strata" target="_blank" rel="noopener noreferrer">Niko1221’s original Strata</a>.</span><span id="updated">Connecting…</span></footer>
+<footer><span>Last 100 requests kept in memory until restart. Inputs and outputs stay on this machine.<br>AryaInfer is a fork of <a href="https://github.com/VecSzn/PolyStrata" target="_blank" rel="noopener noreferrer">PolyStrata</a>, a fork of <a href="https://github.com/Niko1221/Strata" target="_blank" rel="noopener noreferrer">Niko1221’s original Strata</a>.</span><span id="updated">Connecting…</span></footer>
 </main>
 </body></html>

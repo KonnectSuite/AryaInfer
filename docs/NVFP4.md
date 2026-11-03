@@ -1,4 +1,4 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # NVFP4 routed experts
 
@@ -65,7 +65,7 @@ following decode rates:
 | 0.25 | 117 | 124 |
 | 0.10 | 112 | 118 |
 
-## Measured in AryaStrata (2026-10-13)
+## Measured in AryaInfer (2026-10-13)
 
 The numbers above are the fork author's, on his RTX 5090 and 128 GB. These were measured here, on the ready-made GPTQ
 pack (`--family nvfp4 --model NVFP4`).

@@ -1,4 +1,4 @@
-# AryaStrata model shootout — AryaAI promo site
+# AryaInfer model shootout — AryaAI promo site
 
 **One task, six completed outputs (two models produced nothing).** Measured on this host; every number below comes from the saved session logs in each benchmark folder or from rendering the delivered site at 1440×900.
 

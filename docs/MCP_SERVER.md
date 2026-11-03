@@ -1,29 +1,29 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
-# AryaStrata's MCP server: let your AI assistant install and run AryaStrata
+# AryaInfer's MCP server: let your AI assistant install and run AryaInfer
 
 `tools/strata_mcp.py` is an [MCP](https://modelcontextprotocol.io) server for the AI assistant you already use
 (Claude Code, Claude Desktop, Cursor, VS Code, Codex ...). Add it once, then ask in plain words:
 
-- "Install AryaStrata for this PC."
-- "Start AryaStrata." / "Stop AryaStrata."
-- "Is AryaStrata running? How much VRAM does it use?"
-- "Which AryaStrata model fits my PC?"
-- "AryaStrata didn't start - what does the log say?"
-- "How fast is AryaStrata on this PC?" (a short speed test)
-- "How do I connect Open WebUI / the OpenAI SDK / Claude Code to AryaStrata?"
+- "Install AryaInfer for this PC."
+- "Start AryaInfer." / "Stop AryaInfer."
+- "Is AryaInfer running? How much VRAM does it use?"
+- "Which AryaInfer model fits my PC?"
+- "AryaInfer didn't start - what does the log say?"
+- "How fast is AryaInfer on this PC?" (a short speed test)
+- "How do I connect Open WebUI / the OpenAI SDK / Claude Code to AryaInfer?"
 
-The assistant calls the server's tools. The tools run AryaStrata's own setup and start the model the way the start
+The assistant calls the server's tools. The tools run AryaInfer's own setup and start the model the way the start
 scripts do. It is one Python file that uses only the standard library, so it works before setup has created
 `.venv`. It needs Python 3.10 or newer, 64-bit on Windows.
 
 It is not the same thing as [Tools from MCP servers](DETAILS.md#tools-from-mcp-servers). That feature
-(`serve/mcp.py`) lets the *AryaStrata model* call tools from your MCP servers in its chat page. This page is the other
-direction: *your assistant* manages AryaStrata.
+(`serve/mcp.py`) lets the *AryaInfer model* call tools from your MCP servers in its chat page. This page is the other
+direction: *your assistant* manages AryaInfer.
 
 ## Add it
 
-You need a copy of AryaStrata: the zip from GitHub, or `git clone https://github.com/KonnectSuite/AryaStrata`. Below,
+You need a copy of AryaInfer: the zip from GitHub, or `git clone https://github.com/KonnectSuite/AryaStrata`. Below,
 `C:\Users\you\AryaStrata` (Windows) and `/home/you/AryaStrata` (Linux) stand for that folder. Use `python3` on Linux. On
 Windows, use `py` if `python` is not on your PATH.
 
@@ -184,12 +184,12 @@ If a config of the folder sets an `api_key`, the tool sends that key with its ow
   engine log a config names, if that log is inside the AryaStrata folder or the data folder.
 - **Only its own processes.** The server records the process id *and start time* of every process it starts, in
   `.strata-mcp/*.json`. It only ends a process when both match, so a process id the OS has given to another program
-  is never touched. A AryaStrata started some other way (its window, a run script, a service) is only asked over its
+  is never touched. A AryaInfer started some other way (its window, a run script, a service) is only asked over its
   API to unload the model. To end that server, close its window.
 - **Big downloads need a yes.** `strata_install` does nothing until it is called with `confirm: true`. The plan
   shows the download size and the free space first, and the install is refused if the disk is too small.
 - **Local only.** The server checks `127.0.0.1` and never changes the network settings: it does not install with
-  `--host 0.0.0.0` or an API key. To share AryaStrata on your network, run setup yourself (see
+  `--host 0.0.0.0` or an API key. To share AryaInfer on your network, run setup yourself (see
   [Using it](DETAILS.md#using-it)). Experimental options are left off too: the speed projection, rope scaling past
   262K and `--build`. Run setup by hand for those.
 

@@ -1,8 +1,8 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221â€™s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221â€™s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # LFM2.5-24B-A2B (`strata-poly`)
 
-## AryaStrata host findings
+## AryaInfer host findings
 
 UD-Q4_K_XL was installed and measured on our i9-14900KF / RTX 4070 Ti SUPER /
 64 GB Windows host at its native 131,072-token capacity, with FP16 KV and text
@@ -50,7 +50,7 @@ Setup takes UD-Q4_K_XL, or UD-Q3_K_XL when the PC has too little RAM for it; the
 
 ## How fast
 
-The README's numbers are AryaStrata's own benchmark through the server, the test every model of this engine gets
+The README's numbers are AryaInfer's own benchmark through the server, the test every model of this engine gets
 ([BACKENDS.md](BACKENDS.md#a-prompt-of-30000-tokens)): `polystrata.py benchmark --prompt-tokens 24000`, a short chat
 and a prompt built from this repository's documents, 256 tokens written after each, three runs a size and the last
 two below. The engine is 4a644a8d's, with the run configs setup writes for each machine: on both, a prompt is read
@@ -97,7 +97,7 @@ to 21,666 tokens/s; a README cell has the highest of the four.
 On the laptop, UD-Q4_K_XL through each server with the same prompts
 ([the runs](../bench/results/2026-10-15-laptop-lfm25-llamacpp-b11540/README.md)):
 
-| | AryaStrata | llama.cpp b11540, `--n-cpu-moe 25` | llama.cpp b11540, `--fit on` |
+| | AryaInfer | llama.cpp b11540, `--n-cpu-moe 25` | llama.cpp b11540, `--fit on` |
 | --- | ---: | ---: | ---: |
 | Reads about 4,000 tokens | 2,193 to 2,215 tokens/s | 498 to 505 | 483 to 485 |
 | Writes after them | 89 to 94 tokens/s | 57.7 to 58.0 | 55.1 to 55.3 |
@@ -108,14 +108,14 @@ On the laptop, UD-Q4_K_XL through each server with the same prompts
 llama.cpp that [Strata](https://github.com/Niko1221/Strata) v0.1.39 vendors, every layer on the card and flash
 attention on:
 
-| | AryaStrata | llama.cpp, batch of 512 (its default) | llama.cpp, batch of 2,048 |
+| | AryaInfer | llama.cpp, batch of 512 (its default) | llama.cpp, batch of 2,048 |
 | --- | ---: | ---: | ---: |
 | Reads 29,816 tokens | 23,400 tokens/s (18,700 with a batch of 1,024) | 13,311 | 23,614 |
 | Writes, one token at a time | 452 tokens/s | 455 | |
 | Writes after 29,816 tokens, one at a time | 387 tokens/s | 369 | |
 
-With a batch of 2,048 llama.cpp reads the prompt as fast as AryaStrata, 1% faster, and writes as fast one token
-at a time; after the long prompt AryaStrata writes 5% faster. Its guesses add to that where the answer repeats the
+With a batch of 2,048 llama.cpp reads the prompt as fast as AryaInfer, 1% faster, and writes as fast one token
+at a time; after the long prompt AryaInfer writes 5% faster. Its guesses add to that where the answer repeats the
 prompt.
 
 ## Long contexts

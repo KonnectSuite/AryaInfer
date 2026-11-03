@@ -1,4 +1,4 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # Unsloth UD-Q4_K_XL
 
@@ -81,7 +81,7 @@ Hugging Face snapshot symlinks work if you pass the snapshot's file name, not th
 
 ## The pack (by hand)
 
-Build AryaStrata (or install 0.1.31+), then, from the repository root, with gguf-py from the pinned llama.cpp
+Build AryaInfer (or install 0.1.31+), then, from the repository root, with gguf-py from the pinned llama.cpp
 (setup installs it; `STRATA_GGUF_PY` can point to its `gguf-py` folder):
 
 ```sh
@@ -110,7 +110,7 @@ not the original BF16 checkpoint. The output matches llama.cpp's on the same fil
 
 ## The MTP draft layer
 
-The draft layer is the base model's, the same one the other packs use. If setup installed AryaStrata, you have it
+The draft layer is the base model's, the same one the other packs use. If setup installed AryaInfer, you have it
 (`mtp/rt` in `PolyStrata-data`). Otherwise build it as [docs/ORCA.md](ORCA.md#preparation) shows (`tools/mtp_fetch.py`,
 `tools/mtp_pack.py`, `tools/mtp_rt.py`, then copy `data/draft_vocab.bin` to `mtp/rt/`).
 
@@ -193,39 +193,39 @@ also fails, the warning preserves both the GPU allocation or mapping error and t
 
 ## Quality: against llama.cpp on the same file
 
-AryaStrata and llama.cpp (the pinned commit `3cf0325`, a CPU build reading the GGUF memory-mapped) were given the same
-token sequences, and at every position each wrote its 20 most likely next tokens with their log-probabilities: AryaStrata
+AryaInfer and llama.cpp (the pinned commit `3cf0325`, a CPU build reading the GGUF memory-mapped) were given the same
+token sequences, and at every position each wrote its 20 most likely next tokens with their log-probabilities: AryaInfer
 through its verify windows (`STRATA_LOGPOS` with `STRATA_LOGPOS_TOPK=20`), llama.cpp from `llama_get_logits_ith` over
-one batch. AryaStrata ran with the recommended settings (RAM budget 40 GiB, the MTP draft layer on, greedy,
+one batch. AryaInfer ran with the recommended settings (RAM budget 40 GiB, the MTP draft layer on, greedy,
 `--adapt-every 100000` so the expert cache does not move during the run). Per position: whether the most likely token is the same (argmax
 agreement), how many of the 5 / 10 most likely tokens both have, the KL divergence (llama.cpp's distribution against
-AryaStrata's, over llama.cpp's top 20 plus one bucket for the rest), and the perplexity of the sequence under each.
+AryaInfer's, over llama.cpp's top 20 plus one bucket for the rest), and the perplexity of the sequence under each.
 
-| Token set | Positions | Argmax agreement | Top-5 / top-10 overlap | KL | Perplexity AryaStrata / llama.cpp |
+| Token set | Positions | Argmax agreement | Top-5 / top-10 overlap | KL | Perplexity AryaInfer / llama.cpp |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Code: AryaStrata's greedy answer to a coding prompt (an LRU cache in Python, 56-token prompt) | 400 | **99.0%** | 95.6% / 95.3% | 0.0008 | 1.067 / 1.070 |
-| Thinking: AryaStrata's greedy answer to a reasoning puzzle (with thinking, 55-token prompt) | 324 | **97.5%** | 96.2% / 96.4% | 0.0016 | 1.107 / 1.106 |
-| After a 16K prompt: AryaStrata's greedy continuation (256 tokens) of the 16,384 real-text tokens below | 256 | 90.2% | 88.1% / 89.3% | 0.039 | 1.619 / 1.623 |
+| Code: AryaInfer's greedy answer to a coding prompt (an LRU cache in Python, 56-token prompt) | 400 | **99.0%** | 95.6% / 95.3% | 0.0008 | 1.067 / 1.070 |
+| Thinking: AryaInfer's greedy answer to a reasoning puzzle (with thinking, 55-token prompt) | 324 | **97.5%** | 96.2% / 96.4% | 0.0016 | 1.107 / 1.106 |
+| After a 16K prompt: AryaInfer's greedy continuation (256 tokens) of the 16,384 real-text tokens below | 256 | 90.2% | 88.1% / 89.3% | 0.039 | 1.619 / 1.623 |
 | Real text after a 16K prompt: the last 510 tokens of 16,384 tokens of this repository's docs and code | 510 | 91.2% | 88.3% / 89.9% | 0.035 | 4.27 / 4.29 |
 | The same 511 positions with only 512 tokens before them | 511 | 89.2% | 86.0% / 86.3% | 0.061 | 8.99 / 8.87 |
 
 For comparison, [eddoursul/Strata](https://github.com/eddoursul/Strata) reported 98.2-99.3% (code), 95.6-95.8%
 (thinking) and 97.7% (after a 16K prompt) for the same file against llama.cpp on an RTX 3090.
 
-**Where they differ:** at near-ties. Grouped by llama.cpp's own gap between its two most likely tokens, AryaStrata picks
+**Where they differ:** at near-ties. Grouped by llama.cpp's own gap between its two most likely tokens, AryaInfer picks
 the same token at every position of the code and thinking answers where that gap is 0.2 or more (695 of 695) and at
 every position after the 16K prompt where it is 0.5 or more (144 of 144 in the continuation, 254 of 254 in the real
 text; 50 of 54 and 117 of 121 between 0.2 and 0.5). Text after a long document has many more near-ties than a short
 answer (58 of the continuation's 256 positions and 135 of the real text's 510 have a gap under 0.2, against 13 of the
 code answer's 400), which is why its agreement is lower. It is not the long context itself: the same real-text
 positions after only 512 tokens agree a little less (89.2%), and the perplexities match within 3% in every set. For
-scale, AryaStrata's own greedy run and its teacher-forced rerun of the continuation pick different tokens at 6% of the
+scale, AryaInfer's own greedy run and its teacher-forced rerun of the continuation pick different tokens at 6% of the
 positions (93.8% the same: other window sizes, other experts in VRAM), the same kind of near-tie flips. The 16K
-prompts were read by AryaStrata's batched prompt path (15,872 tokens), the rest through the verify windows. These numbers
+prompts were read by AryaInfer's batched prompt path (15,872 tokens), the rest through the verify windows. These numbers
 are the FP16 prompt path's (the released engine's); with the MMQ prompt path (`-DSTRATA_MMQ_KQUANTS=ON`, above) the
 continuation after the 16K prompt agrees at 92.2% (KL 0.029, three runs, identical).
 
-To repeat it: AryaStrata's side is `STRATA_LOGPOS=<file>` with `STRATA_LOGPOS_TOPK=20` (engine 0.1.32) on a serve
+To repeat it: AryaInfer's side is `STRATA_LOGPOS=<file>` with `STRATA_LOGPOS_TOPK=20` (engine 0.1.32) on a serve
 engine with `--short-read` covering the positions to compare; llama.cpp's side was a short program over
 `llama_decode` / `llama_get_logits_ith` writing the same top 20 per position.
 

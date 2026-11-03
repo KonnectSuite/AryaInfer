@@ -1,4 +1,4 @@
-<h1 align="center">AryaStrata</h1>
+<h1 align="center">AryaInfer</h1>
 
 Local AI for coding, coding agents and image understanding, configured and benchmarked against our own host.
 
@@ -6,14 +6,14 @@ Local AI for coding, coding agents and image understanding, configured and bench
 
 Translations retain inherited guidance; current host results and validation status are maintained on this English page.
 
-AryaStrata is a fork of **[PolyStrata](https://github.com/VecSzn/PolyStrata)** by VecSzn,
+AryaInfer is a fork of **[PolyStrata](https://github.com/VecSzn/PolyStrata)** by VecSzn,
 which is a fork of **[the original Strata](https://github.com/Niko1221/Strata)** by
 Niko1221 and the Strata contributors. Their engines, tooling and research make this
 fork possible. See [credits](CREDITS.md) and the original [MIT license](LICENSE).
 
 [Supported models](#supported-models) · [Host results](#measured-on-this-host) · [Install](#install) · [Using it](#using-it) · [How it works](#how-does-it-work) · [Support](#support-and-contributing)
 
-AryaStrata inherits Strata and PolyStrata’s local inference engines, installer, web chat,
+AryaInfer inherits Strata and PolyStrata’s local inference engines, installer, web chat,
 live resource monitor, and compatible APIs. It shares model work across GPU memory,
 system RAM, CPU and storage so large mixture-of-experts models can run on a PC.
 Our focus is coding agents, AryaAI development integration, and reproducible results
@@ -21,7 +21,7 @@ on the hardware below. Models run locally; connected clients and tools have thei
 own network behavior.
 
 <p align="center"><a href="https://github.com/Niko1221/Strata/releases/download/v0.1.10/Pagoda.mp4"><img src="docs/media/pagoda-preview.webp" width="720" alt="Original Strata voxel pagoda garden demonstration"></a><br>
-<sub>Original Strata demonstration by Niko1221 and contributors: Qwen3.8-Flash-Next IQ3_S, RTX 5070, 128K context. This is an upstream example, not an AryaStrata host result. <a href="https://github.com/Niko1221/Strata/releases/download/v0.1.10/Pagoda.mp4">Watch the video</a>.</sub></p>
+<sub>Original Strata demonstration by Niko1221 and contributors: Qwen3.8-Flash-Next IQ3_S, RTX 5070, 128K context. This is an upstream example, not an AryaInfer host result. <a href="https://github.com/Niko1221/Strata/releases/download/v0.1.10/Pagoda.mp4">Watch the video</a>.</sub></p>
 
 ## Supported models
 
@@ -32,13 +32,13 @@ engine and PolyStrata’s additional `strata-poly` engine. Support in the codeba
 does not mean every model, quantization or platform has been tested on our PC.
 The linked guides retain upstream measurements, hardware requirements and limitations.
 
-| Model family | Engine / inherited platform path | Image input | AryaStrata host status | Guide |
+| Model family | Engine / inherited platform path | Image input | AryaInfer host status | Guide |
 | --- | --- | --- | --- | --- |
 | **Qwen3.8-Flash-Next** | Strata; NVIDIA/AMD, Windows/Linux with platform-specific limits | Yes | **IQ3_XXS running and tuned; text/coding benchmarked; GPU vision smoke-tested** | [Models and variants](docs/MODELS.md) |
 | **GLM 5.3 Flash** | `strata-poly`; NVIDIA/Linux | No | Not validated here; substantial RAM requirements | [GLM](docs/GLM.md) |
 | **DeepSeek V4 Flash** | `strata-poly`; NVIDIA/Linux primary path | No | Not validated here; substantial RAM requirements | [DeepSeek](docs/DEEPSEEK.md) |
 | **LFM2.5-24B-A2B** | `strata-poly`; NVIDIA/Windows/Linux | No | **UD-Q4_K_XL: 128K text; short native-thinking coding (4K output) 18/18**; long coding 0/3, recall 2/6: not recommended for large-context agents | [Measured host results](docs/MODEL_ROSTER_HOST_RESULTS.md) · [Backends](docs/BACKENDS.md) |
-| **Flint 40B-A2.5B** | `strata-poly`; NVIDIA/Windows/Linux | No | **UD-Q4_K_XL: 262,144-token context; read 8K/32K/129K/243K-token prompts at 3,707/4,036/2,227/1,430 tok/s and wrote at 121/93/58/22 tok/s**; throughput only, no coding suite run here | [Measured host results](docs/ARYASTRATA.md#flint-40b-a25-october-23-2026) · [Flint](docs/FLINT.md) |
+| **Flint 40B-A2.5B** | `strata-poly`; NVIDIA/Windows/Linux | No | **UD-Q4_K_XL: 262,144-token context; read 8K/32K/129K/243K-token prompts at 3,707/4,036/2,227/1,430 tok/s and wrote at 121/93/58/22 tok/s**; throughput only, no coding suite run here | [Measured host results](docs/ARYAINFER.md#flint-40b-a25-october-23-2026) · [Flint](docs/FLINT.md) |
 | **Qwen3.8 27B** | `strata-poly`; dense `qwen35`, NVIDIA/Windows (CUDA `sm_89` built and run here) | Yes | **IQ2_S + `--kv q4_0`: 200,069-token prompt with its needle found (417 tok/s read, 14.6 tok/s written); IQ3_XXS + q4_0: 96K; 32K with a q8_0 cache; a picture read correctly (card "4711")**; against llama.cpp on the same file the tokenization is identical, the first step's five likeliest ids are within 0.0031, and the greedy replies agree to the first near tie | [Qwen3.8 27B](docs/QWEN38-27B.md) · [Backends](docs/BACKENDS.md) |
 | **Qwen3.6-35B-A3B** | `strata-poly`; NVIDIA/Windows/Linux; Strata path for selected sizes | Yes | **Q4 and Q8: 262K context with GPU vision; coding, image and recall checks passed** | [Measured host results](docs/QWEN36_HOST_RESULTS.md) · [Backends](docs/BACKENDS.md) |
 | **Clover-35B-A3B-Preview** | `strata-poly`; NVIDIA/Windows/Linux | No | Not validated here; upstream measures 68-76 tok/s writing and 1,560-1,700 tok/s reading a 32K prompt on an 8 GB laptop card | [Clover](docs/models/clover.md) |
@@ -102,7 +102,7 @@ These checks do not establish general repository-level coding quality or a fully
 qualified native desktop workflow. Raw records, ranges, exact model/build hashes,
 resource observations and methodology: [full host benchmark](bench/results/2026-10-17-aryastrata-qwen38-iq3xxs/README.md).
 
-[Current host setup](docs/ARYASTRATA.md) · [AryaAI development DSH profile](docs/ARYAAI_DSH.md)
+[Current host setup](docs/ARYAINFER.md) · [AryaAI development DSH profile](docs/ARYAAI_DSH.md)
 
 Additional full-context host results: [Qwen3.6 Q4 versus Q8](docs/QWEN36_HOST_RESULTS.md)
 and [MiniCPM-V 4.7 Q4 with vision](docs/MINICPMV_HOST_RESULTS.md). The MiniCPM
@@ -160,7 +160,7 @@ add host results for each model as validation is completed.
 <summary>Expand original Strata / PolyStrata speed tables and methodology</summary>
 
 <p align="center"><img src="docs/media/speed.svg" width="820" alt="Upstream Qwen3.6 speed illustration: laptop and RTX 5090 measurements"><br>
-<sub>PolyStrata reference measurements on upstream hardware; these are not AryaStrata host results.</sub></p>
+<sub>PolyStrata reference measurements on upstream hardware; these are not AryaInfer host results.</sub></p>
 
 A token is about ¾ of a word.
 
@@ -431,7 +431,7 @@ as fast, with Qwen3.6 and with Tiel Coder ([the two runs](docs/COMMUNITY_BENCHMA
 ## Hardware requirements
 
 These are inherited requirements, installer estimates and upstream test coverage,
-not additional AryaStrata host qualifications. In particular, the large GLM and
+not additional AryaInfer host qualifications. In particular, the large GLM and
 DeepSeek configurations need more RAM than our 64 GB host for the documented
 in-memory setups. Check each model guide before downloading.
 
@@ -588,12 +588,12 @@ Set up AryaStrata on this PC for me: https://github.com/KonnectSuite/AryaStrata 
 ```
 
 It checks your graphics card, RAM and disk and picks the model that fits. Then it installs and starts it and tells
-you how to connect your apps. AI tools can also install, start and stop AryaStrata through its
+you how to connect your apps. AI tools can also install, start and stop AryaInfer through its
 [MCP server](docs/MCP_SERVER.md).
 
 ### Or do it yourself
 
-[Download AryaStrata](https://github.com/KonnectSuite/AryaStrata/archive/refs/heads/main.zip) and unzip it (or `git clone` it).
+[Download AryaInfer](https://github.com/KonnectSuite/AryaStrata/archive/refs/heads/main.zip) and unzip it (or `git clone` it).
 **Windows:** double-click **`START-HERE.bat`**. **Linux:** run **`./setup.sh`** in the AryaStrata folder.
 
 **Mac (Apple Silicon, M1 to M5, macOS 15 or newer):** install Apple's Command Line Tools once
@@ -610,17 +610,17 @@ The installer finds your card and sets up the right engine for it. It asks you a
 
 Press Enter each time for the recommended answer. Then it downloads the model (about 70 GB for Qwen3.8-Flash-Next,
 79 to 114 GB for GLM 5.3 Flash, 91 GB for DeepSeek V4 Flash, 29 to 48 GB for Kolibri 1, 11 to 42 GB for the other eight) and starts it. If the download stops, run it again:
-it continues where it left off. Your browser opens the AryaStrata app at `http://127.0.0.1:8080`.
+it continues where it left off. Your browser opens the AryaInfer app at `http://127.0.0.1:8080`.
 
 All twelve are in the installer's list of models. `./setup.sh --family glm`, `deepseek`, `lfm25`, `flint`, `qwen36`, `clover`, `ornith`,
 `gemma4`, `tiel`, `minicpmv` or `kolibri` goes straight to one ([what it asks and writes](docs/GLM.md#install)).
 
 > **While the model starts, your PC can be slow or stop responding for 1-3 minutes** (longest the first time).
-> AryaStrata loads 35-55 GB into your RAM and locks part of it for the graphics card. This is normal. Wait, and don't
-> close the window. The window shows what AryaStrata is doing.
+> AryaInfer loads 35-55 GB into your RAM and locks part of it for the graphics card. This is normal. Wait, and don't
+> close the window. The window shows what AryaInfer is doing.
 
 **Next time**, run `START-HERE.bat` (or `./setup.sh`) again. It starts right away and downloads nothing twice. Close
-its window to stop the model. `UPDATE.bat` (`./update.sh`) updates AryaStrata without starting it. Updating, Docker,
+its window to stop the model. `UPDATE.bat` (`./update.sh`) updates AryaInfer without starting it. Updating, Docker,
 several cards, where the files go and every option: [docs/INSTALL.md](docs/INSTALL.md).
 
 **Is it fast on your PC?** Run `BENCH.bat` (`./bench.sh`): about 5-10 minutes, it measures chat, 4K/16K prompts and an agent-style session with your own settings and writes a report to share ([how](docs/COMMUNITY_BENCHMARKS.md#run-the-benchmark)).
@@ -649,11 +649,11 @@ sizes are faster. Larger sizes are a bit smarter.
 - **[Swift 1.5](docs/MODELS.md#swift-15):** a fine-tune that thinks for a much shorter time before it answers. You
   get the answer sooner, at about the same quality.
 - **[Unsloth UD-IQ4_XS](docs/MODELS.md#unsloth-ud-iq4_xs):** Unsloth's ~4-bit version, between IQ3_S and
-  UD-Q4_K_XL in quality. A 94 GB download. With less than ~80 GB of RAM, AryaStrata reads part of it from the SSD
+  UD-Q4_K_XL in quality. A 94 GB download. With less than ~80 GB of RAM, AryaInfer reads part of it from the SSD
   while it answers, so it is slower there (an NVMe SSD helps).
 - **[Unsloth UD-Q4_K_XL, UD-Q5_K_XL, UD-Q6_K_XL and Q8_0](docs/MODELS.md#unsloths-files-ud-iq4_xs-to-q8_0):**
   4- to 8-bit, closer to the full model (93-95% the same next token as Q8_0). Fast where every expert fits in RAM
-  (~88 GB for UD-Q4_K_XL up to ~136 GB for Q8_0); with less RAM AryaStrata reads part of them from the SSD while it
+  (~88 GB for UD-Q4_K_XL up to ~136 GB for Q8_0); with less RAM AryaInfer reads part of them from the SSD while it
   answers, which is much slower (7-8.5 tokens/s for UD-Q4_K_XL on a 64 GB PC).
 - **[OrcaRouter's Uncensored IQ3_XXS](docs/MODELS.md#orcarouter-uncensored-iq3_xxs):** you set it up by hand. It is
   not in the installer's menu.
@@ -800,6 +800,8 @@ All twelve models are used the same way: the same app, the same API.
     ([setup](docs/DETAILS.md#the-responses-api-and-codex-cli)).
 - **Thinking:** choose **off, low, medium or high** in the chat menu or in your app's "reasoning effort". Off is the
   fastest. High is best for hard questions.
+- **Tools in the chat page:** give the model your own [MCP servers](docs/DETAILS.md#tools-from-mcp-servers) and a
+  [SearXNG web search](docs/SEARCH.md) from **Monitor** - add them there, and they are offered from the next answer on.
 - **From your phone or another PC:** `START-HERE.bat --setup --host 0.0.0.0 --api-key <secret>`. Always set a key.
 
 The following behavior and platform differences are inherited from the upstream
@@ -823,7 +825,7 @@ More: [where your chats are stored](docs/INSTALL.md#where-things-are-stored), [t
 These options have not been benchmarked in our selected host profile.
 
 Two opt-in settings (by RubenTorney, #1904 and #1905). They help when you run one graphics card and your RAM holds
-every expert (AryaStrata's arena mode, for example Q2_0 or IQ3_XXS on a 64 GB PC). Open your config,
+every expert (AryaInfer's arena mode, for example Q2_0 or IQ3_XXS on a 64 GB PC). Open your config,
 `strata-<model>.json` in the AryaStrata data folder ([where](docs/INSTALL.md#where-things-are-stored)), and add:
 
 - **Faster decode:** `"--adapt-async", "1"` to the `"args"` list. The expert cache then updates on a helper thread
@@ -838,7 +840,7 @@ every expert (AryaStrata's arena mode, for example Q2_0 or IQ3_XXS on a 64 GB PC
 "env": { "STRATA_PIN_BY_NEED": "1" }
 ```
 
-Restart AryaStrata (`START-HERE.bat` or `./setup.sh`) after the change. To undo, remove the two entries.
+Restart AryaInfer (`START-HERE.bat` or `./setup.sh`) after the change. To undo, remove the two entries.
 
 ## How does it work?
 
@@ -848,7 +850,7 @@ remain upstream observations unless included in our host report. Credit for the
 original engineering and visuals belongs to those projects and their contributors.
 
 Models like these usually run on servers with hundreds of gigabytes of graphics memory. Your graphics card has
-8-32 GB. AryaStrata makes the model fit by **sharing the work across your whole PC**. Think of a kitchen: the things
+8-32 GB. AryaInfer makes the model fit by **sharing the work across your whole PC**. Think of a kitchen: the things
 you use all the time stay on the counter, and the rest waits in the pantry.
 
 ### Qwen3.8-Flash-Next
@@ -1025,7 +1027,7 @@ Every part and its numbers: [docs/BACKENDS.md](docs/BACKENDS.md#how-a-backend-wo
 
 | Topic | Guide |
 | --- | --- |
-| This PC, migration and selected Qwen settings | [Host setup and findings](docs/ARYASTRATA.md) |
+| This PC, migration and selected Qwen settings | [Host setup and findings](docs/ARYAINFER.md) |
 | AryaAI development connection and output/context budget | [DSH integration](docs/ARYAAI_DSH.md) |
 | Model quantizations, variants and fit | [Models](docs/MODELS.md) · [Quantizations](docs/QUANTS.md) |
 | Setup, updates, storage paths and Docker | [Installation](docs/INSTALL.md) · [Assistant setup](docs/AI_SETUP.md) |
@@ -1035,7 +1037,7 @@ Every part and its numbers: [docs/BACKENDS.md](docs/BACKENDS.md#how-a-backend-wo
 
 ## Support and contributing
 
-For AryaStrata setup, integration or reproducibility problems, open an
+For AryaInfer setup, integration or reproducibility problems, open an
 [issue in this fork](https://github.com/KonnectSuite/AryaStrata/issues). Include
 your OS, CPU, GPU/VRAM, RAM, model and quantization, engine version, context and
 vision settings, reproduction steps, and relevant logs with secrets and private
@@ -1055,10 +1057,10 @@ for comparison; it supplements the current guide rather than replacing it.
 
 ## Credits and license
 
-**AryaStrata → PolyStrata → original Strata.** This is a fork of
+**AryaInfer → PolyStrata → original Strata.** This is a fork of
 [PolyStrata](https://github.com/VecSzn/PolyStrata) by VecSzn, itself a fork of
 [Strata](https://github.com/Niko1221/Strata) by Niko1221 and contributors.
-AryaStrata contributes host configuration, integration, benchmarking and
+AryaInfer contributes host configuration, integration, benchmarking and
 documentation; it currently uses the upstream release engine without engine-code
 changes. See [CREDITS.md](CREDITS.md) and the preserved [MIT notice](LICENSE).
 

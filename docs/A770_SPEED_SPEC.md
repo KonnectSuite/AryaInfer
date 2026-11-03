@@ -1,11 +1,11 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # A770 decode optimization specification
 
 ## Objective and completion criteria
 
 Achieve **at least 20 generated tokens/second in decode on the local Intel Arc
-A770 running AryaStrata**, with reproducible benchmark evidence and correct output.
+A770 running AryaInfer**, with reproducible benchmark evidence and correct output.
 This specification describes the next optimization campaign; it does not claim
 that the target has already been met.
 
@@ -32,7 +32,7 @@ Completion requires:
 
 ## Verified baseline and hardware
 
-- Worktree: a local AryaStrata v0.1.40.3 checkout.
+- Worktree: a local AryaInfer v0.1.40.3 checkout.
 - Current source baseline: `501f675727ae8a54abed3ec467de1cbfbecd03ea`, branch
   `a770-speed-upstream`, based on upstream `main` at `fb58e0d` when last checked.
 - Existing upstream work: correctness PR #1602 and draft performance PR #1710.
@@ -491,7 +491,7 @@ Arcint reference checkout: a local temporary checkout, reviewed revision
 Arcint's headline A770 coder numbers use a different model/configuration.
 Its Flash-Next results are mainly on a B60. Treat those numbers as evidence for
 candidate techniques, not predictions for this A770 workload. Several arcint
-ideas already originated in AryaStrata; audit existing equivalents before porting.
+ideas already originated in AryaInfer; audit existing equivalents before porting.
 
 ## Execution record
 

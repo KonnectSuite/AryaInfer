@@ -1,10 +1,10 @@
-# Qwen3.6 Q4 versus Q8: AryaStrata host results
+# Qwen3.6 Q4 versus Q8: AryaInfer host results
 
 Both installed templates support thinking Off/On. Historical `low` requests
 enable native thinking; Low/Medium/High are aliases in AryaAI, not three
 distinct strengths. See the [connection audit](ARYAAI_CONNECTION_AUDIT.md).
 
-Measured on the i9-14900KF, RTX 4070 Ti SUPER 16 GB, 64 GB RAM Windows host. AryaStrata is a fork of PolyStrata, which is a fork of Niko1221's original Strata.
+Measured on the i9-14900KF, RTX 4070 Ti SUPER 16 GB, 64 GB RAM Windows host. AryaInfer is a fork of PolyStrata, which is a fork of Niko1221's original Strata.
 
 Both model quants use the source-matched PolyStrata backend, a 262,144-token context with the whole Q8_0 KV cache allocated, GPU vision at up to 1,024 image tokens, one conversation slot, and tail skipping disabled. Q8 model weights and Q8 KV cache are separate choices.
 

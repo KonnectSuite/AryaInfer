@@ -1,6 +1,6 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](docs/ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](docs/ARYAINFER.md).
 
-<h1 align="center">AryaStrata</h1>
+<h1 align="center">AryaInfer</h1>
 
 [English](README.md) · [简体中文](README.zh-CN.md) · **日本語** · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · [Português](README.pt-BR.md)
 
@@ -9,14 +9,14 @@ Qwen3.8-Flash-Next、GLM 5.3 Flash、DeepSeek V4 Flash、LFM2.5、Flint、Qwen3.
 
 <p align="center"><img src="docs/media/speed.svg" width="820" alt="回答を書く速さ（トークン/秒）：8 GB のノート PC で Qwen3.6-35B-A3B は 94〜100、RTX 5090 で 394〜395"></p>
 
-<p align="center"><img src="docs/media/claude-code-demo.gif" width="820" alt="ターミナルの Claude Code と、その横の AryaStrata の API Monitor"><br>
+<p align="center"><img src="docs/media/claude-code-demo.gif" width="820" alt="ターミナルの Claude Code と、その横の AryaInfer の API Monitor"><br>
 <sub>Claude Code と Qwen3.6-35B-A3B UD-Q3_K_M、8 GB のカードのノート PC で、実時間：小さなプログラムに <code>--json</code> オプションを足し、テストを書いて実行します。サーバーは起動時に Claude Code のシステムプロンプトを読んであります（<code>"warm_start": true</code>）。</sub></p>
 
-<p align="center"><a href="https://github.com/Niko1221/Strata/releases/download/v0.1.10/Pagoda.mp4"><img src="docs/media/pagoda-preview.webp" width="720" alt="AryaStrata のモデルが書いたボクセルの五重塔の庭。ブラウザで動いている様子"></a><br>
+<p align="center"><a href="https://github.com/Niko1221/Strata/releases/download/v0.1.10/Pagoda.mp4"><img src="docs/media/pagoda-preview.webp" width="720" alt="AryaInfer のモデルが書いたボクセルの五重塔の庭。ブラウザで動いている様子"></a><br>
 <sub>ボクセルの五重塔の庭。1 回のプロンプトで作成し、RTX 5070 上の <a href="https://github.com/Niko1221/Strata">Strata</a>（Qwen3.8-Flash-Next IQ3_S、128K コンテキスト）で実行 ·
 <a href="https://github.com/Niko1221/Strata/releases/download/v0.1.10/Pagoda.mp4">動画全体（49 秒）</a></sub></p>
 
-AryaStrata は、ふつうはサーバーが必要な大きな AI モデルを普通の PC で動かします。チャットをしたり、コードを書いたり、
+AryaInfer は、ふつうはサーバーが必要な大きな AI モデルを普通の PC で動かします。チャットをしたり、コードを書いたり、
 アプリやコーディングエージェントと連携したりできます。データが PC の外に出ることはありません。
 
 動かせるモデルは 12 つで、エンジンは 2 つです。
@@ -25,7 +25,7 @@ AryaStrata は、ふつうはサーバーが必要な大きな AI モデルを�
   グラフィックカード、Windows または Linux。画像も読めます。エンジンは
   [Strata](https://github.com/Niko1221/Strata) のものをそのまま使っています。
 
-残りの 11 個は AryaStrata のために書いたエンジンで動きます。NVIDIA カードが 1 枚必要です（[2 枚](docs/MULTI_GPU.md#the-strata-poly-models)でも動きます）。11 個とも Linux で動き、
+残りの 11 個は AryaInfer のために書いたエンジンで動きます。NVIDIA カードが 1 枚必要です（[2 枚](docs/MULTI_GPU.md#the-strata-poly-models)でも動きます）。11 個とも Linux で動き、
 GLM 5.3 Flash と DeepSeek V4 Flash 以外は Windows でも動きます。まだ実験的で、動かしたのは 32 GB のカードを載せた 1 台の PC と、
 小さい 8 つについては 8 GB のカードを載せたノート PC 1 台だけです。
 
@@ -46,7 +46,7 @@ GLM 5.3 Flash と DeepSeek V4 Flash 以外は Windows でも動きます。ま�
 
 サーバーは動かしたまま、インストール済みのモデルを切り替えられます（[方法](docs/BACKENDS.md#changing-the-model)、英語）。
 
-AryaStrata は Niko1221 の [Strata](https://github.com/Niko1221/Strata) をもとにしています。
+AryaInfer は Niko1221 の [Strata](https://github.com/Niko1221/Strata) をもとにしています。
 別のリポジトリにしている理由、AMD や VRAM の少ないカード、ファインチューンなどの質問は [FAQ](docs/FAQ.md)（英語）にあります。
 
 ## どのくらい速い？
@@ -90,7 +90,7 @@ NVIDIA：Q2_0 はエンジン 0.1.36、ほかの行は 0.1.26 で測定（回答
 
 ### GLM 5.3 Flash
 
-AryaStrata が 1 台のワークステーションで、短いチャットと 29K トークンのプロンプトで測った値です。
+AryaInfer が 1 台のワークステーションで、短いチャットと 29K トークンのプロンプトで測った値です。
 
 <table>
 <tr><th>NVIDIA: RTX 5090 (32 GB), Xeon Platinum 8470Q (25 vCPU), 120 GB RAM</th></tr>
@@ -110,7 +110,7 @@ GLM 5.3 Flash はほかのモデルよりずっと大きく、このカードの
 
 ### DeepSeek V4 Flash
 
-AryaStrata が同じワークステーションで、短いチャットと 30K トークンのプロンプトで測った値です。
+AryaInfer が同じワークステーションで、短いチャットと 30K トークンのプロンプトで測った値です。
 
 <table>
 <tr><th>NVIDIA: RTX 5090 (32 GB), Xeon Platinum 8470Q (25 vCPU), 120 GB RAM</th></tr>
@@ -160,14 +160,14 @@ AryaStrata が同じワークステーションで、短いチャットと 30K �
 ノート PC では Q8_0 が 32 GB の RAM をいっぱいに使うので遅くなります。ワークステーションにはどのサイズもモデル全体が載ります。
 
 ノート PC では、そこで試した設定でいちばん速かった `--n-cpu-moe 25` の llama.cpp b11540 が 32,000 トークンのプロンプトを 530 トークン/秒で読み、そのあと 53 で書きました。
-AryaStrata は 3,540 で読み、71〜73 で書きました。
-ワークステーションでは llama-bench が 29,816 トークンを llama.cpp の既定のバッチ 512 で 13,300 トークン/秒、2,048 で 23,600 と AryaStrata と同じ速さで読み、1 トークンずつ 455 トークン/秒、そのプロンプトのあとは 369 で書きました。
-AryaStrata は 452 と 387 です。
+AryaInfer は 3,540 で読み、71〜73 で書きました。
+ワークステーションでは llama-bench が 29,816 トークンを llama.cpp の既定のバッチ 512 で 13,300 トークン/秒、2,048 で 23,600 と AryaInfer と同じ速さで読み、1 トークンずつ 455 トークン/秒、そのプロンプトのあとは 369 で書きました。
+AryaInfer は 452 と 387 です。
 128K のコンテキストで約 124,000 トークンのプロンプトを、ワークステーションは 8.7 秒で読んで答え、ノート PC は 45 秒で読みました。
 
 ### Qwen3.6-35B-A3B
 
-AryaStrata が 2 台の PC で、短いチャットと 3 万〜3.2 万トークンのプロンプトで測りました。左は 8 GB のカードを載せたノート PC で、
+AryaInfer が 2 台の PC で、短いチャットと 3 万〜3.2 万トークンのプロンプトで測りました。左は 8 GB のカードを載せたノート PC で、
 カードに載らないエキスパートはプロセッサーが計算します。右はカードにモデル全体が載るワークステーションです。
 
 <table>
@@ -305,12 +305,12 @@ AryaStrata が 2 台の PC で、短いチャットと 3 万〜3.2 万トーク�
 10,000 トークンのプロンプトは、ノート PC で毎秒 1,260 トークン、ワークステーションで毎秒 8,790 トークンで読みます。
 ノート PC では Q6_K が 32 GB の RAM を使い切るので、そこでは遅くなります。
 
-AryaStrata 独自のエンジンで動く 8 つのモデルは、付属のベンチマークで測りました。あなたの PC でも実行できます：
+AryaInfer 独自のエンジンで動く 8 つのモデルは、付属のベンチマークで測りました。あなたの PC でも実行できます：
 `python aryastrata.py benchmark --model <name> --prompt-tokens 24000`
 （[何を送り、何を表示するか](docs/BACKENDS.md#benchmark)、英語）。
 ほかの人が自分のカードで測った結果と、あなたの PC で llama.cpp と比べる方法：
 [コミュニティの測定結果](docs/COMMUNITY_BENCHMARKS.md#the-models-aryastrata-inherits)（英語）。
-ノート PC では Qwen3.6 でも Tiel Coder でも、AryaStrata はプロンプトを llama.cpp b11540 の 2.7〜3.5 倍の速さで読み、
+ノート PC では Qwen3.6 でも Tiel Coder でも、AryaInfer はプロンプトを llama.cpp b11540 の 2.7〜3.5 倍の速さで読み、
 1.5〜1.8 倍の速さで書きました（[2 回の測定](docs/COMMUNITY_BENCHMARKS.md#comparing-with-llamacpp)、英語）。
 
 ## 必要なもの
@@ -465,13 +465,13 @@ Set up AryaStrata on this PC for me: https://github.com/VecSzn/PolyStrata - foll
 ```
 
 AI がグラフィックカード、RAM、ディスクを調べて、合うモデルを選びます。それからインストールして起動し、
-アプリのつなぎ方を教えてくれます。AI ツールは AryaStrata の [MCP サーバー](docs/MCP_SERVER.md) を通じて、
-AryaStrata のインストール、起動、停止もできます。
+アプリのつなぎ方を教えてくれます。AI ツールは AryaInfer の [MCP サーバー](docs/MCP_SERVER.md) を通じて、
+AryaInfer のインストール、起動、停止もできます。
 
 ### 自分でやる
 
-[AryaStrata をダウンロード](https://github.com/KonnectSuite/AryaStrata/archive/refs/heads/main.zip)して展開します（または `git clone` します）。
-**Windows：** **`START-HERE.bat`** をダブルクリック。**Linux：** AryaStrata フォルダーで **`./setup.sh`** を実行します。
+[AryaInfer をダウンロード](https://github.com/KonnectSuite/AryaStrata/archive/refs/heads/main.zip)して展開します（または `git clone` します）。
+**Windows：** **`START-HERE.bat`** をダブルクリック。**Linux：** AryaInfer フォルダーで **`./setup.sh`** を実行します。
 
 手順は NVIDIA でも AMD でも同じです。インストーラーがカードを見つけて、それに合うエンジンを用意します。
 いくつか質問があります：
@@ -480,21 +480,21 @@ AryaStrata のインストール、起動、停止もできます。
 - コンテキストをどのくらいにするか（モデルが覚えておけるテキストの量）
 - 画像を読ませるかどうか（GLM 5.3 Flash、DeepSeek V4 Flash、LFM2.5 は画像を読めません）
 
-**Mac（Apple シリコン、M1〜M5、macOS 15 以降）：** まず一度だけ Apple の Command Line Tools をインストールします（ターミナルで `xcode-select --install`。Xcode 本体は不要です）。次に AryaStrata フォルダーでターミナルを開き、**`./setup.sh`** を実行します。Mac 用エンジンをお使いの Mac 上でビルドし（約 7 分）、同じ質問をしてからモデルをダウンロードして起動します。次回からは `./setup.sh` ですぐに起動します。どのサイズが Mac に合うかと速度：[docs/MAC.md](docs/MAC.md)。
+**Mac（Apple シリコン、M1〜M5、macOS 15 以降）：** まず一度だけ Apple の Command Line Tools をインストールします（ターミナルで `xcode-select --install`。Xcode 本体は不要です）。次に AryaInfer フォルダーでターミナルを開き、**`./setup.sh`** を実行します。Mac 用エンジンをお使いの Mac 上でビルドし（約 7 分）、同じ質問をしてからモデルをダウンロードして起動します。次回からは `./setup.sh` ですぐに起動します。どのサイズが Mac に合うかと速度：[docs/MAC.md](docs/MAC.md)。
 
 毎回 Enter を押せば、おすすめの答えになります。そのあとモデル（Qwen3.8-Flash-Next は約 70 GB、GLM 5.3 Flash は 79〜114 GB、DeepSeek V4 Flash は 91 GB、Kolibri 1 は 29〜48 GB、ほかの 8 つは 11〜42 GB）をダウンロードして起動します。
-ダウンロードが止まったら、もう一度実行してください。続きから再開します。ブラウザーで AryaStrata アプリが
+ダウンロードが止まったら、もう一度実行してください。続きから再開します。ブラウザーで AryaInfer アプリが
 `http://127.0.0.1:8080` に開きます。
 
 12 つともインストーラーのモデル一覧にあります。`./setup.sh --family glm`（または `deepseek`、`lfm25`、`qwen36`、`flint`、`clover`、`ornith`、`gemma4`、`tiel`、`minicpmv`、`kolibri`）なら
 直接そこへ進みます（[何を尋ね、何を書き出すか](docs/GLM.md#install)、英語）。
 
 > **モデルの起動中、1-3 分ほど PC が重くなったり、反応しなくなったりすることがあります**（初回がいちばん長いです）。
-> AryaStrata は 35-55 GB を RAM に読み込み、その一部をグラフィックカード用に固定します。これは正常です。
-> ウィンドウを閉じずに待ってください。AryaStrata が何をしているかはウィンドウに表示されます。
+> AryaInfer は 35-55 GB を RAM に読み込み、その一部をグラフィックカード用に固定します。これは正常です。
+> ウィンドウを閉じずに待ってください。AryaInfer が何をしているかはウィンドウに表示されます。
 
 **次回からは** `START-HERE.bat`（または `./setup.sh`）をもう一度実行します。すぐに起動し、同じものを 2 回ダウンロードすることはありません。
-モデルを止めるときはウィンドウを閉じます。`UPDATE.bat`（`./update.sh`）を使うと、AryaStrata を起動せずに更新できます。
+モデルを止めるときはウィンドウを閉じます。`UPDATE.bat`（`./update.sh`）を使うと、AryaInfer を起動せずに更新できます。
 更新、Docker、複数のカード、ファイルの保存場所、すべてのオプションについて：[docs/INSTALL.md](docs/INSTALL.md)。
 
 **自分の PC で速いか知りたいときは** `BENCH.bat`（`./bench.sh`）を実行します。5〜10 分ほどで、チャット、4K/16K のプロンプト、エージェント風のセッションを自分の設定のまま測り、共有できるレポートを書き出します（[やり方](docs/COMMUNITY_BENCHMARKS.md#run-the-benchmark)）。
@@ -519,7 +519,7 @@ AryaStrata のインストール、起動、停止もできます。
 - **[Swift 1.5](docs/MODELS.md#swift-15)：** 答える前に考える時間がずっと短いファインチューン版です。
   ほぼ同じ品質のまま、答えが早く返ってきます。
 - **[Unsloth UD-IQ4_XS](docs/MODELS.md#unsloth-ud-iq4_xs)：** Unsloth の約 4-bit 版で、品質は IQ3_S と UD-Q4_K_XL の間です。
-  ダウンロードは 94 GB。RAM が約 80 GB 未満だと、答えている間に AryaStrata がその一部を SSD から読むので遅くなります（NVMe SSD が有効です）。
+  ダウンロードは 94 GB。RAM が約 80 GB 未満だと、答えている間に AryaInfer がその一部を SSD から読むので遅くなります（NVMe SSD が有効です）。
 - **[Unsloth UD-Q4_K_XL / UD-Q5_K_XL / UD-Q6_K_XL / Q8_0](docs/MODELS.md#unsloths-files-ud-iq4_xs-to-q8_0)：** 4〜8 ビットで、フルモデルにより近いモデルです
   （次のトークンが Q8_0 と一致する割合は 93〜95%）。すべてのエキスパートが RAM に収まる場合（UD-Q4_K_XL で約 88 GB、
   Q8_0 で約 136 GB）は高速です。RAM が足りない場合は回答の生成中に一部を SSD から読み込むため、大幅に遅くなります
@@ -646,8 +646,8 @@ Q8_0 と比べると、256 トークンずつの 5 つのプロンプトで、�
 
 12 つのモデルの使い方は同じです。同じアプリ、同じ API です。
 
-<p align="center"><img src="docs/media/runpagoda.png" width="900" alt="AryaStrata アプリの Monitor タブと、その横で動くコーディングエージェント"><br>
-<sub>AryaStrata アプリの <b>Monitor</b>（左）。コーディングエージェントが動画の五重塔の庭を書いているところ（右）。<a href="https://github.com/Niko1221/Strata">Strata</a> のスクリーンショットです。</sub></p>
+<p align="center"><img src="docs/media/runpagoda.png" width="900" alt="AryaInfer アプリの Monitor タブと、その横で動くコーディングエージェント"><br>
+<sub>AryaInfer アプリの <b>Monitor</b>（左）。コーディングエージェントが動画の五重塔の庭を書いているところ（右）。<a href="https://github.com/Niko1221/Strata">Strata</a> のスクリーンショットです。</sub></p>
 
 - **ブラウザーで：** `http://127.0.0.1:8080` を開きます。**Chat**、モデルと GPU/CPU/RAM の様子をリアルタイムで見る **Monitor**、
   設定とアドレスが載った **About** があります。
@@ -667,15 +667,15 @@ Q8_0 と比べると、256 トークンずつの 5 つのプロンプトで、�
 | | Qwen3.8-Flash-Next | GLM 5.3 Flash | DeepSeek V4 Flash | LFM2.5-24B-A2B | Qwen3.6-35B-A3B、Ornith 1.5、Gemma 4 26B-A4B、Tiel Coder 35B-A3B、MiniCPM-V 4.7 35B-A3B |
 | --- | --- | --- | --- | --- | --- |
 | **画像** | セットアップで「Images?」に yes と答えます。そのあとチャットで **Picture** をクリックするか、アプリで画像を添付します。AMD のカードは、Linux ではプロセッサーを使って画像を読みます。Windows ではまだ読めません。 | まだ読めません。 | テキストだけです。 | テキストだけです。 | セットアップで「Images?」に yes と答えます。あとは Qwen3.8-Flash-Next と同じです。16 GB 未満のカードでは画像エンコーダーがプロセッサーで動き、画像 1 枚に数秒かかります。 |
-| **リクエストは 1 つずつ** | 初期設定では AryaStrata は 1 つのリクエストに答え、ほかは待ちます。複数に同時に答えるには`"parallel": 2` を設定します（[BATCHING.md](docs/BATCHING.md)）。12 GB のカードでは、それぞれの回答が遅くなります。 | 1 つずつ答え、ほかは待ちます。 | 1 つずつ答え、ほかは待ちます。 | 1 つずつ答え、ほかは待ちます。 | 1 つずつ答え、ほかは待ちます。 |
+| **リクエストは 1 つずつ** | 初期設定では AryaInfer は 1 つのリクエストに答え、ほかは待ちます。複数に同時に答えるには`"parallel": 2` を設定します（[BATCHING.md](docs/BATCHING.md)）。12 GB のカードでは、それぞれの回答が遅くなります。 | 1 つずつ答え、ほかは待ちます。 | 1 つずつ答え、ほかは待ちます。 | 1 つずつ答え、ほかは待ちます。 | 1 つずつ答え、ほかは待ちます。 |
 | **複数の会話** | 直前の会話は保持されるので、2 通目以降は数秒で始まります。エンジンの引数を 2 つ足すと、複数の会話を RAM に保持できます（[詳細](docs/DETAILS.md#using-it)）。 | 直前の会話は保持されます。セットアップで、複数の会話を RAM に保持するかどうかを尋ねます。保持すると、エージェントとサブエージェントが交互に使っても、プロンプトを読み直しません（[仕組み](docs/GLM.md#several-conversations-at-once)）。 | GLM 5.3 Flash と同じです。 | GLM 5.3 Flash と同じです。 | GLM 5.3 Flash と同じです。 |
-| **長いプロンプト** | AryaStrata はチャットの最初のメッセージをすべて読みます。30,000 トークンあたり約 1 分かかります。2 通目以降のメッセージは数秒で始まります。 | 最初のメッセージはすべて読みます。30,000 トークンあたり約 40 秒かかります。 | 最初のメッセージはすべて読みます。30,000 トークンあたり約 29 秒かかります。 | 最初のメッセージはすべて読みます。30,000 トークンにワークステーションで 1.3〜1.5 秒、8 GB のノート PC で 8〜10 秒かかります。 | 最初のメッセージは全部読みます。30,000 トークンで、ワークステーションは 4〜5 秒、8 GB のノート PC は 14〜27 秒です。 |
+| **長いプロンプト** | AryaInfer はチャットの最初のメッセージをすべて読みます。30,000 トークンあたり約 1 分かかります。2 通目以降のメッセージは数秒で始まります。 | 最初のメッセージはすべて読みます。30,000 トークンあたり約 40 秒かかります。 | 最初のメッセージはすべて読みます。30,000 トークンあたり約 29 秒かかります。 | 最初のメッセージはすべて読みます。30,000 トークンにワークステーションで 1.3〜1.5 秒、8 GB のノート PC で 8〜10 秒かかります。 | 最初のメッセージは全部読みます。30,000 トークンで、ワークステーションは 4〜5 秒、8 GB のノート PC は 14〜27 秒です。 |
 
 詳しくは：[チャットの保存場所](docs/INSTALL.md#where-things-are-stored)、[API](docs/DETAILS.md#using-it)。
 
 ### オプション：モデル全体が RAM に収まる場合、GPU 1 枚でさらに高速化
 
-2 つのオプトイン設定です（RubenTorney 氏による #1904 と #1905）。GPU を 1 枚使い、RAM にすべてのエキスパートが収まる場合（AryaStrata の arena モード。例：64 GB の PC で Q2_0 や IQ3_XXS）に効果があります。AryaStrata のデータフォルダーにある設定ファイル `strata-<model>.json`（[場所](docs/INSTALL.md#where-things-are-stored)）を開き、次を追加します：
+2 つのオプトイン設定です（RubenTorney 氏による #1904 と #1905）。GPU を 1 枚使い、RAM にすべてのエキスパートが収まる場合（AryaInfer の arena モード。例：64 GB の PC で Q2_0 や IQ3_XXS）に効果があります。AryaInfer のデータフォルダーにある設定ファイル `strata-<model>.json`（[場所](docs/INSTALL.md#where-things-are-stored)）を開き、次を追加します：
 
 - **生成の高速化：** `"args"` リストに `"--adapt-async", "1"`。エキスパートキャッシュの更新が回答を止めずに補助スレッドで行われます。RTX 5070（Windows、Q2_0）での実測：生成 +4〜5%、コードや長文では +7〜10%。回答はデフォルトとわずかに異なる場合があります（実行ごとには同じです）。
 - **Windows でのプロンプト読み込みの高速化：** `"env"` ブロックに `"STRATA_PIN_BY_NEED": "1"`。Windows はGPU 用に RAM の約半分しか固定できないため、この設定で GPU が本当に必要とするエキスパートから先に固定します。RTX 5070 での実測：プロンプト読み込み +4.4%。
@@ -685,26 +685,26 @@ Q8_0 と比べると、256 トークンずつの 5 つのプロンプトで、�
 "env": { "STRATA_PIN_BY_NEED": "1" }
 ```
 
-変更後は AryaStrata を再起動してください（`START-HERE.bat` または `./setup.sh`）。元に戻すには、2 つの項目を削除します。
+変更後は AryaInfer を再起動してください（`START-HERE.bat` または `./setup.sh`）。元に戻すには、2 つの項目を削除します。
 
 ## うまくいかないとき
 
-- **AryaStrata の初回起動で PC が固まった。** モデルの読み込み中はよくあることです。ウィンドウを閉じずに待ってください。
+- **AryaInfer の初回起動で PC が固まった。** モデルの読み込み中はよくあることです。ウィンドウを閉じずに待ってください。
   10 分たっても固まったまま？ PC を再起動し、ほかのプログラムを閉じてもう一度試すか、小さいサイズを選んでください。
 - **ダウンロードやインストールの途中で止まった。** `START-HERE.bat`（または `./setup.sh`）をもう一度実行してください。
   止まったところから続きます。
 - **とても遅く、ディスクのランプが点滅し続ける。または「the engine stopped unexpectedly」と表示される。** PC の空き RAM が
   足りません。ほかのプログラムを閉じるか（ブラウザーは多く使います）、小さいサイズ（Q2_0 または IQ2_XS）を選んでください。
-- **ポート 8080 がすでに使われていると表示される。** AryaStrata はもう動いています。そのウィンドウを探してください。
+- **ポート 8080 がすでに使われていると表示される。** AryaInfer はもう動いています。そのウィンドウを探してください。
 
 ほかの問題と解決方法：[docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)。それでも解決しない場合は
-[issue](https://github.com/KonnectSuite/AryaStrata/issues) を作成し、AryaStrata フォルダーにある `strata-<model>.log` を添付してください。
+[issue](https://github.com/KonnectSuite/AryaStrata/issues) を作成し、AryaInfer フォルダーにある `strata-<model>.log` を添付してください。
 セキュリティの問題を見つけたら、非公開で報告してください：[SECURITY.md](SECURITY.md)。
 
 ## しくみ
 
 このようなモデルは、ふつう数百ギガバイトのグラフィックメモリを持つサーバーで動きます。あなたのグラフィックカードは
-8-32 GB です。AryaStrata は **PC 全体で作業を分担する** ことで、モデルを収めています。台所を思い浮かべてください。
+8-32 GB です。AryaInfer は **PC 全体で作業を分担する** ことで、モデルを収めています。台所を思い浮かべてください。
 いつも使う道具は調理台に置き、残りは食料庫にしまっておきます。
 
 ### Qwen3.8-Flash-Next
@@ -877,7 +877,7 @@ Qwen3.8-Flash-Next は [Qwen チーム](https://huggingface.co/Qwen/Qwen3.8-Flas
 GLM 5.3 Flash は [neuralll](https://huggingface.co/neuralll/GLM-5.3-Flash-GSQ-RCO-3.0bit-Q4Kattn-GGUF)、Unsloth、
 patrickbdevaney のファイルで動きます。Qwen3.6-35B-A3B は Qwen チーム、Gemma 4 は Google、DeepSeek V4 Flash は DeepSeek のモデルで、
 3 つとも [Unsloth](https://huggingface.co/unsloth) の量子化を使っています。LFM2.5-24B-A2B は [Liquid AI](https://huggingface.co/LiquidAI/LFM2.5-24B-A2B) のモデルで、Unsloth の量子化と Liquid AI 自身の QAD-Q4_0 を使っています。Ornith 1.5 は ornith-ai のモデルで、
-[mudler](https://huggingface.co/mudler/Ornith-1.5-35B-A3B-APEX-MTP-GGUF) の APEX 量子化を使っています。Tiel Coder 35B-A3B は [peculiar-ragdoll](https://huggingface.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF-MTP) が量子化した Ornith 1.5 で、AryaStrata で動くことは [u/Sensitive_Song4219](https://www.reddit.com/r/LocalLLM/comments/1x22inc/comment/pf3r111/) が見つけました。MiniCPM-V 4.7 35B-A3B は [OpenBMB](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-gguf) のモデルで、OpenBMB 自身の量子化を使っています。AryaStrata に組み込んだのは [iMilnb](https://github.com/iMilnb) です。AryaStrata は Niko1221 とコントリビューターによる [Strata](https://github.com/Niko1221/Strata) をもとにしており、
+[mudler](https://huggingface.co/mudler/Ornith-1.5-35B-A3B-APEX-MTP-GGUF) の APEX 量子化を使っています。Tiel Coder 35B-A3B は [peculiar-ragdoll](https://huggingface.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF-MTP) が量子化した Ornith 1.5 で、AryaInfer で動くことは [u/Sensitive_Song4219](https://www.reddit.com/r/LocalLLM/comments/1x22inc/comment/pf3r111/) が見つけました。MiniCPM-V 4.7 35B-A3B は [OpenBMB](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-gguf) のモデルで、OpenBMB 自身の量子化を使っています。AryaInfer に組み込んだのは [iMilnb](https://github.com/iMilnb) です。AryaInfer は Niko1221 とコントリビューターによる [Strata](https://github.com/Niko1221/Strata) をもとにしており、
 [llama.cpp / ggml](https://github.com/ggml-org/llama.cpp) の一部を使っています。すべてのクレジット：
-[docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md#credits)。AryaStrata は [MIT License](LICENSE) のオープンソースです。一部のパーツと
+[docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md#credits)。AryaInfer は [MIT License](LICENSE) のオープンソースです。一部のパーツと
 すべてのモデルには、それぞれ独自のライセンスがあります（[どれか](docs/HOW_IT_WORKS.md#license)）。

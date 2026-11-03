@@ -1,20 +1,20 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
-# Running AryaStrata behind llama-swap
+# Running AryaInfer behind llama-swap
 
 [llama-swap](https://github.com/mostlygeek/llama-swap) puts several model servers behind one address and starts the one a
-request names, stopping the others to free the GPU. AryaStrata works as one of its models. This page is what we needed to
-get it running; it was tested with llama-swap's default stop behaviour, AryaStrata 0.1.39 (Coder IQ1_M on a Tesla V100) and
+request names, stopping the others to free the GPU. AryaInfer works as one of its models. This page is what we needed to
+get it running; it was tested with llama-swap's default stop behaviour, AryaInfer 0.1.39 (Coder IQ1_M on a Tesla V100) and
 clients reaching the machine by its host name.
 
-With AryaStrata models only, AryaStrata can do the switching itself: `"switch_on_request": true` in the config it starts
+With AryaInfer models only, AryaInfer can do the switching itself: `"switch_on_request": true` in the config it starts
 with lists every installed model in `/v1/models` and loads the one a request names, on one port, with the web page and
 its Host check as usual ([DETAILS.md](DETAILS.md#using-it), "Switching models on request"). llama-swap stays the way to
-put AryaStrata next to other servers (llama.cpp, vLLM, ...).
+put AryaInfer next to other servers (llama.cpp, vLLM, ...).
 
 ## The entry
 
-Set AryaStrata up as usual first (`./setup.sh --no-start ...`), then point llama-swap at the server directly. The start script
+Set AryaInfer up as usual first (`./setup.sh --no-start ...`), then point llama-swap at the server directly. The start script
 setup writes (`run-<model>.sh`) fixes the port at 8080, so call `serve/server.py` with llama-swap's port instead:
 
 ```yaml
@@ -32,9 +32,9 @@ models:
 
 - `exec` makes the Python server the process llama-swap stops. On llama-swap's stop (SIGTERM) the server stops its engine:
   in our test the engine was gone and the V100's memory freed within 2 s.
-- `checkEndpoint: /health` -- AryaStrata's `/health` answers only once the model is loaded. Measured load time on our machine
+- `checkEndpoint: /health` -- AryaInfer's `/health` answers only once the model is loaded. Measured load time on our machine
   (model files on a SATA SSD): 80 s, 105 s while another download was using the disk.
-- If other models share the GPU, put them in a llama-swap group or let swapping unload them; AryaStrata needs the card's
+- If other models share the GPU, put them in a llama-swap group or let swapping unload them; AryaInfer needs the card's
   memory to itself.
 
 ## The trap: "Host ... is not allowed"
@@ -45,7 +45,7 @@ The first request through llama-swap failed at once with:
 403 Host 'my-server:8040' is not allowed (DNS rebinding protection)
 ```
 
-AryaStrata only answers to the host names it knows, so a web page cannot reach it by pointing a DNS name at 127.0.0.1.
+AryaInfer only answers to the host names it knows, so a web page cannot reach it by pointing a DNS name at 127.0.0.1.
 llama-swap passes the client's Host header through, so a client that reaches the proxy by name (`http://my-server:8040`)
 is refused. Requests by IP address and to `localhost` always pass, which is why it can work in a quick test and fail
 from another machine. Any one of these fixes it:
@@ -54,9 +54,9 @@ from another machine. Any one of these fixes it:
 - `"allowed_hosts": ["my-server"]` in `strata-<model>.json`, or
 - an `"api_key"`, which turns the check off -- then every client must send the key.
 
-## AryaStrata's own pages through llama-swap
+## AryaInfer's own pages through llama-swap
 
-llama-swap forwards `/upstream/<model>/...` unchanged, so AryaStrata's status and health pages stay reachable, and calling one
+llama-swap forwards `/upstream/<model>/...` unchanged, so AryaInfer's status and health pages stay reachable, and calling one
 also loads the model without sending a chat request:
 
 ```bash
@@ -67,7 +67,7 @@ curl http://my-server:8040/upstream/strata/v1/status
 ## Claude Code and other Anthropic-API clients: the thinking level
 
 Claude Code (and the Claude Agent SDK) send `"output_config": {"effort": "high"}` with every request unless told
-otherwise, so AryaStrata thinks at its highest level (seen by logging the requests). `CLAUDE_CODE_EFFORT_LEVEL=medium` (or
+otherwise, so AryaInfer thinks at its highest level (seen by logging the requests). `CLAUDE_CODE_EFFORT_LEVEL=medium` (or
 `low`) in the client's environment changes it. One measurement, for scale only: on one real coding task in our setup,
 `medium` finished in 6.5 min against 9.7 min at `high`, both correct; `low` took 10.1 min (more trial-and-fix steps).
 One run each -- not a general result.

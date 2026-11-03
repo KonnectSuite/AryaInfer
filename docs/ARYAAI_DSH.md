@@ -1,4 +1,4 @@
-# AryaAI development DSH with AryaStrata
+# AryaAI development DSH with AryaInfer
 
 ## Current connection and thinking audit
 

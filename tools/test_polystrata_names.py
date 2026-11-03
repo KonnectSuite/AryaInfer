@@ -1,6 +1,6 @@
-"""The files tools/polystrata_names.py reads say AryaStrata where they mean this project.  A text that means the
+"""The files tools/polystrata_names.py reads say AryaInfer where they mean this project.  A text that means the
 project this one is built on names it by a link or as "the Strata project": the tool leaves those alone, and
-the bare word it would turn into AryaStrata the next time it runs.
+the bare word it would turn into AryaInfer the next time it runs.
 
     python -m unittest tools.test_polystrata_names
 """

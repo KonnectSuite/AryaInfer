@@ -1,6 +1,6 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](docs/ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](docs/ARYAINFER.md).
 
-<h1 align="center">AryaStrata</h1>
+<h1 align="center">AryaInfer</h1>
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [Deutsch](README.de.md) · **Français** · [Español](README.es.md) · [Português](README.pt-BR.md)
 
@@ -9,14 +9,14 @@ Qwen3.8-Flash-Next, GLM 5.3 Flash, DeepSeek V4 Flash, LFM2.5, Flint, Qwen3.6, Cl
 
 <p align="center"><img src="docs/media/speed.svg" width="820" alt="Tokens par seconde pendant l'écriture d'une réponse : 94 à 100 avec Qwen3.6-35B-A3B sur un portable à carte 8 Go, 394 à 395 sur une RTX 5090"></p>
 
-<p align="center"><img src="docs/media/claude-code-demo.gif" width="820" alt="Claude Code dans un terminal à côté de l'API Monitor de AryaStrata"><br>
+<p align="center"><img src="docs/media/claude-code-demo.gif" width="820" alt="Claude Code dans un terminal à côté de l'API Monitor de AryaInfer"><br>
 <sub>Claude Code avec Qwen3.6-35B-A3B UD-Q3_K_M sur le portable à carte de 8 Go, en temps réel : il ajoute une option <code>--json</code> à un petit programme, écrit un test et lance les tests. Le serveur avait lu le prompt système de Claude Code à son démarrage (<code>"warm_start": true</code>).</sub></p>
 
-<p align="center"><a href="https://github.com/Niko1221/Strata/releases/download/v0.1.10/Pagoda.mp4"><img src="docs/media/pagoda-preview.webp" width="720" alt="Un jardin de pagode en voxels écrit par le modèle de AryaStrata, qui tourne dans le navigateur"></a><br>
+<p align="center"><a href="https://github.com/Niko1221/Strata/releases/download/v0.1.10/Pagoda.mp4"><img src="docs/media/pagoda-preview.webp" width="720" alt="Un jardin de pagode en voxels écrit par le modèle de AryaInfer, qui tourne dans le navigateur"></a><br>
 <sub>Un jardin de pagode en voxels, généré en une seule requête sur une RTX 5070 avec <a href="https://github.com/Niko1221/Strata">Strata</a> (Qwen3.8-Flash-Next IQ3_S, contexte de 128K) ·
 <a href="https://github.com/Niko1221/Strata/releases/download/v0.1.10/Pagoda.mp4">vidéo complète (49 s)</a></sub></p>
 
-AryaStrata fait tourner de grands modèles d'IA sur un PC normal, des modèles qui demandent d'habitude un serveur.
+AryaInfer fait tourner de grands modèles d'IA sur un PC normal, des modèles qui demandent d'habitude un serveur.
 Ils discutent, écrivent du code et fonctionnent avec vos applications et vos agents de code. Rien ne quitte votre PC.
 
 Il fait tourner douze modèles, avec deux moteurs :
@@ -25,7 +25,7 @@ Il fait tourner douze modèles, avec deux moteurs :
   de 12 Go ou plus, sous Windows ou Linux. Il lit aussi les images. Son moteur est celui de
   [Strata](https://github.com/Niko1221/Strata), inchangé.
 
-Les onze autres tournent sur un moteur écrit pour AryaStrata, avec une carte NVIDIA ou [deux](docs/MULTI_GPU.md#the-strata-poly-models) : tous les onze sous Linux, et
+Les onze autres tournent sur un moteur écrit pour AryaInfer, avec une carte NVIDIA ou [deux](docs/MULTI_GPU.md#the-strata-poly-models) : tous les onze sous Linux, et
 tous sauf GLM 5.3 Flash et DeepSeek V4 Flash aussi sous Windows. Ils sont expérimentaux : ils n'ont tourné que sur un seul PC avec une carte
 de 32 Go, et les huit plus petits en plus sur un portable avec une carte de 8 Go.
 
@@ -55,7 +55,7 @@ de 32 Go, et les huit plus petits en plus sur un portable avec une carte de 8 Go
 Le serveur peut passer d'un modèle installé à un autre pendant qu'il tourne
 ([comment](docs/BACKENDS.md#changing-the-model), en anglais).
 
-AryaStrata est construit sur [Strata](https://github.com/Niko1221/Strata) de Niko1221.
+AryaInfer est construit sur [Strata](https://github.com/Niko1221/Strata) de Niko1221.
 Pourquoi c'est un dépôt à part, les cartes AMD et plus petites, les fine-tunes et d'autres questions : [FAQ](docs/FAQ.md) (en anglais).
 
 ## Quelle est sa vitesse ?
@@ -99,7 +99,7 @@ RTX 3090 (24 Go) devrait écrire environ 100-140 tokens par seconde. Longues dis
 
 ### GLM 5.3 Flash
 
-Mesuré pour AryaStrata sur une station de travail, avec une courte discussion et un prompt de 29K tokens.
+Mesuré pour AryaInfer sur une station de travail, avec une courte discussion et un prompt de 29K tokens.
 
 <table>
 <tr><th>NVIDIA : RTX 5090 (32 Go), Xeon Platinum 8470Q (25 vCPU), 120 Go de RAM</th></tr>
@@ -119,7 +119,7 @@ il écrit donc plus lentement. Ce qui a été mesuré et comment : [docs/GLM.md]
 
 ### DeepSeek V4 Flash
 
-Mesuré pour AryaStrata sur la même station de travail, avec une courte discussion et un prompt de 30K tokens.
+Mesuré pour AryaInfer sur la même station de travail, avec une courte discussion et un prompt de 30K tokens.
 
 <table>
 <tr><th>NVIDIA : RTX 5090 (32 Go), Xeon Platinum 8470Q (25 vCPU), 120 Go de RAM</th></tr>
@@ -169,15 +169,15 @@ Sur le portable, Q8_0 remplit les 32 Go de RAM, d'où sa lenteur ; la station de
 entier.
 
 Sur le portable, llama.cpp b11540 avec `--n-cpu-moe 25`, le meilleur des réglages essayés là, a lu un prompt de 32,000
-tokens à 530 tokens/s et a écrit ensuite à 53 ; AryaStrata l'a lu à 3,540 et a écrit à 71-73. Sur la station de
+tokens à 530 tokens/s et a écrit ensuite à 53 ; AryaInfer l'a lu à 3,540 et a écrit à 71-73. Sur la station de
 travail, llama-bench a lu 29,816 tokens à 13,300 tokens/s avec le lot par défaut de llama.cpp, 512, et à 23,600 avec
-2,048, aussi vite que AryaStrata, et a écrit token par token à 455 tokens/s, et à 369 après ce prompt ; AryaStrata
+2,048, aussi vite que AryaInfer, et a écrit token par token à 455 tokens/s, et à 369 après ce prompt ; AryaInfer
 écrit à 452 et 387. Un prompt d'environ 124,000 tokens dans un contexte de 128K a été lu et a reçu sa réponse en 8,7
 secondes sur la station de travail ; le portable l'a lu en 45 secondes.
 
 ### Qwen3.6-35B-A3B
 
-Mesuré par AryaStrata sur deux PC, avec une courte discussion et un prompt de 30,000 à 32,000 tokens : à gauche un
+Mesuré par AryaInfer sur deux PC, avec une courte discussion et un prompt de 30,000 à 32,000 tokens : à gauche un
 portable dont la carte a 8 Go, où le processeur calcule les experts que la carte ne peut pas contenir, à droite une
 station de travail dont la carte contient le modèle entier.
 
@@ -316,12 +316,12 @@ Mesuré de la même façon, sur les deux mêmes PC. Son fichier n'a pas de bloc 
 Un prompt de 10,000 tokens est lu à 1,260 tokens/s sur le portable et à 8,790 sur la station de travail. Sur le
 portable, Q6_K remplit les 32 Go de RAM, c'est ce qui le ralentit là.
 
-Les huit modèles du moteur propre à AryaStrata ont été mesurés avec son benchmark, que vous pouvez lancer sur votre
+Les huit modèles du moteur propre à AryaInfer ont été mesurés avec son benchmark, que vous pouvez lancer sur votre
 PC : `python aryastrata.py benchmark --model <name> --prompt-tokens 24000`
 ([ce qu'il envoie et affiche](docs/BACKENDS.md#benchmark), en anglais).
 Ce que d'autres ont mesuré sur leurs cartes, et comment comparer avec llama.cpp sur la vôtre :
 [résultats de la communauté](docs/COMMUNITY_BENCHMARKS.md#the-models-aryastrata-inherits) (en anglais).
-Sur le portable, AryaStrata a lu les prompts 2.7 à 3.5 fois plus vite que llama.cpp b11540 et écrit 1.5 à 1.8
+Sur le portable, AryaInfer a lu les prompts 2.7 à 3.5 fois plus vite que llama.cpp b11540 et écrit 1.5 à 1.8
 fois plus vite, avec Qwen3.6 et avec Tiel Coder ([les deux mesures](docs/COMMUNITY_BENCHMARKS.md#comparing-with-llamacpp), en anglais).
 
 ## Ce qu'il vous faut
@@ -480,14 +480,14 @@ Set up AryaStrata on this PC for me: https://github.com/VecSzn/PolyStrata - foll
 
 Il vérifie votre carte graphique, votre RAM et votre disque, et choisit le modèle qui convient. Ensuite il l'installe,
 le démarre et vous explique comment connecter vos applications. Les outils d'IA peuvent aussi installer, démarrer et
-arrêter AryaStrata grâce à son [serveur MCP](docs/MCP_SERVER.md).
+arrêter AryaInfer grâce à son [serveur MCP](docs/MCP_SERVER.md).
 
 ### Ou faites-le vous-même
 
-[Téléchargez AryaStrata](https://github.com/KonnectSuite/AryaStrata/archive/refs/heads/main.zip) et décompressez-le (ou faites un `git clone`).
-**Windows :** double-cliquez sur **`START-HERE.bat`**. **Linux :** lancez **`./setup.sh`** dans le dossier AryaStrata.
+[Téléchargez AryaInfer](https://github.com/KonnectSuite/AryaStrata/archive/refs/heads/main.zip) et décompressez-le (ou faites un `git clone`).
+**Windows :** double-cliquez sur **`START-HERE.bat`**. **Linux :** lancez **`./setup.sh`** dans le dossier AryaInfer.
 
-**Mac (Apple Silicon, M1 à M5, macOS 15 ou plus récent) :** installez une fois les Command Line Tools d'Apple (`xcode-select --install` dans le Terminal ; Xcode lui-même n'est pas nécessaire). Ouvrez ensuite le Terminal dans le dossier AryaStrata et lancez **`./setup.sh`**. Il compile le moteur Mac sur votre Mac (environ 7 minutes), pose les mêmes questions, télécharge le modèle et le démarre. La fois suivante, `./setup.sh` démarre tout de suite. Quelle taille convient à votre Mac et sa vitesse : [docs/MAC.md](docs/MAC.md).
+**Mac (Apple Silicon, M1 à M5, macOS 15 ou plus récent) :** installez une fois les Command Line Tools d'Apple (`xcode-select --install` dans le Terminal ; Xcode lui-même n'est pas nécessaire). Ouvrez ensuite le Terminal dans le dossier AryaInfer et lancez **`./setup.sh`**. Il compile le moteur Mac sur votre Mac (environ 7 minutes), pose les mêmes questions, télécharge le modèle et le démarre. La fois suivante, `./setup.sh` démarre tout de suite. Quelle taille convient à votre Mac et sa vitesse : [docs/MAC.md](docs/MAC.md).
 
 Les étapes sont les mêmes pour NVIDIA et AMD. L'installateur détecte votre carte et installe le bon moteur pour elle.
 Il vous pose quelques questions :
@@ -499,17 +499,17 @@ Il vous pose quelques questions :
 Appuyez sur Entrée à chaque fois pour garder la réponse recommandée. Ensuite il télécharge le modèle (environ 70 Go pour
 Qwen3.8-Flash-Next, 79 à 114 Go pour GLM 5.3 Flash, 91 Go pour DeepSeek V4 Flash, 29 à 48 Go pour Kolibri 1, 11 à 42 Go pour les huit autres)
 et le démarre. Si le téléchargement s'arrête, relancez-le : il reprend là où il s'était arrêté. Votre navigateur
-ouvre l'application AryaStrata à l'adresse `http://127.0.0.1:8080`.
+ouvre l'application AryaInfer à l'adresse `http://127.0.0.1:8080`.
 
 Les douze figurent dans la liste des modèles de l'installeur. `./setup.sh --family glm`, `deepseek`, `lfm25`, `qwen36`, `flint`, `clover`,
 `ornith`, `gemma4`, `tiel`, `minicpmv` ou `kolibri` mène directement à l'un d'eux ([ce qu'il demande et écrit](docs/GLM.md#install), en anglais).
 
 > **Pendant le démarrage du modèle, votre PC peut ralentir ou ne plus répondre pendant 1-3 minutes** (plus longtemps la première fois).
-> AryaStrata charge 35-55 Go dans votre RAM et en réserve une partie pour la carte graphique. C'est normal. Attendez, et
-> ne fermez pas la fenêtre. La fenêtre montre ce que fait AryaStrata.
+> AryaInfer charge 35-55 Go dans votre RAM et en réserve une partie pour la carte graphique. C'est normal. Attendez, et
+> ne fermez pas la fenêtre. La fenêtre montre ce que fait AryaInfer.
 
 **La fois suivante**, relancez `START-HERE.bat` (ou `./setup.sh`). Il démarre tout de suite et ne télécharge rien
-deux fois. Fermez sa fenêtre pour arrêter le modèle. `UPDATE.bat` (`./update.sh`) met AryaStrata à jour sans le démarrer.
+deux fois. Fermez sa fenêtre pour arrêter le modèle. `UPDATE.bat` (`./update.sh`) met AryaInfer à jour sans le démarrer.
 Mises à jour, Docker, plusieurs cartes, emplacement des fichiers et toutes les options : [docs/INSTALL.md](docs/INSTALL.md).
 
 **C'est rapide sur votre PC ?** Lancez `BENCH.bat` (`./bench.sh`) : 5 à 10 minutes environ ; il mesure le chat, des prompts de 4K/16K et une session de type agent avec vos propres réglages, et écrit un rapport à partager ([comment](docs/COMMUNITY_BENCHMARKS.md#run-the-benchmark)).
@@ -535,11 +535,11 @@ compressées. Les petites tailles sont plus rapides. Les grandes sont un peu plu
 - **[Swift 1.5](docs/MODELS.md#swift-15) :** un fine-tune qui réfléchit bien moins longtemps avant de répondre. Vous
   avez la réponse plus tôt, avec à peu près la même qualité.
 - **[Unsloth UD-IQ4_XS](docs/MODELS.md#unsloth-ud-iq4_xs)** : la version ~4 bits d'Unsloth, entre IQ3_S et
-  UD-Q4_K_XL en qualité. Un téléchargement de 94 Go. Avec moins de ~80 Go de RAM, AryaStrata en lit une partie depuis
+  UD-Q4_K_XL en qualité. Un téléchargement de 94 Go. Avec moins de ~80 Go de RAM, AryaInfer en lit une partie depuis
   le SSD pendant qu'il répond, il y est donc plus lent (un SSD NVMe aide).
 - **[Unsloth UD-Q4_K_XL, UD-Q5_K_XL, UD-Q6_K_XL et Q8_0](docs/MODELS.md#unsloths-files-ud-iq4_xs-to-q8_0) :** de 4 à 8 bits, plus proches du modèle
   complet (93-95 % le même token suivant que Q8_0). Rapides quand tous les experts tiennent dans la RAM (~88 Go pour
-  UD-Q4_K_XL jusqu'à ~136 Go pour Q8_0) ; avec moins de RAM, AryaStrata en lit une partie depuis le SSD pendant qu'il
+  UD-Q4_K_XL jusqu'à ~136 Go pour Q8_0) ; avec moins de RAM, AryaInfer en lit une partie depuis le SSD pendant qu'il
   répond, ce qui est bien plus lent (7-8.5 tokens/s pour UD-Q4_K_XL sur un PC avec 64 Go).
 - **[OrcaRouter's Uncensored IQ3_XXS](docs/MODELS.md#orcarouter-uncensored-iq3_xxs) :** vous l'installez à la main.
   Il n'est pas dans le menu de l'installateur.
@@ -665,8 +665,8 @@ Trois tailles pour l'instant, d'OpenBMB. L'installeur prend Q4_K_M, ou mix_q3gud
 
 Les douze modèles s'utilisent de la même façon : la même application, la même API.
 
-<p align="center"><img src="docs/media/runpagoda.png" width="900" alt="L'onglet Monitor de l'application AryaStrata à côté d'un agent de code"><br>
-<sub>Le <b>Monitor</b> de l'application AryaStrata (à gauche) pendant qu'un agent de code écrit le jardin de pagode de la vidéo (à droite). Une capture d'écran de <a href="https://github.com/Niko1221/Strata">Strata</a>.</sub></p>
+<p align="center"><img src="docs/media/runpagoda.png" width="900" alt="L'onglet Monitor de l'application AryaInfer à côté d'un agent de code"><br>
+<sub>Le <b>Monitor</b> de l'application AryaInfer (à gauche) pendant qu'un agent de code écrit le jardin de pagode de la vidéo (à droite). Une capture d'écran de <a href="https://github.com/Niko1221/Strata">Strata</a>.</sub></p>
 
 - **Dans le navigateur :** ouvrez `http://127.0.0.1:8080`. Vous y trouvez **Chat**, un **Monitor** en direct du
   modèle et de votre GPU/CPU/RAM, et **About** avec les réglages et les adresses.
@@ -687,15 +687,15 @@ Là où ils diffèrent :
 | | Qwen3.8-Flash-Next | GLM 5.3 Flash | DeepSeek V4 Flash | LFM2.5-24B-A2B | Qwen3.6-35B-A3B, Ornith 1.5, Gemma 4 26B-A4B, Tiel Coder 35B-A3B, MiniCPM-V 4.7 35B-A3B |
 | --- | --- | --- | --- | --- | --- |
 | **Images** | Répondez oui à « Images? » pendant l'installation. Ensuite cliquez sur **Picture** dans le chat, ou joignez des images dans votre application. Les cartes AMD lisent les images sous Linux via le processeur ; sous Windows, pas encore. | Pas encore. | Il ne lit que du texte. | Il ne lit que du texte. | Répondez oui à « Images? » pendant l'installation, puis comme avec Qwen3.8-Flash-Next. Sur une carte de moins de 16 Go, l'encodeur d'images tourne sur le processeur, et une image prend quelques secondes. |
-| **Une requête à la fois** | Par défaut, AryaStrata répond à une requête et les autres attendent. Pour répondre à plusieurs en même temps, mettez `"parallel": 2` ([BATCHING.md](docs/BATCHING.md)). Sur une carte de 12 Go, chaque réponse devient alors plus lente. | Une à la fois, les autres attendent. | Une à la fois, les autres attendent. | Une à la fois, les autres attendent. | Une à la fois, les autres attendent. |
+| **Une requête à la fois** | Par défaut, AryaInfer répond à une requête et les autres attendent. Pour répondre à plusieurs en même temps, mettez `"parallel": 2` ([BATCHING.md](docs/BATCHING.md)). Sur une carte de 12 Go, chaque réponse devient alors plus lente. | Une à la fois, les autres attendent. | Une à la fois, les autres attendent. | Une à la fois, les autres attendent. | Une à la fois, les autres attendent. |
 | **Plusieurs discussions** | La dernière est conservée, donc les messages suivants démarrent en quelques secondes. Deux arguments du moteur en gardent plusieurs en RAM ([détails](docs/DETAILS.md#using-it)). | La dernière est conservée. L'installation demande s'il faut en garder plusieurs en RAM, pour qu'un agent et ses sous-agents se relaient sans que leurs prompts soient relus ([comment](docs/GLM.md#several-conversations-at-once)). | Comme GLM 5.3 Flash. | Comme GLM 5.3 Flash. | Comme GLM 5.3 Flash. |
-| **Longs prompts** | AryaStrata lit en entier le premier message d'une discussion, environ 1 minute pour 30,000 tokens. Les messages suivants démarrent en quelques secondes. | Le premier message est lu en entier, environ 40 secondes pour 30,000 tokens. | Le premier message est lu en entier, environ 29 secondes pour 30,000 tokens. | Le premier message est lu en entier : 30,000 tokens prennent 1,3 à 1,5 seconde sur la station de travail et 8 à 10 secondes sur le portable de 8 Go. | Le premier message est lu en entier : 30,000 tokens prennent 4 à 5 secondes sur la station de travail et 14 à 27 secondes sur le portable de 8 Go. |
+| **Longs prompts** | AryaInfer lit en entier le premier message d'une discussion, environ 1 minute pour 30,000 tokens. Les messages suivants démarrent en quelques secondes. | Le premier message est lu en entier, environ 40 secondes pour 30,000 tokens. | Le premier message est lu en entier, environ 29 secondes pour 30,000 tokens. | Le premier message est lu en entier : 30,000 tokens prennent 1,3 à 1,5 seconde sur la station de travail et 8 à 10 secondes sur le portable de 8 Go. | Le premier message est lu en entier : 30,000 tokens prennent 4 à 5 secondes sur la station de travail et 14 à 27 secondes sur le portable de 8 Go. |
 
 Plus d'infos : [où sont stockées vos discussions](docs/INSTALL.md#where-things-are-stored), [l'API](docs/DETAILS.md#using-it).
 
 ### Optionnel : plus de vitesse sur une seule carte quand tout le modèle tient en RAM
 
-Deux réglages optionnels (de RubenTorney, #1904 et #1905). Ils aident si vous utilisez une seule carte graphique et que votre RAM contient tous les experts (le mode arena de AryaStrata, par exemple Q2_0 ou IQ3_XXS sur un PC de 64 Go). Ouvrez votre configuration `strata-<model>.json` dans le dossier de données de AryaStrata ([où](docs/INSTALL.md#where-things-are-stored)) et ajoutez :
+Deux réglages optionnels (de RubenTorney, #1904 et #1905). Ils aident si vous utilisez une seule carte graphique et que votre RAM contient tous les experts (le mode arena de AryaInfer, par exemple Q2_0 ou IQ3_XXS sur un PC de 64 Go). Ouvrez votre configuration `strata-<model>.json` dans le dossier de données de AryaInfer ([où](docs/INSTALL.md#where-things-are-stored)) et ajoutez :
 
 - **Génération plus rapide :** `"--adapt-async", "1"` dans la liste `"args"`. Le cache d'experts est alors mis à jour dans un thread auxiliaire au lieu de mettre la réponse en pause. Mesuré sur une RTX 5070 (Windows, Q2_0) : +4-5 % de génération, +7-10 % sur le code et les longs documents. Les réponses peuvent légèrement différer de celles par défaut (elles restent identiques d'une exécution à l'autre).
 - **Lecture du prompt plus rapide sous Windows :** `"STRATA_PIN_BY_NEED": "1"` dans le bloc `"env"`. Windows ne peut verrouiller qu'environ la moitié de la RAM pour la carte ; ce réglage verrouille d'abord les experts dont la carte a vraiment besoin. Mesuré sur la RTX 5070 : +4,4 % en lecture du prompt.
@@ -705,11 +705,11 @@ Deux réglages optionnels (de RubenTorney, #1904 et #1905). Ils aident si vous u
 "env": { "STRATA_PIN_BY_NEED": "1" }
 ```
 
-Redémarrez AryaStrata (`START-HERE.bat` ou `./setup.sh`) après la modification. Pour annuler, retirez les deux entrées.
+Redémarrez AryaInfer (`START-HERE.bat` ou `./setup.sh`) après la modification. Pour annuler, retirez les deux entrées.
 
 ## Un problème ?
 
-- **Mon PC s'est figé au premier démarrage de AryaStrata.** C'est normal pendant le chargement du modèle. Attendez, et ne
+- **Mon PC s'est figé au premier démarrage de AryaInfer.** C'est normal pendant le chargement du modèle. Attendez, et ne
   fermez pas la fenêtre. Toujours figé après 10 minutes ? Redémarrez le PC, fermez les autres programmes et
   réessayez, ou choisissez une taille plus petite.
 - **Il s'est arrêté pendant le téléchargement ou l'installation.** Relancez `START-HERE.bat` (ou `./setup.sh`). Il
@@ -717,16 +717,16 @@ Redémarrez AryaStrata (`START-HERE.bat` ou `./setup.sh`) après la modification
 - **C'est très lent et le voyant du disque clignote sans arrêt, ou il affiche « the engine stopped unexpectedly ».**
   Votre PC n'a pas assez de RAM libre. Fermez les autres programmes (les navigateurs en utilisent beaucoup), ou
   choisissez une taille plus petite (Q2_0 ou IQ2_XS).
-- **Il dit que le port 8080 est déjà utilisé.** AryaStrata tourne déjà. Cherchez sa fenêtre.
+- **Il dit que le port 8080 est déjà utilisé.** AryaInfer tourne déjà. Cherchez sa fenêtre.
 
 Autres problèmes et leurs solutions : [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md). Toujours bloqué ? Ouvrez une
-[issue](https://github.com/KonnectSuite/AryaStrata/issues) et joignez `strata-<model>.log` depuis le dossier AryaStrata. Vous
+[issue](https://github.com/KonnectSuite/AryaStrata/issues) et joignez `strata-<model>.log` depuis le dossier AryaInfer. Vous
 avez trouvé un problème de sécurité ? Signalez-le en privé : [SECURITY.md](SECURITY.md).
 
 ## Comment ça marche ?
 
 Les modèles comme celui-ci tournent d'habitude sur des serveurs avec des centaines de gigaoctets de mémoire
-graphique. Votre carte graphique a 8-32 Go. AryaStrata fait tenir le modèle en **répartissant le travail sur tout votre
+graphique. Votre carte graphique a 8-32 Go. AryaInfer fait tenir le modèle en **répartissant le travail sur tout votre
 PC**. Pensez à une cuisine : ce que vous utilisez tout le temps reste sur le plan de travail, et le reste attend dans
 le placard.
 
@@ -921,8 +921,8 @@ quantification d'[Unsloth](https://huggingface.co/unsloth). LFM2.5-24B-A2B est d
 de Liquid AI. Ornith 1.5 est d'ornith-ai, dans la quantification APEX de
 [mudler](https://huggingface.co/mudler/Ornith-1.5-35B-A3B-APEX-MTP-GGUF). Tiel Coder 35B-A3B est Ornith 1.5 dans la quantification de
 [peculiar-ragdoll](https://huggingface.co/peculiar-ragdoll/Tiel-Coder-35B-A3B-GGUF-MTP) ;
-[u/Sensitive_Song4219](https://www.reddit.com/r/LocalLLM/comments/1x22inc/comment/pf3r111/) a découvert qu'il tourne sur AryaStrata. MiniCPM-V 4.7 35B-A3B est d'[OpenBMB](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-gguf),
-dans leur propre quantification ; [iMilnb](https://github.com/iMilnb) l'a amené à AryaStrata. AryaStrata est construit sur [Strata](https://github.com/Niko1221/Strata) de Niko1221 et de ses
+[u/Sensitive_Song4219](https://www.reddit.com/r/LocalLLM/comments/1x22inc/comment/pf3r111/) a découvert qu'il tourne sur AryaInfer. MiniCPM-V 4.7 35B-A3B est d'[OpenBMB](https://huggingface.co/openbmb/MiniCPM-V-4.7-35B-A3B-gguf),
+dans leur propre quantification ; [iMilnb](https://github.com/iMilnb) l'a amené à AryaInfer. AryaInfer est construit sur [Strata](https://github.com/Niko1221/Strata) de Niko1221 et de ses
 contributeurs, et utilise des parties de [llama.cpp / ggml](https://github.com/ggml-org/llama.cpp). Tous les
-crédits : [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md#credits). AryaStrata est open source sous [licence MIT](LICENSE).
+crédits : [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md#credits). AryaInfer est open source sous [licence MIT](LICENSE).
 Quelques parties et chaque modèle ont leur propre licence ([lesquelles](docs/HOW_IT_WORKS.md#license)).

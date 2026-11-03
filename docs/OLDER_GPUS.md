@@ -1,8 +1,8 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # Older GPUs (experimental)
 
-AryaStrata's supported cards are NVIDIA RTX 20 / 30 / 40 / 50 and the AMD cards in [AMD_HIP.md](AMD_HIP.md). The cards
+AryaInfer's supported cards are NVIDIA RTX 20 / 30 / 40 / 50 and the AMD cards in [AMD_HIP.md](AMD_HIP.md). The cards
 below run through **opt-in, experimental** paths that community members wrote and measured on their own machines. The
 maintainers have none of these cards: each path is compile-checked and unit-tested here, and the ready-made engines
 and their output stay exactly as they were. Numbers are the reporters' own, on one machine each.
@@ -60,7 +60,7 @@ The choice is kept in the model's config (`"cuda": 12`): its starts and `UPDATE.
 their own engine. Setting the model up again chooses again (by its cards; add `--cuda 12` to keep a forced choice). A Pascal / Volta card added to a model at a start (`--gpus`) moves that model to the
 CUDA 12 engine.
 
-`--cuda 12` is also the way to run AryaStrata with an NVIDIA driver older than 580: CUDA 12 needs 528 or newer on Windows
+`--cuda 12` is also the way to run AryaInfer with an NVIDIA driver older than 580: CUDA 12 needs 528 or newer on Windows
 (527.41, NVIDIA's minor-version compatibility) and 525 on Linux; setup's "driver too old" stop says so. Such old
 drivers were not tested here.
 

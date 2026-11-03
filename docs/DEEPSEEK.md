@@ -1,4 +1,4 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # DeepSeek V4 Flash (`strata-poly`)
 
@@ -33,7 +33,7 @@ first layers in RAM, as `--n-cpu-moe` keeps them. The experts of ten layers are 
 beside the rest of the model at this context. That column is the faster of two runs; the other wrote 24 to 26
 tokens/s and read the prompt at 72.
 
-The README's row is AryaStrata's own benchmark through the server, the test every model of this engine gets
+The README's row is AryaInfer's own benchmark through the server, the test every model of this engine gets
 ([BACKENDS.md](BACKENDS.md#a-prompt-of-30000-tokens)), as setup installs the model: a short chat written at 56
 tokens/s, and a prompt of 29,750 tokens read whole at 1,038 to 1,040, with the first token after 29 s and the
 answer after it written at 39 to 44: the second and third of three runs, as for the other models. The first, with

@@ -1,6 +1,6 @@
 # Credits and project lineage
 
-AryaStrata, maintained in [KonnectSuite/AryaStrata](https://github.com/KonnectSuite/AryaStrata),
+AryaInfer, maintained in [KonnectSuite/AryaStrata](https://github.com/KonnectSuite/AryaStrata),
 is a fork of [PolyStrata](https://github.com/VecSzn/PolyStrata) by VecSzn.
 PolyStrata is a fork of [the original Strata](https://github.com/Niko1221/Strata)
 by Niko1221 and the Strata contributors.
@@ -12,13 +12,13 @@ measurements and extensions inherited by this fork. Individual source notices,
 third-party licenses and benchmark author attributions are preserved.
 The original MIT copyright and permission notice remains in [LICENSE](LICENSE).
 
-AryaStrata is configured for our i9-14900KF, RTX 4070 Ti SUPER 16 GB, 64 GB RAM,
+AryaInfer is configured for our i9-14900KF, RTX 4070 Ti SUPER 16 GB, 64 GB RAM,
 Windows 11 host. We will build and benchmark changes against that setup, and
 replace documentation wording with our measured findings as results become
 available. The installed engine is currently upstream release 0.1.45; no custom
 engine build or performance improvement is claimed.
 
-Only measurements explicitly recorded as AryaStrata host results describe this
+Only measurements explicitly recorded as AryaInfer host results describe this
 machine. Inherited tables and demos describe their original machines. Keep their
 provenance when comparing, superseding or archiving them. Record the exact model,
 build, configuration, workload and raw results for every new performance claim.

@@ -1,8 +1,8 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # Which model? Sizes, versions and what fits
 
-## Measured on the AryaStrata host, October 17, 2026
+## Measured on the AryaInfer host, October 17, 2026
 
 On the **i9-14900KF / RTX 4070 Ti SUPER 16 GB / 64 GB RAM / Windows 11** host,
 Qwen3.8 Flash Next **IQ3_XXS**, engine **0.1.45**, measured **86.1 tokens/s** for
@@ -16,12 +16,12 @@ coding-agent sessions** and **3/3 development DSH adapter replay trials** passed
 These are not general repository-level coding or native desktop acceptance scores.
 
 [Exact profile, raw records, ranges and limitations](../bench/results/2026-10-17-aryastrata-qwen38-iq3xxs/README.md) ·
-[Host setup](ARYASTRATA.md) · [AryaAI development DSH](ARYAAI_DSH.md).
+[Host setup](ARYAINFER.md) · [AryaAI development DSH](ARYAAI_DSH.md).
 
 The measurements below remain attributed upstream reference results unless
 explicitly marked as this host's findings.
 
-This page is about [Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next), which AryaStrata runs in
+This page is about [Qwen3.8-Flash-Next](https://huggingface.co/Qwen/Qwen3.8-Flash-Next), which AryaInfer runs in
 several **sizes** (the same model, compressed more or less) and several **versions** (the original, a coding
 version, a fine-tune). The installer recommends one for your PC; this page explains the choice. The full nine-family [support table](../README.md#supported-models) covers GLM,
 DeepSeek, LFM, Qwen3.6, Ornith, Gemma, Tiel and MiniCPM-V, with links to their
@@ -84,7 +84,7 @@ A card with more VRAM is faster, because more of the model fits on the GPU: an R
 RX 9060 XT, RX 6900 XT) are in [AMD_HIP.md](AMD_HIP.md#rdna4-gfx1201).
 
 Every PC is different: `START-HERE.bat --calibrate` measures a few engine settings on yours and keeps the fastest
-(about 15-30 minutes, longer on a slow card; on the PC above it made the Coder 7% faster; NVIDIA cards for now). Measured AryaStrata on your own
+(about 15-30 minutes, longer on a slow card; on the PC above it made the Coder 7% faster; NVIDIA cards for now). Measured AryaInfer on your own
 PC? See [Community benchmark results](COMMUNITY_BENCHMARKS.md) for a report template and how to share your results
 in a pull request.
 

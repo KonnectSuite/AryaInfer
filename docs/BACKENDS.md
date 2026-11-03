@@ -1,11 +1,11 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221â€™s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221â€™s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # Models and backends
 
-AryaStrata runs more than one model family. This page says which, how the engine is put together so that it can,
+AryaInfer runs more than one model family. This page says which, how the engine is put together so that it can,
 how a model is recognized, how to add one, and how to change the model that answers.
 
-AryaStrata host measurements are separate from the inherited comparisons below:
+AryaInfer host measurements are separate from the inherited comparisons below:
 [Qwen3.6 Q4/Q8](QWEN36_HOST_RESULTS.md) and
 [MiniCPM-V 4.7 Q4](MINICPMV_HOST_RESULTS.md), both at 262,144-token capacity
 with GPU vision on our Windows host. See each report for actual input counts,
@@ -1190,7 +1190,7 @@ one check that expected reasoning where GLM gave none.
 The tokenizers give llama.cpp's ids on the same prompts (27 to 8001 tokens) for Qwen3.6, Ornith and Gemma 4.
 
 Pictures were checked the same way, greedy and up to 64 tokens, on three prompts: one picture; two pictures of
-different shapes with text between and after them; a picture, an answer and a second question. AryaStrata's
+different shapes with text between and after them; a picture, an answer and a second question. AryaInfer's
 server code rendered each prompt. llama.cpp's server got it as text with its media marker where a picture goes
 and encoded the pictures itself; the engine got the ids and `strata-vision`'s rows. Both read the same number of
 prompt tokens.

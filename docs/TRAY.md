@@ -1,6 +1,6 @@
 # The tray icon (Windows)
 
-AryaStrata in the Windows notification area: the model runs with no console window to close by accident, and the
+AryaInfer in the Windows notification area: the model runs with no console window to close by accident, and the
 icon is where it is started, stopped, restarted and switched. Windows only; Linux runs it from a terminal as before.
 
 ## Starting it
@@ -9,7 +9,7 @@ icon is where it is started, stopped, restarted and switched. Windows only; Linu
 - run `pythonw serve\tray.py` (no window: `pythonw`, not `python`).
 
 Setup also offers to start the tray icon **at sign-in**: a `.vbs` in the user's Startup folder. The offer is off by
-default, so `START-HERE.bat` and `run-<model>.bat` stay the way AryaStrata has always started; the icon's own
+default, so `START-HERE.bat` and `run-<model>.bat` stay the way AryaInfer has always started; the icon's own
 **Start at sign-in** item turns the entry on and off later with no setup run. (A Startup-folder entry was chosen
 over Task Scheduler because Task Scheduler's default start was measured at 0.05 GiB/s on this PC against 1.42-1.52
 GiB/s for a double-click: [DETAILS.md](DETAILS.md#running-it-at-startup-task-scheduler).)
@@ -18,14 +18,14 @@ GiB/s for a double-click: [DETAILS.md](DETAILS.md#running-it-at-startup-task-sch
 
 | Item | What it does |
 | --- | --- |
-| Open AryaStrata | Opens the web app, `http://127.0.0.1:<port>/` from the config |
-| Start AryaStrata | Starts the model hidden, in a job that ends with the icon |
-| Stop AryaStrata | Stops it the way Ctrl+C would, then waits for the card to be free |
-| Restart AryaStrata | Stop, then start again on the same model |
+| Open AryaInfer | Opens the web app, `http://127.0.0.1:<port>/` from the config |
+| Start AryaInfer | Starts the model hidden, in a job that ends with the icon |
+| Stop AryaInfer | Stops it the way Ctrl+C would, then waits for the card to be free |
+| Restart AryaInfer | Stop, then start again on the same model |
 | Model | Only when more than one model is installed: switch by restarting on it |
 | Start at sign-in | Writes or removes the Startup-folder entry |
 | Open the log | `logs\tray.log`, the server's whole console output and the tray's own lines |
-| Quit AryaStrata | Removes the icon and stops the model |
+| Quit AryaInfer | Removes the icon and stops the model |
 
 Items that do not apply to the current state are greyed out. Double-click opens the web app; right-click opens the
 menu. The tooltip says the state and, when there is one, the address; a balloon announces ready, crashed (with the
@@ -63,7 +63,7 @@ Measured on this PC (Windows 11, i9-14900KF / RTX 4070 Ti SUPER) while building 
 - the icon starts under `pythonw`, adds itself to the notification area, and logs `tray: the icon is up`; the shell
   shows it in the overflow as an `AryaStrata` notification-area button with the state's own frame colour, read back
   through UI automation (the overflow window, `TopLevelWindowForOverflowXamlIsland`);
-- a right-click on that icon opens the real menu: with a server running outside the tray, **Open AryaStrata** and
+- a right-click on that icon opens the real menu: with a server running outside the tray, **Open AryaInfer** and
   **Quit** are enabled and **Start** / **Stop** / **Restart** are greyed out;
 - a server running outside the tray on port 8080 shows as **running outside the tray** and is left alone;
 - the sign-in entry is written and removed in the user's Startup folder (`AryaStrata (tray).vbs`), and the entry

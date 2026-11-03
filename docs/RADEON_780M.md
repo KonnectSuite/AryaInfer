@@ -1,8 +1,8 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # Radeon 780M / 760M (Ryzen 7040 / 8040, gfx1103): build from source on Linux
 
-The Radeon 780M (Phoenix / Hawk Point, RDNA3, `gfx1103`) runs AryaStrata through the same HIP backend as the Radeon
+The Radeon 780M (Phoenix / Hawk Point, RDNA3, `gfx1103`) runs AryaInfer through the same HIP backend as the Radeon
 cards in [AMD_HIP.md](AMD_HIP.md). **Status: experimental and opt-in** (`STRATA_EXPERIMENTAL_GFX1103=1`): the port
 is measured on one machine (the numbers below), the maintainers have not run one, and the chip is not Strix Halo.
 Everything here was measured on a Ryzen 7 8745HS (8 cores, AVX-512), Radeon 780M (12 CUs), 60 GB DDR5, GTT at

@@ -94,7 +94,7 @@ the fix, reproduced on this host with the user's task.
 answer. `compaction-basic` computes its pressure budget as `window - request maxTokens -
 headroom`; at 262,144 with 65,536 allowed and the default 64K headroom, the live-context
 budget is 131,072 tokens instead of 188,416. If a session needs more live context and
-accepts shorter writes, lower the model's allowance with **AryaStrata → Chat output
+accepts shorter writes, lower the model's allowance with **AryaInfer → Chat output
 limits**; the editor's range is 1,024 to the window minus 1,024.
 
 At the ceiling the request is not refused: a **234,726-token** prompt with
@@ -223,9 +223,9 @@ repeated) on the tuned models, no tools, 64-token answer.
 
 | Prompt | Model | Time to first token | Prompt read | Answer | Result |
 | ---: | --- | ---: | ---: | --- | --- |
-| 234,726 | Qwen3.6 UD-Q4_K_XL | 186.4 s | 1,259 tok/s | "AryaStrata - the details" | `finish: stop`, no OOM |
-| 234,726 | Qwen3.6 UD-Q2_K_XL | 183.2 s | 1,281 tok/s | "AryaStrata - the details" | `finish: stop`, no OOM |
-| 234,726 | Ornith 1.5 APEX (now 262,144) | 185.7 s | 1,264 tok/s | "AryaStrata - the details" | `finish: stop`, no OOM |
+| 234,726 | Qwen3.6 UD-Q4_K_XL | 186.4 s | 1,259 tok/s | "AryaInfer - the details" | `finish: stop`, no OOM |
+| 234,726 | Qwen3.6 UD-Q2_K_XL | 183.2 s | 1,281 tok/s | "AryaInfer - the details" | `finish: stop`, no OOM |
+| 234,726 | Ornith 1.5 APEX (now 262,144) | 185.7 s | 1,264 tok/s | "AryaInfer - the details" | `finish: stop`, no OOM |
 
 The attention cache does grow to its 262K size by then (the expert cache gives the VRAM
 back), and the Qwen3.6 Q4 read is still **29% faster** than the pre-tuning roster's

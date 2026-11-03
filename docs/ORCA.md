@@ -1,12 +1,12 @@
-> **AryaStrata documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaStrata host. See [host findings](ARYASTRATA.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # OrcaRouter IQ3_XXS compatibility
 
 Validated on Linux with an RTX 5090 (32 GB), Ryzen 9 9950X3D and 128 GB RAM on 2026-09-27.
 
 The target is `orcarouter/Qwen3.8-Flash-Next-Uncensored-GGUF`, **IQ3_XXS** (two shards, 85.20 GB total).
-It has AryaStrata's Qwen4Exp geometry, but ordinary quantization also compresses the hyperconnection,
-small attention and PLE projections which AryaStrata's kernels read as BF16.
+It has AryaInfer's Qwen4Exp geometry, but ordinary quantization also compresses the hyperconnection,
+small attention and PLE projections which AryaInfer's kernels read as BF16.
 
 `tools/iq_pack.py --compat-bf16` expands only those projections, rounding to BF16 using nearest-even.
 This adds rounding relative to the GGUF's dequantized weights; it does not recover the original BF16
@@ -20,7 +20,7 @@ finish downloading before packing. Pass the snapshot filename, not its hash-name
 
 ## Preparation
 
-Build AryaStrata normally using the pinned llama.cpp dependency. Python needs numpy, regex and gguf-py
+Build AryaInfer normally using the pinned llama.cpp dependency. Python needs numpy, regex and gguf-py
 from that dependency (`STRATA_GGUF_PY` can point to its `gguf-py` directory).
 
 ```sh
@@ -32,7 +32,7 @@ from that dependency (`STRATA_GGUF_PY` can point to its `gguf-py` directory).
 Use this model's own tokenizer exported into the pack. Do not share another model's `dense.bin`,
 and do not rename the Orca files to impersonate one of setup's GSQ-RCO models.
 
-AryaStrata's persistent server also uses the MTP runtime (optional: without `--mtp` it drafts by lookup only), prepared by
+AryaInfer's persistent server also uses the MTP runtime (optional: without `--mtp` it drafts by lookup only), prepared by
 the existing tools:
 
 ```sh

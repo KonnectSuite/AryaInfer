@@ -1,10 +1,10 @@
-# MiniCPM-V 4.7 35B-A3B on the AryaStrata host
+# MiniCPM-V 4.7 35B-A3B on the AryaInfer host
 
 The installed template supports thinking Off/On. Benchmark requests labeled
 `low` enable native thinking; Low/Medium/High are aliases in AryaAI, not three
 distinct strengths. See the [connection audit](ARYAAI_CONNECTION_AUDIT.md).
 
-AryaStrata is a fork of [PolyStrata](https://github.com/VecSzn/PolyStrata),
+AryaInfer is a fork of [PolyStrata](https://github.com/VecSzn/PolyStrata),
 which is a fork of [Niko1221's original Strata](https://github.com/Niko1221/Strata).
 Original notices and credits remain in [CREDITS.md](../CREDITS.md).
 
