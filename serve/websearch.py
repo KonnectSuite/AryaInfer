@@ -26,6 +26,7 @@ import json
 import os
 import re
 import socket
+import ssl
 import threading
 import time
 import urllib.error
@@ -224,6 +225,19 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _ssl_context():
+    """A trust store that works: certifi's bundle when the install has it, else the platform's own.
+
+    Python on Windows trusts the system store only through its own loader, and a server started without SSL_CERT_FILE
+    could not verify ordinary https pages, so read_page answered "certificate verify failed" for every one of them.
+    """
+    try:
+        import certifi
+    except ImportError:
+        return ssl.create_default_context()
+    return ssl.create_default_context(cafile=certifi.where())
+
+
 def _get(url: str, headers: dict, timeout: float, cancel, limit: int) -> tuple[int, object, bytes]:
     """GET once -> (status, headers, body at most `limit` bytes).  A 3xx is returned as one, not followed.
 
@@ -233,7 +247,9 @@ def _get(url: str, headers: dict, timeout: float, cancel, limit: int) -> tuple[i
     def work():
         try:
             req = urllib.request.Request(url, headers=headers, method="GET")
-            with urllib.request.build_opener(_NoRedirect).open(req, timeout=timeout) as r:
+            opener = urllib.request.build_opener(_NoRedirect,
+                                                 urllib.request.HTTPSHandler(context=_ssl_context()))
+            with opener.open(req, timeout=timeout) as r:
                 box["status"], box["headers"], box["body"] = r.status, r.headers, r.read(limit + 1)
         except urllib.error.HTTPError as e:              # 3xx and 4xx/5xx reach here (nothing follows a redirect)
             with e:

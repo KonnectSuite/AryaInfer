@@ -806,6 +806,8 @@ All twelve models are used the same way: the same app, the same API.
     ([setup](docs/DETAILS.md#the-responses-api-and-codex-cli)).
 - **Thinking:** choose **off, low, medium or high** in the chat menu or in your app's "reasoning effort". Off is the
   fastest. High is best for hard questions.
+- **At a glance:** two lights in the header say whether **web search** and **images (ComfyUI)** are on, off, or not
+  answering; a grey ring means never set up, red means the ComfyUI address does not answer. Clicking one opens its card.
 - **Tools in the chat page:** give the model your own [MCP servers](docs/DETAILS.md#tools-from-mcp-servers) from
   **Settings > Tools > MCP servers** (a catalog of known servers, a pasted Claude Desktop block, or the fields by
   hand) and a [SearXNG web search](docs/SEARCH.md) beside it; both are offered from the next answer on.
@@ -1096,4 +1098,5 @@ PolyStrata is built on
 [llama.cpp / ggml](https://github.com/ggml-org/llama.cpp). All credits:
 [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md#credits). PolyStrata is open source under the [MIT License](LICENSE). A few
 parts and every model have their own licenses ([which ones](docs/HOW_IT_WORKS.md#license)).
+
 

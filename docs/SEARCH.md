@@ -1,4 +1,4 @@
-# Web search (SearXNG)
+﻿# Web search (SearXNG)
 
 AryaInfer has no search engine of its own and sends nothing off this PC unless you ask it to. Point it at a
 [SearXNG](https://docs.searxng.org) instance you run or trust - on this PC, on the LAN, or over a Tailnet - and the
@@ -111,6 +111,7 @@ rebinding) - the tool runs with your rights on a machine you control, not as a p
 | `no results` | the query found nothing (a rare word, a `!bang` to an engine that is off) |
 | `... resolves to 127.0.0.1, a local or private address` | `read_page` against a local address with `allow_local` off |
 | `the page has no readable text` | a JavaScript-only page, a PDF, or an image |
+| `certificate verify failed` | the host's trust store was missing the page's root: the reader now verifies with `certifi`'s bundle when it is installed, so this means no bundle and an unusual certificate |
 
 ## The code
 
@@ -122,3 +123,4 @@ rebinding) - the tool runs with your rights on a machine you control, not as a p
 | `serve/test_websearch.py` | the tests: mapping, settings, every failure mode, the page reader, the chat loop |
 
 `python -m unittest serve.test_websearch` runs them without a GPU, a model or a real instance.
+

@@ -12,6 +12,7 @@ import sys
 import tempfile
 import threading
 import time
+import ssl
 import unittest
 import urllib.error
 import urllib.request
@@ -51,6 +52,12 @@ class ScriptedEngine(MockEngine):
 
 # ------------------------------------------------------------------------------------------------ the settings
 class Settings(unittest.TestCase):
+    def test_the_reader_trusts_the_certifi_bundle(self):
+        # a server started without SSL_CERT_FILE could not verify ordinary https pages
+        ctx = W._ssl_context()
+        self.assertIsInstance(ctx, ssl.SSLContext)
+        self.assertGreater(ctx.cert_store_stats()["x509_ca"], 0)
+
     def test_defaults_and_values(self):
         s = W.normalize({})
         self.assertEqual((s["enabled"], s["base_url"], s["auth"], s["max_results"]), (False, "", "none", 8))

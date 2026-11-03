@@ -193,6 +193,20 @@ class Contract(unittest.TestCase):
         self.assertNotIn("api_base", self.room)
         self.assertGreaterEqual(self.templates.count("prompt:"), 8)
 
+    def test_the_tools_show_their_state_in_the_header(self):
+        for name in ("tool-pills", "pill-search", "pill-images"):
+            self.assertIn(name, self.page.by_id, name)
+        for call in ('$("pill-search").onclick', '$("pill-images").onclick', "function renderToolPills()"):
+            self.assertIn(call, self.js, call)
+        self.assertIn("renderToolPills();", self.js)
+        self.assertIn('renderToolPills();                       // the switches for web search and images',
+                      self.js)                                  # a switch in the drawer moves the light
+        self.assertIn("function openSearchDialog()", self.js)
+        css = (WEB / "app.css").read_text(encoding="utf-8")
+        for state in ('[data-state="on"]', '[data-state="down"]'):
+            self.assertIn(state, css)
+        self.assertIn(".st-tool__label { display: none; }", css)   # a phone keeps the lights, not the words
+
     def test_written_pages_render_in_the_answer(self):
         for needle in ("data-artifact-open", "st-artifact__frame", "function wbShowArtifact",
                        "codeBlock(m[2].trim(), rest, {live: true})",   # a streaming block stays code

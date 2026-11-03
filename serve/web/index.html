@@ -84,6 +84,16 @@
         <svg class="st-icon"><use href="web/sprite.svg#i-menu"/></svg></button>
       <h1 class="st-header__title" id="view-title">Chat</h1>
       <span class="st-header__spacer"></span>
+      <div class="st-tools" id="tool-pills">
+        <button class="st-tool" id="pill-search" type="button" data-state="unset" title="Web search: not set up"
+                aria-label="Web search: not set up">
+          <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-globe"/></svg>
+          <span class="st-tool__led"></span><span class="st-tool__label">Web</span></button>
+        <button class="st-tool" id="pill-images" type="button" data-state="unset" title="Images: not set up"
+                aria-label="Images (ComfyUI): not set up">
+          <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-image"/></svg>
+          <span class="st-tool__led"></span><span class="st-tool__label">Images</span></button>
+      </div>
       <button class="st-btn st-btn--icon" id="wb-toggle" type="button" title="Workbench (Ctrl+Shift+B)"
               aria-label="Open the workbench" aria-pressed="false">
         <svg class="st-icon"><use href="web/sprite.svg#i-panel"/></svg></button>

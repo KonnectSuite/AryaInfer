@@ -199,6 +199,7 @@ async function loadHealth() {
       healthShown = true;
       if (location.hash === "#images" && !$("nav-images").hidden) showTab("images");
     }
+    renderToolPills();
   } catch (e) {
     setTimeout(loadHealth, 2000);
   }
@@ -1197,6 +1198,7 @@ async function loadSearch() {
     searchInfo = await r.json();
   } catch (e) { return; /* an older server: no web search */ }
   renderSearch();
+  renderToolPills();
 }
 function searchToggle(id, on) { $(id).setAttribute("aria-checked", String(!!on)); }
 function searchOn(id) { return $(id).getAttribute("aria-checked") === "true"; }
@@ -1332,11 +1334,12 @@ $("search-test").onclick = async () => {             // one real query with the 
     $("search-test").disabled = false;
   }
 };
-$("search-open").onclick = () => {
+$("search-open").onclick = () => openSearchDialog();
+function openSearchDialog() {
   closeSettings();
   $("search-dialog").showModal();
   loadSearch().then(() => $("search-url").focus());
-};
+}
 $("search-close").onclick = () => $("search-dialog").close();
 $("search-dialog").addEventListener("click", (e) => { if (e.target === $("search-dialog")) $("search-dialog").close(); });
 
@@ -1391,8 +1394,28 @@ function renderComfy() {
     ? "a generate_image tool in this page's chat" : "set the server up first";
   renderComfyWorkflows();
   renderComfyCheck();
+  renderToolPills();
   if (typeof roomOnComfy === "function") roomOnComfy();      // the Images room shares these settings
 }
+// Two lights in the header: is web search on, and is the image engine on and answering.  A click opens the card that
+// turns it on, so the light is also the shortcut.  "unset" means the tool has never been configured.
+function renderToolPills() {
+  const s = settings || {};
+  const search = !searchInfo.configured ? "unset" : (s.search !== false ? "on" : "off");
+  const images = !comfyInfo.configured ? "unset"
+    : (!comfyInfo.reachable ? "down" : (s.images !== false ? "on" : "off"));
+  const words = {on: "on", off: "off", unset: "not set up", down: "ComfyUI is not answering"};
+  const set = (id, state, label) => {
+    const el = $(id);
+    el.dataset.state = state;
+    el.title = `${label}: ${words[state]}`;
+    el.setAttribute("aria-label", `${label}: ${words[state]}`);
+  };
+  set("pill-search", search, "Web search");
+  set("pill-images", images, "Images");
+}
+$("pill-search").onclick = () => openSearchDialog();
+$("pill-images").onclick = () => { if (typeof openImagesDialog === "function") openImagesDialog(); };
 function renderComfyWorkflows() {
   const box = $("image-workflows");
   const list = comfyInfo.workflows || [];
@@ -2719,6 +2742,7 @@ $("s-apply").onclick = async () => {
               search: $("s-search").getAttribute("aria-checked") === "true",
               images: $("s-images").getAttribute("aria-checked") === "true"};
   store.set("sampling", settings);
+  renderToolPills();                       // the switches for web search and images take effect now
   const share = $("s-share").getAttribute("aria-checked") === "true";
   openDrawer(false);
   if (share || sharedOn) {
