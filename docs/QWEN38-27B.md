@@ -898,3 +898,19 @@ The batch ceiling is real: a 3072-row batch at 8K was tried and never finished (
 scratch is about 4.3 GB on top of the 10.25 GB of weights and the cache - the same spill the IQ3 file showed at 120K,
 and the card pages rather than running.  Batch 1024 is the safe point at 131K context and 2048 at 64K or less; do not
 take a batch above that on this card.
+
+### AQ3 on the int8 tensor cores: correct, not yet faster (2026-11-03)
+
+`fused_aq3_i8` (`src/poly/prefill_f16.cu`) multiplies the AQ3 codes on the int8 tensor cores - one
+`mma.sync.m16n8k32` per 32 values through `ggml_cuda_mma`, the group scale and the activation block scale applied to
+each chunk - with the tokens quantized once a call by `native_quantize_q8_1`.  It is opt-in (`STRATA_AQ3_I8=1`); the
+default stays the Q8_0 expansion path.
+
+Correctness: `src/poly/aq3_i8_test.cu` builds a synthetic AQ3 matrix, quantizes the activations to Q8_1 and compares
+the kernel with a double-precision CPU reference: worst |diff| 4.8e-7 on values up to 4.16, no non-finite values.  The
+engine's 24-token greedy greeting gives the same ids on both paths.
+
+Speed: not yet.  At 8K, batch 1024, 64 tokens, the int8 product reads 230.6 tok/s against 1,418.6 for the expansion
+path - 6x slower.  The block is 32 rows by 32 tokens, so its activations are read again for every 32 output rows (16
+MACs a byte, against MMQ's tiles) and staged by a byte copy on 128 threads.  The next step is a bigger tile (64-128
+rows by 128 tokens) with vectorized staging; the instruction is already the right one.

@@ -11,6 +11,7 @@
 
 #include "ggml.h"
 #include "common.cuh"
+#include "mma.cuh"
 
 #include <cuda_fp16.h>
 #include <mma.h>
@@ -55,6 +56,16 @@ __device__ __forceinline__ void aq3_8(const uint8_t* blk, int off, __half* out) 
 #pragma unroll
     for (int j = 0; j < 8; ++j)
         out[j] = __float2half(d * (float) ((int) (((qs[j] >> sl) & 3) | (((hm[j] >> sh) & 1) << 2)) - 4));
+}
+
+// The same eight values as signed int8, for the tensor-core product: the group's scale is applied once in the epilogue.
+__device__ __forceinline__ void aq3_8_i8(const uint8_t* blk, int off, int8_t* out) {
+    const uint8_t* qs = blk + 4 + (off & 63);
+    const uint8_t* hm = blk + 68 + (off & 31);
+    const int sl = 2 * (off >> 6), sh = off >> 5;
+#pragma unroll
+    for (int j = 0; j < 8; ++j)
+        out[j] = (int8_t) ((int) (((qs[j] >> sl) & 3) | (((hm[j] >> sh) & 1) << 2)) - 4);
 }
 
 template <bool AQ3>
@@ -217,9 +228,114 @@ __global__ void cast_f16_kernel(const float* __restrict__ x, __half* __restrict_
     if (i < n) y[i] = __float2half(x[i]);
 }
 
+// AQ3 x Q8_0 products on the int8 tensor cores (opt-in: STRATA_AQ3_I8).  A block is 32 weight rows by 32 tokens, k in
+// tiles of 128 values - one AQ3 group, so one weight scale a row.  Eight warps: two row halves of 16 and four token
+// groups of 8; each 32-value chunk is one m16n8k32, and the group's scale and that chunk's activation scale are
+// applied to its int32 sum before it joins the fp32 accumulator.  The activation buffer is the q8_0 layout MMQ
+// already produces (a half scale and 32 int8 a 32-value block), so the tokens are quantized once a call.
+constexpr int I8_BM = 32, I8_BN = 32, I8_BK = 128;
+constexpr size_t kI8Smem = (size_t) (I8_BM * I8_BK + I8_BN * I8_BK) + (I8_BM + 4 * I8_BN) * sizeof(float);
+
+__global__ void fused_aq3_i8_kernel(const uint8_t* __restrict__ w, size_t row_bytes,
+                                    const uint8_t* __restrict__ xq, float* __restrict__ y,
+                                    int n_in, int n_out, int rows) {
+    extern __shared__ char smem_i8[];
+    int8_t* a_s = (int8_t*) smem_i8;                 // BM x BK weight codes
+    int8_t* b_s = a_s + I8_BM * I8_BK;               // BN x BK activation codes
+    float* wsc = (float*) (b_s + I8_BN * I8_BK);     // a weight group scale a row
+    float* bsc = wsc + I8_BM;                        // four activation block scales a token
+    const int m0 = blockIdx.x * I8_BM, t0 = blockIdx.y * I8_BN;
+    const int tid = threadIdx.x, warp = tid >> 5, wr = warp >> 2, wt = warp & 3;
+    const int lane = tid & 31;
+    const int blocks_per_row = n_in / 32;
+    float acc[4] = {0.f, 0.f, 0.f, 0.f};
+    for (int kt = 0; kt < n_in / I8_BK; ++kt) {
+        for (int c = tid; c < I8_BM * (I8_BK / 8); c += (int) blockDim.x) {
+            const int m = c / (I8_BK / 8), j = c % (I8_BK / 8), col = m0 + m;
+            int8_t* out = a_s + m * I8_BK + j * 8;
+            if (col >= n_out) {
+                for (int i = 0; i < 8; ++i) out[i] = 0;
+                continue;
+            }
+            const int k = kt * I8_BK + j * 8;
+            aq3_8_i8(w + (size_t) col * row_bytes + (size_t) (k >> 8) * kAq3Block, k & 255, out);
+        }
+        if (tid < I8_BM) {
+            const int col = m0 + tid;
+            wsc[tid] = col < n_out
+                ? __half2float(*(const __half*) (w + (size_t) col * row_bytes + (size_t) (kt >> 1) * kAq3Block +
+                                                 (kt & 1) * 2))
+                : 0.f;
+        }
+        if (tid < I8_BN * 4) {
+            const int t = tid >> 2, c = tid & 3, tok = t0 + t;
+            int8_t* out = b_s + t * I8_BK + c * 32;
+            if (tok >= rows) {
+                for (int i = 0; i < 32; ++i) out[i] = 0;
+                bsc[t * 4 + c] = 0.f;
+            } else {
+                // native_quantize_q8_1's block: half2 ds (the scale, then the sum) and 32 int8
+                const uint8_t* blk = xq + ((size_t) tok * blocks_per_row + kt * 4 + c) * 36;
+                for (int i = 0; i < 32; ++i) out[i] = (int8_t) blk[4 + i];
+                bsc[t * 4 + c] = __half2float(*(const __half*) blk);
+            }
+        }
+        __syncthreads();
+        // The mma.cuh tile layout is written in terms of threadIdx.x as the lane, which is only true for a one-warp
+        // block; this block has eight, so the same mapping is done here with the lane.  A is 16 rows by 8 ints of 4
+        // codes (32 values), B is 8 tokens by 8 ints, and D's elements follow A's: row (l / 2) * 8 + lane / 4, token
+        // (lane % 4) * 2 + l % 2.
+        for (int c = 0; c < 4; ++c) {
+            ggml_cuda_mma::tile<16, 8, int> A, D;
+            ggml_cuda_mma::tile<8, 8, int> B;
+#pragma unroll
+            for (int l = 0; l < 4; ++l) {
+                // m16n8k32's A fragment: a0/a1 are the first 8 rows, a2/a3 the next 8, and each holds 8 of the
+                // row's 32 codes (two ints); the class mapping is the C one, not this.
+                const int r = ((l & 1) * 8) + (lane >> 2), j = ((l >> 1) * 4) + (lane & 3);
+                A.x[l] = ((const int*) (a_s + (wr * 16 + r) * I8_BK + c * 32))[j];
+            }
+#pragma unroll
+            for (int l = 0; l < 2; ++l) {
+                const int r = lane >> 2, j = (l * 4) + (lane & 3);
+                B.x[l] = ((const int*) (b_s + (wt * 8 + r) * I8_BK + c * 32))[j];
+            }
+            D.x[0] = D.x[1] = D.x[2] = D.x[3] = 0;
+            ggml_cuda_mma::mma(D, A, B);
+#pragma unroll
+            for (int l = 0; l < 4; ++l) {
+                const int r = ((l >> 1) * 8) + (lane >> 2), tk = ((lane & 3) * 2) + (l & 1);
+                acc[l] += wsc[wr * 16 + r] * bsc[(wt * 8 + tk) * 4 + c] * (float) D.x[l];
+            }
+        }
+        __syncthreads();
+    }
+#pragma unroll
+    for (int l = 0; l < 4; ++l) {
+        const int r = m0 + wr * 16 + ((l >> 1) * 8) + (lane >> 2);
+        const int tk = t0 + wt * 8 + ((lane & 3) * 2) + (l & 1);
+        if (r < n_out && tk < rows) y[(size_t) tk * n_out + r] = acc[l];
+    }
+}
+
 }  // namespace
 
 bool f16_type(int ggml_type) { return ggml_type == (int) GGML_TYPE_IQ3_XXS || ggml_type == (int) kTypeAQ3; }
+
+bool fused_gemm_i8(const void* w, size_t row_bytes, const void* xq, float* y, int n_in, int n_out, int rows,
+                   void* stream) {
+    if (rows <= 0 || n_in <= 0 || n_in % I8_BK != 0) return false;
+    const dim3 grid((unsigned) ((n_out + I8_BM - 1) / I8_BM), (unsigned) ((rows + I8_BN - 1) / I8_BN));
+    fused_aq3_i8_kernel<<<grid, 256, kI8Smem, (cudaStream_t) stream>>>((const uint8_t*) w, row_bytes,
+                                                                     (const uint8_t*) xq, y, n_in, n_out, rows);
+    const cudaError_t launched = cudaPeekAtLastError();
+    if (launched != cudaSuccess) {
+        std::fprintf(stderr, "aq3 i8 launch: %s (n_in %d, n_out %d, rows %d)\n", cudaGetErrorString(launched), n_in,
+                     n_out, rows);
+        return false;
+    }
+    return true;
+}
 
 void cast_f16(const float* x, uint16_t* out, size_t n, void* stream) {
     if (n == 0) return;
@@ -278,6 +394,7 @@ namespace strata::poly {
 bool f16_type(int) { return false; }
 void cast_f16(const float*, uint16_t*, size_t, void*) {}
 bool fused_gemm_f16(const void*, size_t, int, const uint16_t*, float*, int, int, int, void*) { return false; }
+bool fused_gemm_i8(const void*, size_t, const void*, float*, int, int, int, void*) { return false; }
 size_t aq3_row_bytes(int n_in) { return (size_t) (n_in / 256) * 100; }
 void aq3_to_q8_0(const void*, void*, int, int, void*) {}
 void aq3_gemv(const void*, const void*, float*, int, int, int, void*) {}

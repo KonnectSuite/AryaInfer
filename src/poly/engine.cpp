@@ -2271,6 +2271,13 @@ void Engine::dbg(const char* name, int il, const float* dev, int n) {
 void Engine::lin(const Dev& w, const float* x, float* y, int n, const void* xq, int rows_per_x) {
 #ifdef ARYAINFER_ENGINE
     if (w.type == kTypeAQ3) {   // AQ3: the tensor-core product for a prompt batch, dp4a for up to 8 tokens a launch
+        // STRATA_AQ3_I8: the int8 tensor-core product on the AQ3 codes, with the tokens quantized once a call (q8_0,
+        // the same layout MMQ writes).  Opt-in until it is measured against the Q8_0 expansion path.
+        static const bool aq3_i8 = std::getenv("STRATA_AQ3_I8") != nullptr;
+        if (n >= kStageRows && aq3_i8 && mmq_) {
+            kernels::native_quantize_q8_1(x, q8_, w.n_in * n, 1, st_);
+            if (fused_gemm_i8(w.p, aq3_row_bytes(w.n_in), q8_, y, w.n_in, w.n_out, n, st_)) return;
+        }
         if (n >= kStageRows && mmq_ && Mmq::fits((int) GGML_TYPE_Q8_0, w.n_out, w.n_in)) {
             const size_t need = (size_t) w.n_out * (size_t) (w.n_in / 32) * 34;
             if (aq3_q8_n_ < need) {

@@ -16,6 +16,9 @@ void cast_f16(const float* x, uint16_t* out, size_t n, void* stream);
 /// y is `rows` rows of `n_out` floats.  False when the type has no kernel, and then nothing was written.
 bool fused_gemm_f16(const void* w, size_t row_bytes, int ggml_type, const uint16_t* x, float* y, int n_in, int n_out,
                     int rows, void* stream);
+/// The int8 tensor-core product (STRATA_AQ3_I8): AQ3 weights and q8_0 activations (a half scale and 32 int8 a block).
+bool fused_gemm_i8(const void* w, size_t row_bytes, const void* xq, float* y, int n_in, int n_out, int rows,
+                   void* stream);
 
 /// AQ3 (aryainfer, tools/aryainfer_gsq3_convert.py): uniform 3-bit, two fp16 scales a 256-value block of 100 bytes.
 /// Not a ggml type; the GGUF stores it as I8 rows of aq3_row_bytes(n_in) and the engine tags the upload with this id.

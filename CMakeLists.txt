@@ -1,6 +1,6 @@
-# Strata Engine - top-level build (P1.S1).
+﻿# Strata Engine - top-level build (P1.S1).
 #
-# Targets (phase-1 Ă‚Â§P1.S1): `strata_artifact` (no CUDA dependency), `tests`.  `strata_plan` and the C++
+# Targets (phase-1 Ä‚â€šÃ‚Â§P1.S1): `strata_artifact` (no CUDA dependency), `tests`.  `strata_plan` and the C++
 # `strata-pack` are added when their sources exist - a target with no sources would make the build graph
 # claim something the tree does not have, which is worse than an absent target.
 #
@@ -2089,6 +2089,12 @@ if(STRATA_NATIVE_EXPERTS AND (STRATA_ENABLE_CUDA OR STRATA_ENABLE_HIP) AND NOT S
     target_link_libraries(poly_gdn_mma_test PRIVATE strata_poly_mmq ${_strata_gpu_blas_target} ${_strata_gpu_runtime_target})
     add_test(NAME poly_gdn_mma_test COMMAND poly_gdn_mma_test)
     set_tests_properties(poly_gdn_mma_test PROPERTIES SKIP_RETURN_CODE 77)
+    # The AQ3 int8 tensor-core product against the Q8_0 expansion path on a synthetic matrix (no model file).
+    add_executable(aq3_i8_test src/poly/aq3_i8_test.cu)
+    target_include_directories(aq3_i8_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_link_libraries(aq3_i8_test PRIVATE strata_poly_mmq ${_strata_gpu_blas_target} ${_strata_gpu_runtime_target})
+    add_test(NAME aq3_i8_test COMMAND aq3_i8_test)
+    set_tests_properties(aq3_i8_test PROPERTIES SKIP_RETURN_CODE 77)
     # Optional model/state check; run by hand with an MTP GGUF and frozen prompt IDs.
     add_executable(poly_gdn_mma_state_test src/poly/gdn_mma_state_test.cpp src/poly/engine.cpp src/poly/glm5next.cpp
                    src/poly/qwen35.cpp src/poly/gemma4.cpp src/poly/deepseek4.cpp src/poly/lfm2moe.cpp
@@ -2256,3 +2262,5 @@ if(STRATA_HIP_GFX906)
   add_executable(gfx906_qsa_query_swizzle_probe bench/gfx906_qsa_query_swizzle_probe.cpp)
   target_link_libraries(gfx906_qsa_query_swizzle_probe PRIVATE strata_kernels ${_strata_gpu_runtime_target})
 endif()
+
+
