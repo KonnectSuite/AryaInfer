@@ -19,5 +19,12 @@
    "qwen38-27b-arya"
   ],
   "notes": "The same IQ3_XXS file on AryaInfer's own engine binary (aryainfer.exe), which is built from this repo so the fork's changes have a home while strata-poly stays exactly as PolyStrata ships it. Same protocol, flags, READY line and auto-switching as the poly engine; 128K with a 4-bit cache and a 512-row prompt batch (722.2 tok/s reading and 70.3 writing on a 61,833-token prompt with GPU vision; 826.0 reading with the encoder on the CPU). The fork's build compiles the chunked GDN MMA kernel that upstream's installed 0.1.45 lacks; the model config enables it with STRATA_GDN_MMA=1, measured on this host 2026-11-03 at +8-9% reading (1,190.0 -> 1,287.8 at 8K, 1,021.4 -> 1,114.5 at 32K, 854.9 -> 917.8 at 62K) with decode unchanged by the kernel."
+ },
+ "qwen3.8-27b-aq3": {
+  "display_name": "AryaInfer Qwen3.8 27B GSQ3 AQ3 - 128K vision (Arya engine, faster writing)",
+  "aliases": [
+   "qwen38-27b-aq3"
+  ],
+  "notes": "ISTA-DASLab's 3-bit GSQ checkpoint repacked as AQ3 (tools/aryainfer_gsq3_convert.py), uniform 3-bit with a scale per 128, read only by aryainfer.exe. Measured on this host 2026-11-03 against the IQ3_XXS mix on the same engine (q4_0 KV, STRATA_GDN_MMA=1, greedy, 256 tokens): writing 88.3 vs 67.0 tok/s at 8K, 80.5 vs 69.0 at 32K, 68.4 vs 56.9 on a 130,672-token prompt; reading 582.6 vs 662.3 there (batch 1024 vs 512, 15.2 GB VRAM). Prompt reading pays for expanding each matrix to Q8_0 until a native AQ3 MMQ loader exists. Perplexity not yet measured."
  }
 }

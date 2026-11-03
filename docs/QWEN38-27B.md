@@ -855,3 +855,7 @@ Q8_0 (exact) and multiplied by MMQ. Same host and harness as above (`tools/qwen3
 Decode is +17-32%. Prefill pays for the Q8_0 expansion (the whole model written and read again every batch), so it
 only ties at batch 2048; an MMQ tile loader that reads AQ3 directly is the next step. Not yet measured: 64K+,
 VRAM at 128K with batch 2048, perplexity.
+
+At 128K context (130,672-token prompt, same harness): AQ3 at batch 1024 reads 582.6 tok/s and writes 68.4 with
+15.2 GB of VRAM in use (no spill); the IQ3_XXS mix at batch 512 reads 662.3 and writes 56.9. Model entry
+`qwen3.8-27b-aq3` (`docs/host-tuning/strata-qwen3.8-27b-aq3.json`) uses batch 1024.

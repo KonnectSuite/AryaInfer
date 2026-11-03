@@ -1,0 +1,56 @@
+{
+ "exe": "\\\\engines\\arya-infer\\aryainfer.exe",
+ "args": [
+  "--model",
+  "\\\\models\\qwen38-27b\\Qwen3.8-27B-GSQ3-AQ3-mtp.gguf",
+  "--max-context",
+  "131072",
+  "--kv",
+  "q4_0",
+  "--vram-reserve-mib",
+  "512",
+  "--prompt-batch",
+  "1024"
+ ],
+ "cwd": "C:\\Users\\KNPhu\\AryaCode\\KonnectSuite\\AryaInfer",
+ "tokenizer": "\\\\models\\qwen38-27b\\tokenizer",
+ "model_name": "qwen3.8-27b-aq3",
+ "display_name": "AryaInfer Qwen3.8 27B GSQ3 AQ3 - 128K vision (Arya engine, faster writing)",
+ "log": "\\\\strata-qwen3.8-27b-aq3.log",
+ "lib_dirs": [
+  "\\\\cuda\\13.1.2\\bin\\x64",
+  "\\\\cuda\\13.1.2\\bin",
+  "\\\\engines\\strata-0.1.54"
+ ],
+ "port": 8082,
+ "gpu": 0,
+ "vision": {
+  "exe": "\\\\engines\\strata-0.1.54\\strata-vision.exe",
+  "mmproj": "\\\\models\\qwen38-27b\\mmproj-Qwen3.8-27B-BF16.gguf",
+  "model": "\\\\models\\qwen38-27b\\Qwen3.8-27B-GSQ-RCO-IQ3_XXS-mtp.gguf",
+  "gpu": false,
+  "max_tokens": 1024,
+  "min_tokens": 1024
+ },
+ "switch_on_request": true,
+ "env": {
+  "STRATA_GDN_MMA": "1"
+ },
+ "aliases": [
+  "qwen38-27b-aq3"
+ ],
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20
+ },
+ "reasoning_budget_tokens": 8000,
+ "reasoning_loop_recovery": "recover",
+ "reasoning_effort": "medium",
+ "reasoning_budget_by_effort": {
+  "off": 0,
+  "low": 4000,
+  "medium": 8000,
+  "high": 10000
+ }
+}
