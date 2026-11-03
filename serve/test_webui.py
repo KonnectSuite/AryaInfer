@@ -99,6 +99,12 @@ class Contract(unittest.TestCase):
         self.assertTrue(inside(self.page, "model-btn", "composer"))
         self.assertIn('$("models-nav").onclick', self.js)      # the sidebar row opens the same menu
 
+    def test_the_recent_chats_contract(self):
+        for name in ("conversations", "chat-search", "chat-list", "chat-menu"):
+            self.assertIn(name, self.page.by_id)
+        for call in ('$("chat-list").onclick', '$("chat-menu").onclick', '$("chat-search").oninput'):
+            self.assertIn(call, self.js)
+
     def test_the_views_still_carry_what_the_other_suites_pin(self):
         for name in ("cc-card", "cc-slots-text", "cc-mem-text", "cc-facts", "cc-note"):
             self.assertIn(name, self.page.by_id)
@@ -131,8 +137,14 @@ class Storage(unittest.TestCase):
 
     def test_the_stored_keys(self):
         js = JS.read_text(encoding="utf-8")
-        for key in ('"strata.theme"', '"strata." + k', '"apikey"', '"chat"', '"sampling"', '"sidebar"'):
+        for key in ('"strata.theme"', '"strata." + k', '"apikey"', '"chats"', '"chat"', '"sampling"', '"sidebar"'):
             self.assertIn(key, js)
+
+    def test_the_chat_list_is_capped_and_migrated(self):
+        js = JS.read_text(encoding="utf-8")
+        self.assertIn("CHAT_CAP = 50", js)
+        self.assertIn('OLD_CHAT_STORE = "chat"', js)
+        self.assertIn("version: 1, active: activeChat, items: chats", js)
 
 
 if __name__ == "__main__":

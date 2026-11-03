@@ -2360,6 +2360,13 @@ new chat, as it always did.
 light or dark), the API key, and the model's run-config values for every client, which take effect the next time the
 model starts. Esc closes it, as it closes the sampling drawer and the drawer's narrow-window form.
 
+**Chats** are listed under *Recent*, newest first, with the age and a menu per row (rename, save as Markdown,
+delete). They are kept in this browser (`localStorage`), like the API key: nothing about a chat is sent anywhere
+except the message you send. The newest 50 are kept; older ones are dropped when a new chat is saved. An install that
+keeps a single chat (anything older than this build) copies that chat into the list on its first run and leaves the
+old entry in place, so going back to an older build still finds it. Search the list with the box above it, or press
+Ctrl/Cmd+K. The model is selected in the message box, and **Ctrl/Cmd+Shift+N** starts a chat.
+
 ### API request monitor
 
 Off by default, since it keeps prompts and answers in memory: turn it on with `"api_monitor": true` in

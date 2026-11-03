@@ -67,8 +67,9 @@ main { flex: 1; min-height: 0; display: flex; }
 .app[data-collapsed="true"] .st-sidebar__conversations,
 .app[data-collapsed="true"] .st-nav__sub,
 .app[data-collapsed="true"] .st-nav__badge { display: none; }
-.app[data-collapsed="true"] .st-sidebar__brand { justify-content: center; }
-.app[data-collapsed="true"] .st-sidebar__collapse { display: none; }
+.app[data-collapsed="true"] .st-sidebar__brand { display: none; }
+.app[data-collapsed="true"] .st-sidebar__head { justify-content: center; }
+.app[data-collapsed="true"] .st-sidebar__collapse { margin: 0; }
 .app[data-collapsed="true"] .st-sidebar__new { justify-content: center; padding: 0; }
 .app[data-collapsed="true"] .st-nav { justify-content: center; padding: 0; }
 

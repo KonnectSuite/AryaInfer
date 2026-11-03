@@ -260,9 +260,7 @@ async function switchModel(name) {
   await loadHealth();
   await loadModels();
   if (message) { toast("error", "The model was not switched", message, 10000); return; }
-  messages = [];
-  saveChat();
-  renderChat();
+  newChat();                                   // the other model answers from a fresh chat, as before
   toast("success", `${name} is loaded`, "A new chat was started.");
 }
 
@@ -327,6 +325,7 @@ async function poll() {
     if (++metricsFailures === 3) setPill("error", "Server not reachable");
   }
   if (tab === "monitor" && ++mcpTick % 10 === 0) loadMcp();       // server states change rarely: every 10 s
+  renderChats();                                                  // the list's "3m" ages once a minute; a no-op otherwise
   setTimeout(poll, 1000);
 }
 
@@ -964,14 +963,250 @@ function samplingUntouched(s) {
 }
 let settings = {...DEFAULTS, ...store.get("sampling", {})};
 if (samplingUntouched(settings)) settings.temperature = DEFAULTS.temperature;
-let messages = store.get("chat", []);
 let attachments = [];                 // {name, url}
 let busy = null;                      // {controller, msg, cutoff?}
 
-function saveChat() {
-  store.set("chat", messages.map((m) => ({...m, images: (m.images || []).map((i) => ({name: i.name})),
-                                           files: (m.files || []).map((f) => ({name: f.name}))})));
+// ------------------------------------------------------------------ chats (kept in this browser)
+// Every conversation lives in strata.chats: {version, active, items:[{id, title, times, messages}]}.  `messages` is
+// the active chat's own array, so the chat code works on it directly; saveChat writes it back into the list.  An
+// install that predates this keeps one chat in strata.chat: the first run copies it into the list and leaves the old
+// key untouched, so going back to an older build still finds it.
+const CHAT_STORE = "chats", OLD_CHAT_STORE = "chat", CHAT_CAP = 50;
+let chats = [], activeChat = "", lastChatStamp = null, chatMenuFor = null;
+let messages = [];
+
+function newChatId() {
+  try { return crypto.randomUUID(); } catch (e) { return `c${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`; }
 }
+function chatTitle(text) {
+  const line = String(text || "").replace(/\s+/g, " ").trim();
+  return line ? (line.length > 60 ? `${line.slice(0, 57).trimEnd()}…` : line) : "New chat";
+}
+function blankChat() {
+  return {id: newChatId(), title: "New chat", createdAt: Date.now(), updatedAt: Date.now(), messages: []};
+}
+function savedMessages(list) {
+  return list.map((m) => ({...m, images: (m.images || []).map((i) => ({name: i.name})),
+                           files: (m.files || []).map((f) => ({name: f.name}))}));
+}
+function loadChats() {
+  const saved = store.get(CHAT_STORE, null);
+  if (saved && Array.isArray(saved.items)) {
+    chats = saved.items.filter((c) => c && typeof c.id === "string" && Array.isArray(c.messages));
+    if (chats.length) {
+      activeChat = chats.some((c) => c.id === saved.active) ? saved.active : chats[0].id;
+      ensureChat();
+      return;
+    }
+  }
+  const old = store.get(OLD_CHAT_STORE, []);
+  chats = [];
+  if (Array.isArray(old) && old.length) {
+    const first = old.find((m) => m.role === "user");
+    chats.push({id: newChatId(), title: chatTitle(first && first.text), createdAt: Date.now(), updatedAt: Date.now(),
+                messages: old});
+  }
+  ensureChat();
+  store.set(CHAT_STORE, {version: 1, active: activeChat, items: chats});   // the migration is written once
+}
+function ensureChat() {
+  if (!chats.length) chats.push(blankChat());
+  if (!chats.some((c) => c.id === activeChat)) activeChat = chats[0].id;
+  messages = chats.find((c) => c.id === activeChat).messages;
+  return chats.find((c) => c.id === activeChat);
+}
+function activeChatItem() { return chats.find((c) => c.id === activeChat) || null; }
+function saveChat() {
+  const chat = ensureChat();
+  chat.messages = savedMessages(messages);
+  chat.updatedAt = Date.now();
+  if (chat.title === "New chat") {
+    const first = messages.find((m) => m.role === "user");
+    if (first) chat.title = chatTitle(first.text);
+  }
+  chats.sort((a, b) => b.updatedAt - a.updatedAt);
+  if (chats.length > CHAT_CAP) chats.length = CHAT_CAP;   // the active chat is the newest, so it is never dropped
+  store.set(CHAT_STORE, {version: 1, active: activeChat, items: chats});
+  renderChats();
+}
+function ago(t) {
+  const s = Math.max(0, (Date.now() - t) / 1000);
+  if (s < 60) return "now";
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  if (s < 86400) return `${Math.round(s / 3600)}h`;
+  if (s < 86400 * 7) return `${Math.round(s / 86400)}d`;
+  return new Date(t).toLocaleDateString([], {month: "short", day: "numeric"});
+}
+let chatFilter = "";
+function renderChats() {
+  const query = chatFilter.trim().toLowerCase();
+  const items = chats.filter((c) => !query ||
+    `${c.title} ${c.messages.map((m) => m.text || "").join(" ")}`.toLowerCase().includes(query));
+  // rebuild only when something visible changed, so the 1 s poll does not fight the pointer
+  const stamp = JSON.stringify([activeChat, query, chats.length, Math.floor(Date.now() / 60000),
+                                items.map((c) => [c.id, c.title, c.updatedAt])]);
+  if (stamp === lastChatStamp) return;
+  lastChatStamp = stamp;
+  const list = $("chat-list");
+  list.replaceChildren();
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "st-empty";
+    empty.innerHTML = `<span class="st-empty__title"></span><span></span>`;
+    empty.firstChild.textContent = query ? "No chat matches" : "No chats yet";
+    empty.lastChild.textContent = query ? "Try another word." : "Ask something and it is kept here.";
+    list.append(empty);
+    return;
+  }
+  for (const chat of items) {
+    const row = document.createElement("div");
+    row.className = "st-chat-item";
+    row.dataset.chat = chat.id;
+    row.setAttribute("role", "listitem");
+    row.setAttribute("aria-current", String(chat.id === activeChat));
+    row.tabIndex = 0;
+    const title = document.createElement("span");
+    title.className = "st-chat-item__title";
+    title.textContent = chat.title;
+    title.title = chat.title;
+    const when = document.createElement("span");
+    when.className = "st-chat-item__time";
+    when.textContent = ago(chat.updatedAt);
+    const menu = document.createElement("button");
+    menu.type = "button";
+    menu.className = "st-chat-item__menu";
+    menu.dataset.chatMenu = chat.id;
+    menu.setAttribute("aria-label", `Options for ${chat.title}`);
+    menu.innerHTML = icon("more", "st-icon st-icon--sm");
+    row.append(title, when, menu);
+    list.append(row);
+  }
+}
+function openChat(id) {
+  if (busy) { toast("warn", "Still writing", "Stop the answer first."); return; }
+  const chat = chats.find((c) => c.id === id);
+  if (!chat) return;
+  closeSidebar();
+  closeChatMenu();
+  if (chat.id === activeChat) { $("input").focus(); return; }
+  attachments = [];
+  renderAttachments();
+  activeChat = chat.id;
+  messages = chat.messages;
+  store.set(CHAT_STORE, {version: 1, active: activeChat, items: chats});
+  lastChatStamp = null;
+  renderChats();
+  renderChat();
+  showTab("chat");
+  $("input").focus();
+  scrollDown(true);
+}
+function newChat() {
+  if (busy) { toast("warn", "Still writing", "Stop the answer first."); return; }
+  closeChatMenu();
+  const current = activeChatItem();
+  if (current && !current.messages.length) { showTab("chat"); $("input").focus(); return; }
+  const chat = blankChat();
+  chats.unshift(chat);
+  activeChat = chat.id;
+  messages = chat.messages;
+  attachments = [];
+  renderAttachments();
+  saveChat();
+  renderChat();
+  showTab("chat");
+  $("input").focus();
+}
+function deleteChat(id) {
+  if (busy) { toast("warn", "Still writing", "Stop the answer first."); return; }
+  const at = chats.findIndex((c) => c.id === id);
+  if (at < 0) return;
+  const chat = chats[at];
+  if (!confirm(`Delete "${chat.title}"? Chats are kept in this browser only, so this cannot be undone.`)) return;
+  chats.splice(at, 1);
+  if (activeChat === id) {
+    const next = chats[Math.min(at, chats.length - 1)];
+    if (next) { activeChat = next.id; messages = next.messages; } else { activeChat = ""; messages = []; }
+    renderChat();
+  }
+  closeChatMenu();
+  saveChat();
+  lastChatStamp = null;
+  renderChats();
+  toast("info", "Chat deleted", "", 4000);
+}
+function renameChat(id) {
+  const row = $("chat-list").querySelector(`[data-chat="${CSS.escape(id)}"]`);
+  const chat = chats.find((c) => c.id === id);
+  if (!row || !chat) return;
+  closeChatMenu();
+  const title = row.querySelector(".st-chat-item__title");
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = chat.title === "New chat" ? "" : chat.title;
+  input.placeholder = "Chat name";
+  input.setAttribute("aria-label", "Chat name");
+  title.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    if (save) {
+      const name = input.value.replace(/\s+/g, " ").trim();
+      chat.title = name || chat.title;
+      chat.updatedAt = Date.now();
+      store.set(CHAT_STORE, {version: 1, active: activeChat, items: chats});
+    }
+    lastChatStamp = null;
+    renderChats();
+  };
+  input.onkeydown = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); finish(true); }
+    else if (e.key === "Escape") { e.preventDefault(); finish(false); }
+  };
+  input.onblur = () => finish(true);
+}
+function openChatMenu(id, anchor) {
+  const wasOpen = !$("chat-menu").hidden && chatMenuFor === id;
+  closeChatMenu();
+  if (wasOpen) return;
+  chatMenuFor = id;
+  $("chat-menu").hidden = false;
+  placePopover($("chat-menu"), anchor);
+}
+function closeChatMenu() {
+  $("chat-menu").hidden = true;
+  chatMenuFor = null;
+}
+$("chat-menu").onclick = (e) => {
+  const b = e.target.closest("[data-chat-act]");
+  if (!b || !chatMenuFor) return;
+  const id = chatMenuFor;
+  if (b.dataset.chatAct === "rename") renameChat(id);
+  else if (b.dataset.chatAct === "export") exportChat(id);
+  else if (b.dataset.chatAct === "delete") deleteChat(id);
+};
+$("chat-list").onclick = (e) => {
+  if (e.target.closest("input")) return;                       // a row being renamed
+  const menu = e.target.closest("[data-chat-menu]");
+  if (menu) { e.stopPropagation(); openChatMenu(menu.dataset.chatMenu, menu); return; }
+  const row = e.target.closest("[data-chat]");
+  if (row) openChat(row.dataset.chat);
+};
+$("chat-list").onkeydown = (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  if (e.target.closest("input") || e.target.closest("button")) return;
+  const row = e.target.closest("[data-chat]");
+  if (!row) return;
+  e.preventDefault();
+  openChat(row.dataset.chat);
+};
+$("chat-search").oninput = () => { chatFilter = $("chat-search").value; renderChats(); };
+$("chat-search").onkeydown = (e) => {
+  if (e.key === "Escape") { e.preventDefault(); $("chat-search").value = ""; chatFilter = ""; renderChats(); }
+};
 function timeStr(t) { return new Date(t).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"}); }
 
 // ------------------------------------------------------------------ swipes
@@ -1407,28 +1642,25 @@ $("input").addEventListener("keydown", (e) => {
 function autosize() { const t = $("input"); t.style.height = "auto"; t.style.height = `${Math.min(t.scrollHeight, innerHeight * 0.4)}px`; }
 $("input").addEventListener("input", autosize);
 
-$("new-btn").onclick = () => {
-  if (busy) { toast("warn", "Still writing", "Stop the answer first."); return; }
-  if (!messages.length) return;
-  const backup = messages;
-  messages = [];
-  saveChat();
-  renderChat();
-  toast("info", "New chat", "The last one was cleared.", 6000, {label: "Undo", run: () => { messages = backup; saveChat(); renderChat(); }});
-};
-$("export-btn").onclick = () => {
-  if (!messages.length) { toast("info", "Nothing to save yet"); return; }
+$("new-btn").onclick = newChat;
+$("export-btn").onclick = () => exportChat(activeChat);
+// One chat as Markdown: the answers, their thinking and the tool calls behind them.
+function exportChat(id) {
+  const chat = chats.find((c) => c.id === id) || activeChatItem();
+  if (!chat || !chat.messages.length) { toast("info", "Nothing to save yet"); return; }
+  closeChatMenu();
   const tools = (m) => (m.tools || []).filter((t) => t.result != null).map((t) =>
     `<details><summary>Tool ${t.server ? `${t.server} / ` : ""}${t.tool || t.name}${t.ok ? "" : " (error)"}</summary>\n\n` +
     `\`\`\`json\n${JSON.stringify(t.arguments || {}, null, 2)}\n\`\`\`\n\n\`\`\`\n${t.result}\n\`\`\`\n\n</details>\n\n`).join("");
-  const md = messages.map((m) => m.role === "user" ? `## You\n\n${m.text}\n` :
+  const md = chat.messages.map((m) => m.role === "user" ? `## You\n\n${m.text}\n` :
     `## ${health.model}\n\n${m.reasoning ? `<details><summary>Thinking</summary>\n\n${m.reasoning}\n\n</details>\n\n` : ""}${tools(m)}${m.text || m.error || ""}\n`).join("\n");
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([md], {type: "text/markdown"}));
-  a.download = `strata-chat-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.md`;
+  const name = (chat.title || "chat").replace(/[\\/:*?"<>|]+/g, "-").slice(0, 60).trim() || "chat";
+  a.href = URL.createObjectURL(new Blob([`# ${chat.title || "Chat"}\n\n${md}`], {type: "text/markdown"}));
+  a.download = `${name}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.md`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-};
+}
 
 // pictures and text files: the attach button, dropping them on the chat, or pasting a picture (issue #30)
 const TEXT_EXT = /\.(txt|md|markdown|rst|tex|py|pyi|ipynb|js|mjs|cjs|ts|tsx|jsx|vue|svelte|json|jsonl|csv|tsv|log|ya?ml|toml|ini|cfg|conf|env|xml|html?|css|scss|less|c|cc|cpp|cxx|h|hh|hpp|cu|cuh|rs|go|java|kt|kts|swift|rb|php|pl|lua|r|jl|scala|sql|sh|bash|zsh|fish|ps1|psm1|bat|cmd|diff|patch|gradle|cmake|mk|dockerfile|gitignore|proto|graphql)$/i;
@@ -1611,21 +1843,40 @@ $("s-apply").onclick = async () => {
 $("sampling-btn").onclick = () => openDrawer(true);
 $("drawer-close").onclick = () => openDrawer(false);
 $("scrim").onclick = () => { if (!closeTopOverlay()) { openDrawer(false); openSettings(false); closeSidebar(); } };
-// Escape: the model menu first, then whatever overlay is on top
+// Escape: the menus first, then whatever overlay is on top
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
+  if (!$("chat-menu").hidden) { closeChatMenu(); return; }
   if (!$("model-menu").hidden) { closeModelMenu(); $("model-btn").focus(); return; }
   closeTopOverlay();
+});
+// the page's own shortcuts: search the chats, start one, open Settings
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const key = e.key.toLowerCase();
+  if (key === "k") {
+    e.preventDefault();
+    if (NARROW.matches) openSidebar(true);
+    $("chat-search").focus();
+    $("chat-search").select();
+  } else if (key === "n" && e.shiftKey) {
+    e.preventDefault();
+    newChat();
+  }
 });
 // a click outside an anchored panel closes it
 document.addEventListener("click", (e) => {
   if (!$("model-menu").hidden && !$("model-menu").contains(e.target) &&
       !$("model-btn").contains(e.target) && !$("models-nav").contains(e.target)) closeModelMenu();
+  if (!$("chat-menu").hidden && !$("chat-menu").contains(e.target) &&
+      !e.target.closest("[data-chat-menu]")) closeChatMenu();
   if (settingsOpen() && !$("settings-pop").contains(e.target) && !$("settings-btn").contains(e.target)) openSettings(false);
 });
 
 // ------------------------------------------------------------------ start
 setBusy(false);
+loadChats();
+renderChats();
 renderChat();
 const startQuestion = new URLSearchParams(location.search).get("q");   // /?q=... starts a chat (a shortcut)
 if (startQuestion) history.replaceState(null, "", location.pathname + location.hash);

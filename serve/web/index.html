@@ -486,6 +486,16 @@
 <!-- ============================ Model menu ============================ -->
 <div class="st-menu" id="model-menu" role="menu" aria-label="Models" hidden></div>
 
+<!-- ============================ Chat row menu ============================ -->
+<div class="st-menu" id="chat-menu" role="menu" aria-label="Chat options" hidden>
+  <button class="st-menu__item" type="button" role="menuitem" data-chat-act="rename">
+    <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-code"/></svg><span>Rename</span></button>
+  <button class="st-menu__item" type="button" role="menuitem" data-chat-act="export">
+    <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-download"/></svg><span>Save as Markdown</span></button>
+  <button class="st-menu__item" type="button" role="menuitem" data-chat-act="delete">
+    <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-trash"/></svg><span>Delete</span></button>
+</div>
+
 <!-- ============================ Sampling drawer ============================ -->
 <aside class="st-drawer" id="drawer" data-open="false" aria-label="Sampling and thinking" aria-hidden="true">
   <div class="st-drawer__head"><span class="card-title">Sampling</span>
