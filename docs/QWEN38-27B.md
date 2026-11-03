@@ -627,3 +627,40 @@ one 16 GB card with MTP 3 and an LM-head draft, against our ~70 with one MTP blo
 cost is comparable, the tokens per pass are not.  The engine's draft block reads one MTP block (`block_layer_`); the
 file is named `-mtp`, and whether it carries more than one MTP block, and how to verify three guesses a round with
 the LM head, is the next thing to check in the GGUF and `src/poly/qwen35.cpp` (draft), before any kernel work.
+## `aryainfer`: this fork's own engine binary, wired in like strata-poly (2026-11-03)
+
+The user's rule for updates: leave `strata-poly.exe` alone so upstream PolyStrata's engines can be dropped in, and give
+this fork's changes a binary of their own.  That binary is now `aryainfer` (CMakeLists.txt): the same sources, protocol,
+flags and READY line as `strata-poly`, built with `-DARYAINFER_ENGINE=1`, so it is a drop-in for the server and the model
+configs choose between the two by their `exe`.  `strata-poly` above it in CMakeLists.txt is not touched.  The READY
+line says which is running: `engine=aryainfer-0.1.45` against `engine=0.1.45`.
+
+Built here: MSVC 14.44, CUDA 13.1.2, sm_89, `cmake --build build-poly --target aryainfer` (14 targets, linking
+`build-poly/aryainfer.exe`, 66 MB), installed to `C:\AI\Strata-data\engines\arya-infer\aryainfer.exe`.
+
+The server needed one line to treat it as a poly engine (`serve/server.py`, `poly_engine()`): it takes its pictures as
+strata-vision `.sve` records through GENI, not the native `--vision` flag, and it has no `arch`.  Without that, the
+server appended `--vision` and the engine refused it ("unknown option --vision"); with it the config
+`strata-qwen3.8-27b-arya.json` (+ its `models.json` entry and `docs/host-tuning/` copy) loads, serves and switches like
+any other model.  Checked through the running server: `POST /api/models/load {"model": "qwen3.8-27b-arya"}` -> 200,
+the engine process is `aryainfer.exe`, the prompt answers, and the switch back to `qwen3.8-27b-iq3_xxs` (strata-poly)
+-> 200 with `strata-poly.exe` running.  `serve.test_server`: 367 tests OK.
+
+The 27B on aryainfer, through the server (131K, q4_0, batch 512, vision resident): a 5,619-token prompt read at
+1,121.5 tok/s and wrote 33 tokens at 53.6 tok/s (20 of 35 drafts), the cached follow-up at 65.5 tok/s - the same
+engine, so the same numbers as strata-poly within run-to-run noise (8K standalone: 1,205.6 / 69.3).
+
+## Flash Next on this host: which engine can run it (2026-11-03)
+
+`aryainfer` (poly) does not run it: the model is a `qwen4exp` family, and the poly engine answers "a 'qwen4exp' model,
+which this engine does not run", whatever the cache format (q8_0 is qwen35moe/kolibri1's, int8/int8k are Gemma 4's).
+Flash Next runs on the native Strata engine (`strata.exe` 0.1.56, its pack and PLE, dflash2 draft, int8 cache).  On
+this host, through the server, a 14,019-token prompt read at 1,578.4 tok/s and wrote 33 tokens at 64.0 tok/s (17 of
+19 drafts), with the expert cache at 69.7% and 15,509 MiB of VRAM used - the engine warned it had 487 MiB free at the
+start of the request (below its 1,024 MiB floor), which is the spill state to watch.
+
+The HF repo the user found (`Feyd89/Qwen3.8-Flash-Next-NVFP4-capy-flash`) is NVFP4 for capy-flash, i.e. Blackwell
+(sm_120) FP4 weights and a Linux-first server: an RTX 4070 Ti SUPER (sm_89, Ada) has no FP4 tensor-core path, so that
+artifact cannot run here on any engine.  capy-flash's own comparison table is on an RTX 5070 Ti and puts its 27B at
+139 tok/s decode at 8K against Strata's 138 with route-tail-skip - parity on decode, not a blowout; the Flash Next
+numbers there are two-card sm_120 with 96 GB of RAM, which is not this machine.

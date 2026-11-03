@@ -751,7 +751,9 @@ class ConvCacheLog:
 
 def poly_engine(cfg: dict) -> bool:
     """The run config starts strata-poly (the engine of the models AryaStrata adds), not the Strata project's."""
-    return Path(str(cfg.get("exe") or "")).stem.lower() in ("strata-poly", "strata-glm")   # its name before 10-05
+    # aryainfer is this fork's build of the same engine (CMakeLists.txt): same protocol, flags and READY line, so the
+    # server treats it as a poly engine - it takes pictures as .sve through GENI rather than the native --vision flag.
+    return Path(str(cfg.get("exe") or "")).stem.lower() in ("strata-poly", "strata-glm", "aryainfer")
 
 
 def conversation_slots(engine) -> int | None:

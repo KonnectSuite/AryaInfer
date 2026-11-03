@@ -705,12 +705,20 @@ struct Slot {
     Clock::time_point t0;
 };
 
+// aryainfer is the same engine as strata-poly, built by this fork so its own changes have a home; the READY line says
+// which binary is running (the server and the docs read it).
+#ifdef ARYAINFER_ENGINE
+#define STRATA_ENGINE_NAME "aryainfer-" STRATA_VERSION
+#else
+#define STRATA_ENGINE_NAME STRATA_VERSION
+#endif
+
 int serve(Session& ss) {
     Engine& engine = ss.engine;
     std::vector<Slot> slots((size_t) engine.sequences() - 1);
     std::printf("INFO context=%d expert_slots=%d expert_cache_mib=%lld pool_workers=%d conversation_cache_mib=%lld "
                 "conversation_cache_slots=%d conversation_cache_min_free_mib=%lld vram_free_mib=%lld vram_elastic=1 "
-                "batch_slots=%d engine=" STRATA_VERSION "\n",
+                "batch_slots=%d engine=" STRATA_ENGINE_NAME "\n",
                 engine.max_context(), engine.cached_experts(), (long long) (engine.cached_gib() * 1024.0),
                 engine.threads(), (long long) ss.flags.o.park_mib, ss.flags.o.park_slots, ss.flags.min_free_mib,
                 (long long) engine.vram_free_mib(), (int) slots.size());

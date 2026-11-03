@@ -12,5 +12,12 @@
    "qwen38-27b-iq2_s"
   ],
   "notes": "The same model from the smaller IQ2_S file, for the long prompts: 200,069-token context on a 4-bit cache, measured here with the needle found at 417.3 tok/s reading and 14.6 tok/s writing. Calibrated for coding on this host (2026-11-02): temperature 0.6, top_p 0.95, top_k 20, thinking budget 1536, loop recovery on; 7 of 7 code probes and 3 of 3 answer-only probes passed, and the repetition bait stopped on its own. Thinking modes off, low, medium and high are supported (default medium, thinking cap 4096); measured on this host 2026-11-02: every graded level passed all six probes on both files, off passed four of six and five of six, and the deep levels think most."
+ },
+ "qwen3.8-27b-arya": {
+  "display_name": "AryaInfer Qwen3.8 27B IQ3_XXS - 128K vision (Arya engine)",
+  "aliases": [
+   "qwen38-27b-arya"
+  ],
+  "notes": "The same IQ3_XXS file on AryaInfer's own engine binary (aryainfer.exe), which is built from this repo so the fork's changes have a home while strata-poly stays exactly as PolyStrata ships it. Same protocol, flags, READY line and auto-switching as the poly engine; the config uses 128K with a 4-bit cache and a 512-row prompt batch, which measured here at 722.2 tok/s reading and 70.3 tok/s writing on a 61,833-token prompt (14.9 GiB VRAM)."
  }
 }
