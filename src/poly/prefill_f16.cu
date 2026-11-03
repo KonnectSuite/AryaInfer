@@ -173,25 +173,43 @@ __global__ void aq3_gemv_kernel(const uint8_t* __restrict__ w, const Q81* __rest
 }
 
 // A 32-value piece of AQ3 to a Q8_0 block (half d; int8 qs[32]): the group's scale and the values as they are.
+//
+// One block expands 256 pieces (8,704 bytes of Q8_0, a multiple of 16), computes them into shared memory, then copies
+// that range out as whole 32-bit words.  The direct version stored each thread's 34-byte block at a 34-byte stride, so
+// every 4-byte store instruction across a warp touched 32 different 32-byte sectors; the copy here is contiguous, and
+// the expansion drops from about 60 GB/s to the card's write bandwidth.  The output range starts at blockIdx * 8,704,
+// so it is 16-byte aligned, and the last block copies its rem.
+constexpr int kAq3Expand = 256;
 __global__ void aq3_q8_0_kernel(const uint8_t* __restrict__ w, uint8_t* __restrict__ q8, int n_in, size_t pieces) {
-    const size_t p = (size_t) blockIdx.x * blockDim.x + threadIdx.x;
-    if (p >= pieces) return;
-    const size_t per_row = (size_t) (n_in / 32);
-    const size_t row = p / per_row, s = p - row * per_row;
-    const int c = (int) (s & 7);
-    const uint8_t* blk = w + row * (size_t) (n_in / 256) * kAq3Block + (s >> 3) * kAq3Block;
-    const uint32_t* qs = (const uint32_t*) (blk + 4 + 32 * (c & 1));
-    const uint32_t* hm = (const uint32_t*) (blk + 68);
-    const int sl = 2 * (c >> 1);
-    uint8_t* out = q8 + p * 34;
-    ((__half*) out)[0] = ((const __half*) blk)[c >> 2];
-    uint16_t* o16 = (uint16_t*) (out + 2);   // 34-byte blocks: two-byte aligned
+    __shared__ __align__(16) uint8_t sm[kAq3Expand * 34];
+    const size_t base = (size_t) blockIdx.x * kAq3Expand;
+    const size_t p = base + threadIdx.x;
+    if (p < pieces) {
+        const size_t per_row = (size_t) (n_in / 32);
+        const size_t row = p / per_row, s = p - row * per_row;
+        const int c = (int) (s & 7);
+        const uint8_t* blk = w + row * (size_t) (n_in / 256) * kAq3Block + (s >> 3) * kAq3Block;
+        const uint32_t* qs = (const uint32_t*) (blk + 4 + 32 * (c & 1));
+        const uint32_t* hm = (const uint32_t*) (blk + 68);
+        const int sl = 2 * (c >> 1);
+        uint8_t* out = sm + (size_t) threadIdx.x * 34;
+        ((__half*) out)[0] = ((const __half*) blk)[c >> 2];
+        uint16_t* o16 = (uint16_t*) (out + 2);   // 34-byte blocks: two-byte aligned
 #pragma unroll
-    for (int i = 0; i < 8; ++i) {
-        const uint32_t v = __vsub4(((qs[i] >> sl) & 0x03030303u) | (((hm[i] >> c) & 0x01010101u) << 2), 0x04040404u);
-        o16[2 * i] = (uint16_t) v;
-        o16[2 * i + 1] = (uint16_t) (v >> 16);
+        for (int i = 0; i < 8; ++i) {
+            const uint32_t v = __vsub4(((qs[i] >> sl) & 0x03030303u) | (((hm[i] >> c) & 0x01010101u) << 2), 0x04040404u);
+            o16[2 * i] = (uint16_t) v;
+            o16[2 * i + 1] = (uint16_t) (v >> 16);
+        }
     }
+    __syncthreads();
+    const size_t n = pieces - base < (size_t) kAq3Expand ? pieces - base : (size_t) kAq3Expand;
+    const size_t bytes = n * 34, words = bytes / 4;
+    uint8_t* dst = q8 + base * 34;
+    const uint32_t* src32 = (const uint32_t*) sm;
+    uint32_t* dst32 = (uint32_t*) dst;
+    for (size_t i = threadIdx.x; i < words; i += (size_t) blockDim.x) dst32[i] = src32[i];
+    if (threadIdx.x < bytes - words * 4) dst[words * 4 + threadIdx.x] = sm[words * 4 + threadIdx.x];
 }
 
 __global__ void cast_f16_kernel(const float* __restrict__ x, __half* __restrict__ y, size_t n) {

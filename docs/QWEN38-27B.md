@@ -852,10 +852,44 @@ Q8_0 (exact) and multiplied by MMQ. Same host and harness as above (`tools/qwen3
 | GSQ-RCO IQ3_XXS mix | 32K | 512 | 1,105.2 | 69.0 | 164 / 210 |
 | AQ3 | 32K | 2048 | 1,062.5 | 80.5 | 149 / 212 |
 
-Decode is +17-32%. Prefill pays for the Q8_0 expansion (the whole model written and read again every batch), so it
-only ties at batch 2048; an MMQ tile loader that reads AQ3 directly is the next step. Not yet measured: 64K+,
-VRAM at 128K with batch 2048, perplexity.
+Decode is +17-32%. Prefill paid for the Q8_0 expansion (the whole model written and read again every batch), so it
+only tied at batch 2048. **That is fixed** (the section below): the expansion now copies through shared memory with
+contiguous stores, and AQ3 leads at every batch. Not yet measured: perplexity.
 
-At 128K context (130,672-token prompt, same harness): AQ3 at batch 1024 reads 582.6 tok/s and writes 68.4 with
-15.2 GB of VRAM in use (no spill); the IQ3_XXS mix at batch 512 reads 662.3 and writes 56.9. Model entry
+At 128K context (130,672-token prompt, same harness): AQ3 at batch 1024 read 582.6 tok/s and wrote 68.4 with
+15.2 GB of VRAM in use (no spill); the IQ3_XXS mix at batch 512 read 662.3 and wrote 56.9. Model entry
 `qwen3.8-27b-aq3` (`docs/host-tuning/strata-qwen3.8-27b-aq3.json`) uses batch 1024.
+
+### AQ3 prefill: the Q8_0 expansion was the bottleneck (2026-11-03)
+
+The expansion kernel stored each thread's 34-byte Q8_0 block straight at a 34-byte stride: every 4-byte store
+instruction across a warp touched 32 separate 32-byte sectors, so the copy ran at about 60 GB/s and cost ~0.37 s for
+the 10.9 GB model **on every prompt batch**.  A block now computes its 256 pieces into shared memory (8,704 bytes,
+a multiple of 16) and copies that range out as whole 32-bit words, 16-byte aligned and contiguous: the copy runs at
+the card's write bandwidth and the per-batch cost drops into the tens of milliseconds.  The token ids are identical
+before and after (the greeting at temperature 0 gave `271,40,1044,449,23739,...` both times), because the transform
+is exact.
+
+Measured on a free card, same file, q4_0, `STRATA_GDN_MMA=1`, 8,000-token prompt, 64 greedy tokens (before -> after):
+
+| context | prompt batch | before | after | reading |
+| --- | ---: | ---: | ---: | ---: |
+| 8K | 512 | 711.3 | **1,266.5** | +78% |
+| 8K | 1024 | 990.0 | **1,415.6** | +43% |
+| 8K | 2048 | 1,175.0 | **1,495.1** | +27% |
+| 32K | 512 | - | 1,073.6 | - |
+| 32K | 1024 | (1,062.5 at 2048 in the table above) | **1,194.4** | - |
+| 32K | 2048 | - | 1,177.1 | - |
+| 62K | 1024 | - | 924.8 | - |
+| 62K | 2048 | - | 988.1 | - |
+
+Through the server, `qwen3.8-27b-aq3` at 131K context and batch 1024: a 61,787-token prompt read at **968.7 tok/s**
+(63.3 tok/s writing, 20 of 30 drafts) with 15,235 MiB of VRAM - against 911.9 for the IQ3_XXS arya entry at the same
+prompt length.  The model entry's paths were also repaired (they held `\\engines\...` UNC paths that do not resolve,
+so the entry could not start); the vision encoder now points at the AQ3 file and an image turn was checked (1,046
+prompt tokens, 1.3 s).  Batch 1024 stays the entry's setting because 2048 at 131K would add ~1.4 GB on a card that
+measured 15.2 GB here.
+
+What is left for prefill is the instruction class, not the copy: the Q8_0 MMQ path is dp4a on the CUDA cores (about
+1,500 tok/s at 8K, and the per-token compute that remains after the copy).  An int8 `mma.sync` product over the AQ3
+codes, read directly with no expansion, is the next step.

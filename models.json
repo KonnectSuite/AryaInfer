@@ -25,6 +25,6 @@
   "aliases": [
    "qwen38-27b-aq3"
   ],
-  "notes": "ISTA-DASLab's 3-bit GSQ checkpoint repacked as AQ3 (tools/aryainfer_gsq3_convert.py), uniform 3-bit with a scale per 128, read only by aryainfer.exe. Measured on this host 2026-11-03 against the IQ3_XXS mix on the same engine (q4_0 KV, STRATA_GDN_MMA=1, greedy, 256 tokens): writing 88.3 vs 67.0 tok/s at 8K, 80.5 vs 69.0 at 32K, 68.4 vs 56.9 on a 130,672-token prompt; reading 582.6 vs 662.3 there (batch 1024 vs 512, 15.2 GB VRAM). Prompt reading pays for expanding each matrix to Q8_0 until a native AQ3 MMQ loader exists. Perplexity not yet measured."
+  "notes": "ISTA-DASLab's 3-bit GSQ checkpoint repacked as AQ3 (tools/aryainfer_gsq3_convert.py), uniform 3-bit with a scale per 128, read only by aryainfer.exe. Measured on this host 2026-11-03: reading 1,266.5 tok/s at 8K with batch 512 (711.3 before the Q8_0 expansion was made coalesced), 1,415.6 at batch 1024, 1,495.1 at 2048, 1,194.4 at 32K (batch 1024), and 968.7 on a 61,787-token prompt through the server at 131K context (15.2 GiB); writing 88-99 tok/s at 8K (80.5 at 32K, 68.4 at 128K). Entry paths repaired 2026-11-03 (they held UNC paths that do not resolve) and the vision encoder points at the AQ3 file; an image turn was checked. Batch 1024 is its setting: 2048 at 131K would add ~1.4 GiB on a card that measured 15.2 GiB."
  }
 }
