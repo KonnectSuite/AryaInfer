@@ -688,3 +688,31 @@ this host already runs; the difference in speed is the engine, not the weights.
 What transfers from it is the recipe: INT8 KV, an embedding table in RAM (already true here), and **MTP 3 with an
 LM-head draft**, which is where their 7 tokens a decode round come from.  That draft depth is the piece this engine
 does not have yet.
+## The last levers measured: draft depth, the batch, and the vision encoder (2026-11-03)
+
+Draft options at 8K on a free card (q4_0, batch 512, 128 tokens, the repository build, the same file):
+
+| arm | decode | prefill | accepted |
+| --- | --- | --- | --- |
+| the policy's default | **76.0** | 1,197.0 | 90/106 |
+| `--window 8` | 72.3 | 1,177.7 | 87/110 |
+| `--spec-width measured` | 70.6 | 1,194.3 | 81/109 |
+| `--lookup 8` | 74.5 | 1,177.0 | 88/105 |
+| `--lookup-chain 4 --lookup-chain-min 2` | 75.3 | 1,162.8 | 88/104 |
+| `--tree 4,3` | no row (the run did not finish) | | |
+
+The policy's own choice is the best of them; on this text none of the flags adds tokens a round.  The file has
+`nextn_predict_layers = 1` (one MTP block), and with `--window 8` the acceptance by position was
+`[0.83, 0.93, 1.00, 0.83, 0.80, 0.75, 1.00]` over 45 rounds at 2.84 tokens a round: the guesses are often right, but
+the verify pass that carries them is what costs, and the window as a whole did not pay.  Tokens a round is therefore
+capped by the pass, not by draft quality, with the one MTP block this file has.
+
+Context capped at 64K, same 62,000-token prompt, the three batches (standalone, no vision): 512 -> 854.9 tok/s
+reading, 80.9 writing; 1024 -> 865.3 / 68.8; 2048 -> 855.6 / 63.1.  Reading is the same and the larger batches cost
+writing, so 512 stays.
+
+The vision encoder on the CPU (`"gpu": false` in the config's vision section) frees about 1.2 GB; the dense engine
+sizes its arena to the free VRAM, and a 61,787-token prompt then read at **826.0 tok/s** through the server instead of
+722.2 (+14%), with decode unchanged (~70) and 14.7 GiB used.  An image turn (a 768-pixel PNG, 1,024 image tokens)
+took 9.9 s end to end, its prompt read in 1,238 ms at 87.2 tok/s of writing, 13 of 13 drafts accepted.  It is the
+default now for text-first work; `"gpu": true` buys faster image encoding for those 14 points of reading speed.

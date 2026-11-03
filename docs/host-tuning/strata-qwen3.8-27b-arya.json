@@ -28,7 +28,7 @@
   "exe": "\\\\engines\\strata-0.1.54\\strata-vision.exe",
   "mmproj": "\\\\models\\qwen38-27b\\mmproj-Qwen3.8-27B-BF16.gguf",
   "model": "\\\\models\\qwen38-27b\\Qwen3.8-27B-GSQ-RCO-IQ3_XXS-mtp.gguf",
-  "gpu": true,
+  "gpu": false,
   "max_tokens": 1024,
   "min_tokens": 1024
  },

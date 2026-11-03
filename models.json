@@ -4,7 +4,7 @@
   "aliases": [
    "qwen38-27b-iq3_xxs"
   ],
-  "notes": "Dense Qwen3.8 27B (llama.cpp arch qwen35) from ISTA-DASLab's IQ3_XXS file, read in place by strata-poly with its 1,024-token vision and its draft block.  128K context on a 4-bit cache with --prompt-batch 256, measured on this host at 574.9 tok/s reading a 128,024-token prompt and 51.6 tok/s writing (needle found, 15,661 MiB peak). Calibrated for coding on this host (2026-11-02): temperature 0.6, top_p 0.95, top_k 20, thinking budget 1536, loop recovery on; 7 of 7 code probes and 3 of 3 answer-only probes passed, and the repetition bait stopped on its own. Thinking modes off, low, medium and high are supported (default medium, thinking cap 4096); measured on this host 2026-11-02: every graded level passed all six probes on both files, off passed four of six and five of six, and the deep levels think most."
+  "notes": "Dense Qwen3.8 27B (llama.cpp arch qwen35) from ISTA-DASLab's IQ3_XXS file, read in place by strata-poly (or aryainfer) with its draft block and 1,024-token vision.  128K context on a 4-bit cache with a 512-row prompt batch: measured on this host 2026-11-03, a 61,787-token prompt read at 826.0 tok/s and wrote at ~70 tok/s with the vision encoder on the CPU and 14.7 GiB of VRAM; the same prompt read at 722.2 tok/s with the encoder on the card, and the old 2,048-row batch decoded at 32.0 at 64K.  Calibrated for coding on this host: temperature 0.6, top_p 0.95, top_k 20, thinking budget 1536, loop recovery on; 7 of 7 code probes and 3 of 3 answer-only probes passed."
  },
  "qwen3.8-27b-iq2_s": {
   "display_name": "AryaStrata Qwen3.8 27B IQ2_S - 200K vision",
