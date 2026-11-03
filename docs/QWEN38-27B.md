@@ -830,3 +830,28 @@ already near its best with this MTP head. The handoff's step 1 is closed as a ne
 what a pass and a verify row cost, not by how many guesses are offered. Verify rows of up to 8 tokens go through
 `native_mmvq` (`Engine::lin`), which for IQ3_XXS does a grid lookup per weight per column; that is the likely reason
 an extra row costs 3.4-5.6 ms rather than near nothing. Not yet profiled (no Nsight on this host).
+
+## AQ3: the GSQ checkpoint's own 3-bit codes (aryainfer, 2026-11-03)
+
+`tools/aryainfer_gsq3_convert.py` turns `ISTA-DASLab/Qwen3.8-27B-3Bit-GSQ` (rev `b5ce0b76`) into a GGUF that is the
+GSQ-RCO GGUF with every 3-bit linear replaced by AQ3 blocks (uniform 3-bit, fp16 scale per 128, 100 bytes per 256
+values, stored as I8 rows; only aryainfer reads them). The GDN value heads are moved to llama.cpp's tiled order. Its
+`--check` compares layers 0 and 3 against the GSQ-RCO file: correlation 0.81-0.97 per tensor (the RCO file is a
+different mixed IQ1-IQ4 rounding of the same weights), exact pack/unpack roundtrip.
+
+Decode: a dp4a GEMV for 1-8 tokens (`aq3_gemv`, `src/poly/prefill_f16.cu`). Prefill: each matrix expanded to ggml
+Q8_0 (exact) and multiplied by MMQ. Same host and harness as above (`tools/qwen38_force_bench.py`, `QWEN38_MODEL`,
+`PB`), q4_0 KV, `STRATA_GDN_MMA=1`, 256 tokens written greedily; the output text matches in content:
+
+| File | Context | Prompt batch | Prefill tok/s | Decode tok/s | Accepted / offered |
+|---|---|---:|---:|---:|---:|
+| GSQ-RCO IQ3_XXS mix | 8K | 512 | 1,238.7 | 67.0 | 171 / 218 |
+| AQ3 | 8K | 512 | 706.1 | 88.3 | 163 / 213 |
+| AQ3 | 8K | 1024 | 993.9 | 85.2 | 160 / 215 |
+| AQ3 | 8K | 2048 | 1,229.3 | 85.1 | 152 / 205 |
+| GSQ-RCO IQ3_XXS mix | 32K | 512 | 1,105.2 | 69.0 | 164 / 210 |
+| AQ3 | 32K | 2048 | 1,062.5 | 80.5 | 149 / 212 |
+
+Decode is +17-32%. Prefill pays for the Q8_0 expansion (the whole model written and read again every batch), so it
+only ties at batch 2048; an MMQ tile loader that reads AQ3 directly is the next step. Not yet measured: 64K+,
+VRAM at 128K with batch 2048, perplexity.

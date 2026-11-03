@@ -740,6 +740,8 @@ protected:
     double tree_time_[4] = {};          ///< window_tree(): ms in the GDN rows, the attention rows, the dense FFN, all
     uint16_t* pf16_x_ = nullptr;        ///< --prefill-f16: the batch's rows, halves
     size_t pf16_x_n_ = 0;
+    void* aq3_q8_ = nullptr;            ///< aryainfer: an AQ3 matrix as Q8_0 for a prompt batch's MMQ
+    size_t aq3_q8_n_ = 0;
     int64_t ahead_pos_ = -1;            ///< draft() has left the block's row of this position as its token leaves it,
     int32_t ahead_tok_ = 0;             ///< which is this one
     const float* tree_in_ = nullptr;    ///< draft_topk(): the node's parent's hidden output, where it has one

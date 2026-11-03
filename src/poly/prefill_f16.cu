@@ -19,6 +19,7 @@ namespace strata::poly {
 namespace {
 
 constexpr int BM = 32, BN = 128, BK = 128;   // weight rows, tokens, k values a step
+constexpr size_t kAq3Block = 100;            // AQ3: bytes per 256 values
 constexpr int THREADS = 256;                 // eight warps: 2 x 4, each 16 rows by 32 tokens
 constexpr size_t kSmem = (size_t) (BM * BK + BN * BK) * sizeof(__half) + (size_t) BM * BN * sizeof(float);
 
@@ -44,6 +45,19 @@ __device__ __forceinline__ void iq3_xxs_8(const block_iq3_xxs& x, int ib, int il
     for (int j = 0; j < 8; ++j) out[j] = __float2half(v[j]);
 }
 
+// Eight consecutive values of an AQ3 block (tools/aryainfer_gsq3_convert.py): 256 values in 100 bytes, two fp16 group
+// scales, the low two bits at byte j % 64 (bits 2 * (j / 64)), the high bit at byte j % 32 (bit j / 32), value - 4.
+__device__ __forceinline__ void aq3_8(const uint8_t* blk, int off, __half* out) {
+    const float d = __half2float(((const __half*) blk)[off >> 7]);
+    const uint8_t* qs = blk + 4 + (off & 63);
+    const uint8_t* hm = blk + 68 + (off & 31);
+    const int sl = 2 * (off >> 6), sh = off >> 5;
+#pragma unroll
+    for (int j = 0; j < 8; ++j)
+        out[j] = __float2half(d * (float) ((int) (((qs[j] >> sl) & 3) | (((hm[j] >> sh) & 1) << 2)) - 4));
+}
+
+template <bool AQ3>
 __global__ void fused_iq3_gemm(const uint8_t* __restrict__ w, size_t row_bytes, const __half* __restrict__ x,
                                float* __restrict__ y, int n_in, int n_out, int rows) {
     extern __shared__ char smem[];
@@ -71,9 +85,13 @@ __global__ void fused_iq3_gemm(const uint8_t* __restrict__ w, size_t row_bytes, 
                 continue;
             }
             const uint8_t* row = w + (size_t) col * row_bytes;
-            const uint8_t* blk = row + (size_t) (k >> 8) * sizeof(block_iq3_xxs);
             const int off = (int) (k0 & 255) + 8 * t;   // first 128 values of the block, then its second
-            iq3_xxs_8(*(const block_iq3_xxs*) blk, off >> 5, (off & 31) >> 3, a_s + m * BK + 8 * t);
+            if constexpr (AQ3) {
+                aq3_8(row + (size_t) (k >> 8) * kAq3Block, off, a_s + m * BK + 8 * t);
+            } else {
+                const uint8_t* blk = row + (size_t) (k >> 8) * sizeof(block_iq3_xxs);
+                iq3_xxs_8(*(const block_iq3_xxs*) blk, off >> 5, (off & 31) >> 3, a_s + m * BK + 8 * t);
+            }
         }
         // the token tile: halves already, sixteen bytes a thread
         for (int i = tid * 8; i < BN * BK; i += THREADS * 8) {
@@ -106,6 +124,76 @@ __global__ void fused_iq3_gemm(const uint8_t* __restrict__ w, size_t row_bytes, 
     }
 }
 
+struct Q81 {
+    half2 ds;   // the block's scale and its scale times the sum of its values
+    int8_t qs[32];
+};
+
+// y = w x for NC tokens of q8_1 activations: a warp a row, a lane a 32-value piece of it at a time, each piece's
+// weights unpacked once to int8 and multiplied with every token's piece by dp4a.
+template <int NC>
+__global__ void aq3_gemv_kernel(const uint8_t* __restrict__ w, const Q81* __restrict__ x, float* __restrict__ y,
+                                int n_in, int n_out) {
+    const int row = blockIdx.x * 4 + threadIdx.y;
+    if (row >= n_out) return;
+    const int nb = n_in >> 8, pieces = nb * 8, per_tok = n_in >> 5;
+    const uint8_t* wr = w + (size_t) row * nb * kAq3Block;
+    float acc[NC];
+#pragma unroll
+    for (int c = 0; c < NC; ++c) acc[c] = 0.f;
+    for (int s = threadIdx.x; s < pieces; s += 32) {
+        const int c = s & 7;
+        const uint8_t* blk = wr + (size_t) (s >> 3) * kAq3Block;
+        const float d = __half2float(((const __half*) blk)[c >> 2]);
+        const uint32_t* qs = (const uint32_t*) (blk + 4 + 32 * (c & 1));
+        const uint32_t* hm = (const uint32_t*) (blk + 68);
+        const int sl = 2 * (c >> 1);
+        int v[8];
+#pragma unroll
+        for (int i = 0; i < 8; ++i)
+            v[i] = (int) (((qs[i] >> sl) & 0x03030303u) | (((hm[i] >> c) & 0x01010101u) << 2));
+#pragma unroll
+        for (int t = 0; t < NC; ++t) {
+            const Q81& q = x[(size_t) t * per_tok + s];
+            const int* xq = (const int*) q.qs;
+            int sumi = 0;
+#pragma unroll
+            for (int i = 0; i < 8; ++i) sumi = __dp4a(v[i], xq[i], sumi);
+            const float2 ds = __half22float2(q.ds);
+            acc[t] += d * (ds.x * (float) sumi - 4.f * ds.y);
+        }
+    }
+#pragma unroll
+    for (int t = 0; t < NC; ++t) {
+        float a = acc[t];
+#pragma unroll
+        for (int o = 16; o > 0; o >>= 1) a += __shfl_xor_sync(0xffffffffu, a, o);
+        if (threadIdx.x == 0) y[(size_t) t * n_out + row] = a;
+    }
+}
+
+// A 32-value piece of AQ3 to a Q8_0 block (half d; int8 qs[32]): the group's scale and the values as they are.
+__global__ void aq3_q8_0_kernel(const uint8_t* __restrict__ w, uint8_t* __restrict__ q8, int n_in, size_t pieces) {
+    const size_t p = (size_t) blockIdx.x * blockDim.x + threadIdx.x;
+    if (p >= pieces) return;
+    const size_t per_row = (size_t) (n_in / 32);
+    const size_t row = p / per_row, s = p - row * per_row;
+    const int c = (int) (s & 7);
+    const uint8_t* blk = w + row * (size_t) (n_in / 256) * kAq3Block + (s >> 3) * kAq3Block;
+    const uint32_t* qs = (const uint32_t*) (blk + 4 + 32 * (c & 1));
+    const uint32_t* hm = (const uint32_t*) (blk + 68);
+    const int sl = 2 * (c >> 1);
+    uint8_t* out = q8 + p * 34;
+    ((__half*) out)[0] = ((const __half*) blk)[c >> 2];
+    uint16_t* o16 = (uint16_t*) (out + 2);   // 34-byte blocks: two-byte aligned
+#pragma unroll
+    for (int i = 0; i < 8; ++i) {
+        const uint32_t v = __vsub4(((qs[i] >> sl) & 0x03030303u) | (((hm[i] >> c) & 0x01010101u) << 2), 0x04040404u);
+        o16[2 * i] = (uint16_t) v;
+        o16[2 * i + 1] = (uint16_t) (v >> 16);
+    }
+}
+
 __global__ void cast_f16_kernel(const float* __restrict__ x, __half* __restrict__ y, size_t n) {
     const size_t i = (size_t) blockIdx.x * blockDim.x + threadIdx.x;
     if (i < n) y[i] = __float2half(x[i]);
@@ -113,7 +201,7 @@ __global__ void cast_f16_kernel(const float* __restrict__ x, __half* __restrict_
 
 }  // namespace
 
-bool f16_type(int ggml_type) { return ggml_type == (int) GGML_TYPE_IQ3_XXS; }
+bool f16_type(int ggml_type) { return ggml_type == (int) GGML_TYPE_IQ3_XXS || ggml_type == (int) kTypeAQ3; }
 
 void cast_f16(const float* x, uint16_t* out, size_t n, void* stream) {
     if (n == 0) return;
@@ -122,16 +210,46 @@ void cast_f16(const float* x, uint16_t* out, size_t n, void* stream) {
 
 bool fused_gemm_f16(const void* w, size_t row_bytes, int ggml_type, const uint16_t* x, float* y, int n_in, int n_out,
                     int rows, void* stream) {
-    if (ggml_type != (int) GGML_TYPE_IQ3_XXS || n_in <= 0 || n_out <= 0 || rows <= 0) return false;
+    if (!f16_type(ggml_type) || n_in <= 0 || n_out <= 0 || rows <= 0) return false;
     static bool attrs = false;
     if (!attrs) {
-        cudaFuncSetAttribute(fused_iq3_gemm, cudaFuncAttributeMaxDynamicSharedMemorySize, (int) kSmem);
+        cudaFuncSetAttribute(fused_iq3_gemm<false>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int) kSmem);
+        cudaFuncSetAttribute(fused_iq3_gemm<true>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int) kSmem);
         attrs = true;
     }
     const dim3 grid((rows + BN - 1) / BN, (n_out + BM - 1) / BM);
-    fused_iq3_gemm<<<grid, THREADS, kSmem, (cudaStream_t) stream>>>((const uint8_t*) w, row_bytes, (const __half*) x, y,
-                                                                   n_in, n_out, rows);
+    if (ggml_type == (int) kTypeAQ3)
+        fused_iq3_gemm<true><<<grid, THREADS, kSmem, (cudaStream_t) stream>>>((const uint8_t*) w, row_bytes,
+                                                                             (const __half*) x, y, n_in, n_out, rows);
+    else
+        fused_iq3_gemm<false><<<grid, THREADS, kSmem, (cudaStream_t) stream>>>((const uint8_t*) w, row_bytes,
+                                                                              (const __half*) x, y, n_in, n_out, rows);
     return true;
+}
+
+size_t aq3_row_bytes(int n_in) { return (size_t) (n_in / 256) * kAq3Block; }
+
+void aq3_to_q8_0(const void* w, void* q8, int n_in, int n_out, void* stream) {
+    const size_t pieces = (size_t) n_out * (size_t) (n_in / 32);
+    aq3_q8_0_kernel<<<(unsigned) ((pieces + 255) / 256), 256, 0, (cudaStream_t) stream>>>((const uint8_t*) w,
+                                                                                          (uint8_t*) q8, n_in, pieces);
+}
+
+void aq3_gemv(const void* w, const void* xq, float* y, int n_in, int n_out, int ncols, void* stream) {
+    const dim3 block(32, 4), grid((unsigned) ((n_out + 3) / 4));
+    const auto* wp = (const uint8_t*) w;
+    const auto* xp = (const Q81*) xq;
+    cudaStream_t st = (cudaStream_t) stream;
+    switch (ncols) {
+    case 1: aq3_gemv_kernel<1><<<grid, block, 0, st>>>(wp, xp, y, n_in, n_out); break;
+    case 2: aq3_gemv_kernel<2><<<grid, block, 0, st>>>(wp, xp, y, n_in, n_out); break;
+    case 3: aq3_gemv_kernel<3><<<grid, block, 0, st>>>(wp, xp, y, n_in, n_out); break;
+    case 4: aq3_gemv_kernel<4><<<grid, block, 0, st>>>(wp, xp, y, n_in, n_out); break;
+    case 5: aq3_gemv_kernel<5><<<grid, block, 0, st>>>(wp, xp, y, n_in, n_out); break;
+    case 6: aq3_gemv_kernel<6><<<grid, block, 0, st>>>(wp, xp, y, n_in, n_out); break;
+    case 7: aq3_gemv_kernel<7><<<grid, block, 0, st>>>(wp, xp, y, n_in, n_out); break;
+    default: aq3_gemv_kernel<8><<<grid, block, 0, st>>>(wp, xp, y, n_in, n_out); break;
+    }
 }
 
 }  // namespace strata::poly
@@ -142,6 +260,9 @@ namespace strata::poly {
 bool f16_type(int) { return false; }
 void cast_f16(const float*, uint16_t*, size_t, void*) {}
 bool fused_gemm_f16(const void*, size_t, int, const uint16_t*, float*, int, int, int, void*) { return false; }
+size_t aq3_row_bytes(int n_in) { return (size_t) (n_in / 256) * 100; }
+void aq3_to_q8_0(const void*, void*, int, int, void*) {}
+void aq3_gemv(const void*, const void*, float*, int, int, int, void*) {}
 }  // namespace strata::poly
 
 #endif

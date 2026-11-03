@@ -5,7 +5,7 @@ from strata_tokenizer import Tokenizer
 
 EXE = os.path.abspath("build-poly/aryainfer.exe")
 os.environ["PATH"] = r"C:\AI\Strata-data\cuda\13.1.2\bin\x64;C:\AI\Strata-data\cuda\13.1.2\bin;" + os.environ["PATH"]
-MODEL = r"C:\AI\Strata-data\models\qwen38-27b\Qwen3.8-27B-GSQ-RCO-IQ3_XXS-mtp.gguf"
+MODEL = os.environ.get("QWEN38_MODEL") or r"C:\AI\Strata-data\models\qwen38-27b\Qwen3.8-27B-GSQ-RCO-IQ3_XXS-mtp.gguf"
 FILLER = ("The harbor fills with fog each morning, and the cranes move slowly along the water while the crews check "
           "the ropes and the tide tables.  Every crate has a number painted on its side, and the ledger keeps a line "
           "for each one.  ")
@@ -21,7 +21,7 @@ def run(ctx, extra, max_new=128, tokens=8000, env=None):
     tok = Tokenizer.from_gguf(MODEL)
     ids = prompt_ids(tok, min(tokens, ctx - max_new - 8))
     line_txt = "GEN %d temperature=0 %s\n" % (max_new, ",".join(map(str, ids)))
-    cmd = [EXE, "--model", MODEL, "--serve", "--max-context", str(ctx), "--kv", "q4_0", "--prompt-batch", "512", "--report-drafts", *extra]
+    cmd = [EXE, "--model", MODEL, "--serve", "--max-context", str(ctx), "--kv", "q4_0", "--prompt-batch", os.environ.get("PB", "512"), "--report-drafts", *extra]
     p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                          encoding="utf-8", errors="replace", bufsize=1,
                          env={**os.environ, "STRATA_GDN_MMA": "1", **(env or {})})
@@ -43,6 +43,11 @@ def run(ctx, extra, max_new=128, tokens=8000, env=None):
             p.stdin.write(line_txt); p.stdin.flush()
         except OSError:
             pass
+    toks = []
+    def ro():
+        for line in p.stdout:
+            if line.startswith("T "): toks.append(int(line[2:]))
+    threading.Thread(target=ro, daemon=True).start()
     threading.Thread(target=rd, daemon=True).start()
     time.sleep(2.5)
     threading.Thread(target=wr, daemon=True).start()
@@ -51,6 +56,7 @@ def run(ctx, extra, max_new=128, tokens=8000, env=None):
         time.sleep(0.2)
     time.sleep(0.3)
     p.kill(); time.sleep(0.2)
+    stats['text'] = tok.decode(toks)[:160].replace(chr(10), ' ')
     return stats
 
 
@@ -60,3 +66,4 @@ for ctx in map(int, sys.argv[1].split(",")):
         s = run(ctx, [], 256, ctx - 400, {"STRATA_FORCE_GUESSES": force} if force != "0" else {})
         print("ctx %6d %-8s prefill %8s decode %6s acc %s/%s | %s" % (ctx, name, s.get("prefill"), s.get("decode"),
               s.get("accepted"), s.get("offered"), s.get("pos")), flush=True)
+        if os.environ.get("SHOW_TEXT"): print("   ", s.get("text"), flush=True)

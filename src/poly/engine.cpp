@@ -1168,6 +1168,19 @@ Dev Engine::upload(const TensorInfo* t, const std::string& name, int64_t n_in, i
                    float (*fix)(float)) {
     if (!t) throw std::runtime_error("the GGUF has no tensor " + name);
     const uint64_t rest = t->elements() / std::max<uint64_t>(t->shape[0], 1);
+#ifdef ARYAINFER_ENGINE
+    // AQ3 (tools/aryainfer_gsq3_convert.py): I8 rows exactly aq3_row_bytes(n_in) wide are AQ3 blocks; as they are
+    if (want == kAnyMat && !fix && t->type == (uint32_t) GGML_TYPE_I8 && n_in % 256 == 0 && (int64_t) rest == n_out &&
+        t->shape[0] == aq3_row_bytes((int) n_in)) {
+        const size_t bytes = home(*t).payload(*t);
+        const Dev d{dense_ ? dense_ + dense_at_ : nullptr, kTypeAQ3, (int) n_in, (int) n_out};
+        dense_at_ += pad(bytes) + kTail;
+        if (!dense_) return d;
+        if (dense_at_ > dense_bytes_) throw std::logic_error("the dense arena is too small for " + t->name);
+        h2d(d.p, home(*t).data(*t), bytes);
+        return d;
+    }
+#endif
     if ((int64_t) t->shape[0] != n_in || (int64_t) rest != n_out)
         throw std::runtime_error(t->name + " is " + shape_of(*t) + ", expected [" + std::to_string(n_in) + ", " +
                                  std::to_string(n_out) + "]");
@@ -2256,6 +2269,40 @@ void Engine::dbg(const char* name, int il, const float* dev, int n) {
 // y = w x for n tokens.  xq is x already in Q8_1, when the caller has it.  rows_per_x below n_out gives each group
 // of rows its own input (see gemv_f32); only the float types take it.
 void Engine::lin(const Dev& w, const float* x, float* y, int n, const void* xq, int rows_per_x) {
+#ifdef ARYAINFER_ENGINE
+    if (w.type == kTypeAQ3) {   // AQ3: the tensor-core product for a prompt batch, dp4a for up to 8 tokens a launch
+        if (n >= kStageRows && mmq_ && Mmq::fits((int) GGML_TYPE_Q8_0, w.n_out, w.n_in)) {
+            const size_t need = (size_t) w.n_out * (size_t) (w.n_in / 32) * 34;
+            if (aq3_q8_n_ < need) {
+                aq3_q8_ = dmalloc(need, "an AQ3 matrix as Q8_0");
+                aq3_q8_n_ = need;
+            }
+            aq3_to_q8_0(w.p, aq3_q8_, w.n_in, w.n_out, st_);
+            Mmq::quantize(x, nullptr, mqx_, (int) GGML_TYPE_Q8_0, w.n_in, w.n_in, n, st_);
+            mmq_->mul(aq3_q8_, (int) GGML_TYPE_Q8_0, w.n_out, w.n_in, 0, 1, mqx_, nullptr, nullptr, n, n, y, w.n_out, st_);
+            return;
+        }
+        if (n >= kStageRows) {
+            const size_t x_need = (size_t) n * (size_t) w.n_in;
+            if (pf16_x_n_ < x_need) {
+                pf16_x_ = (uint16_t*) dmalloc(x_need * sizeof(uint16_t), "a prompt batch's halves");
+                pf16_x_n_ = x_need;
+            }
+            cast_f16(x, pf16_x_, x_need, st_);
+            fused_gemm_f16(w.p, aq3_row_bytes(w.n_in), (int) kTypeAQ3, pf16_x_, y, w.n_in, w.n_out, n, st_);
+            return;
+        }
+        if (!xq) {
+            kernels::native_quantize_q8_1(x, q8_, w.n_in * n, 1, st_);
+            xq = q8_;
+        }
+        const size_t token = kernels::native_q8_1_bytes(w.n_in);
+        for (int at = 0; at < n; at += 8)
+            aq3_gemv(w.p, (const uint8_t*) xq + (size_t) at * token, y + (size_t) at * w.n_out, w.n_in, w.n_out,
+                     std::min(8, n - at), st_);
+        return;
+    }
+#endif
     if (w.type == kTypeF32 || w.type == kTypeBF16) {
         const int per = rows_per_x ? rows_per_x : w.n_out;
         const size_t count = (size_t) w.n_in * w.n_out;

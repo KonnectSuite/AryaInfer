@@ -4,6 +4,29 @@ Goal: NInfer-class speed for Qwen3.8 27B inside `aryainfer.exe` (not a port). Th
 `C:\Users\KNPhu\.claude\plans\jaunty-bouncing-boot.md`; the earlier state is `HANDOFF-2026-11-03-qwen38-perf.md`.
 The session stopped on budget before Stage 3 code started.
 
+
+## UPDATE (second budget, same day): AQ3 runs end to end
+
+- `tools/aryainfer_gsq3_convert.py` works (`--check` passes; GDN V heads reordered as llama.cpp does). Output file:
+  `build-env\models\Qwen3.8-27B-GSQ3-AQ3-mtp.gguf` (the sandbox would not let Python write under `C:\AI`; move it to
+  `C:\AI\Strata-data\models\qwen38-27b\` by hand). Packing is a dense little-endian 3-bit stream, NOT 10 per
+  int32; the format notes below are corrected by the converter's docstring.
+- Engine (all under `ARYAINFER_ENGINE`): `Engine::upload` tags I8 rows of `aq3_row_bytes(n_in)` as `kTypeAQ3` (200);
+  `Engine::lin` sends n <= 8 to `aq3_gemv` (dp4a) and prompt batches to `aq3_to_q8_0` + MMQ Q8_0 (exact). Kernels in
+  `src/poly/prefill_f16.cu`. The old fused wmma path for AQ3 (285 tok/s) is still there as the no-MMQ fallback.
+- Measured (table in `docs/QWEN38-27B.md`): decode 88.3 vs 67.0 at 8K, 80.5 vs 69.0 at 32K. Prefill 706 at batch
+  512, 1,229 at 2048 (old file 1,239 at 512): the Q8_0 expansion is the cost.
+
+### Next, in order
+1. **Native AQ3 MMQ tile loader**: add AQ3 to the vendored MMQ as a `load_tiles` variant that unpacks straight to the
+   int8 tile (like Q8_0's loader, with the `aq3_q8_0_kernel` arithmetic), so no expansion pass. Expect prefill well
+   above 1,239 at batch 512. Alternative if MMQ is too invasive: a cp.async-pipelined int8 `mma.sync` GEMM.
+2. Faster `aq3_gemv`: coalesced 16-byte loads (lanes on consecutive blocks), 2 rows a warp; check T=1 bandwidth
+   (should approach 600 GB/s; the weights are ~10.5 GB).
+3. 64K/128K runs, VRAM at 128K, perplexity vs the RCO file, then a `models.json` entry `qwen3.8-27b-aq3` and a
+   `docs/host-tuning/` config; copy `build-polyryainfer.exe` into `C:\AI\Strata-data\enginesrya-infer\`.
+4. Stage 2 (long-context attention) needs a profiler.
+
 ## Target
 
 NInfer-4080 (RTX 4080, 76 SMs, 717 GB/s): prefill 2,754 / 2,460 / 2,152 tok/s at 8K / 32K / 64K; MTP3 decode with
