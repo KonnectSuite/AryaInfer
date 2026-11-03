@@ -72,11 +72,13 @@ def parse_by_pos(line: str) -> list[tuple[int, int]]:
 
 
 def run_one(exe: str, model: str, ctx: int, tokens: int, max_new: int, kv: str, pb: int, extra: list[str],
-            timeout: float, ask: str = "") -> dict:
+            timeout: float, ask: str = "", by_pos: bool = False) -> dict:
     tok = Tokenizer.from_gguf(model)
     tokens = min(tokens, ctx - max_new - 8)   # the engine refuses a prompt plus output past --max-context
     ids = prompt_ids(tok, tokens, ask)
-    cmd = [exe, "--model", model, "--serve", "--max-context", str(ctx), "--kv", kv, "--report-drafts", *extra]
+    cmd = [exe, "--model", model, "--serve", "--max-context", str(ctx), "--kv", kv, *extra]
+    if by_pos:                                      # not every build has it; the base line still counts drafts
+        cmd.append("--report-drafts")
     if pb:
         cmd += ["--prompt-batch", str(pb)]
     t0 = time.monotonic()
@@ -147,6 +149,8 @@ def main() -> int:
     ap.add_argument("--prompt-batch", type=int, default=0)
     ap.add_argument("--extra", default="", help="more engine flags, space separated")
     ap.add_argument("--ask", default="", help="the request appended to the filler (default: the bicycle essay)")
+    ap.add_argument("--drafts-by-pos", action="store_true",
+                    help="pass --report-drafts (only a build that knows the flag)")
     ap.add_argument("--timeout", type=float, default=1800)
     ap.add_argument("--out", default=str(ROOT / "build-env" / "spec-bench.json"))
     a = ap.parse_args()
@@ -158,7 +162,8 @@ def main() -> int:
     rows = []
     for ctx, n in zip(ctxs, toks):
         print(f"=== context {ctx}, prompt ~{n} tokens", flush=True)
-        row = run_one(a.exe, a.model, ctx, n, a.max_new, a.kv, a.prompt_batch, extra, a.timeout, a.ask)
+        row = run_one(a.exe, a.model, ctx, n, a.max_new, a.kv, a.prompt_batch, extra, a.timeout, a.ask,
+                      by_pos=a.drafts_by_pos)
         rows.append(row)
         print("  " + json.dumps(row), flush=True)
     Path(a.out).write_text(json.dumps(rows, indent=1), encoding="utf-8")

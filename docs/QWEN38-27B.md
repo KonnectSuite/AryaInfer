@@ -503,3 +503,51 @@ Phase 4 notes:
 What remains, if the tree is ever the priority: the GDN recurrence for a tree's rows as one kernel over a state table
 (the per-row copies are the measured cost), and the ancestor mask in the `fdec` decode-attention kernel.  Even then
 the arithmetic above says the tree would have to add more than ~5 ms of tokens per row to pay.
+
+## Why decode fell as the context filled, and the batch that fixed it (2026-11-03)
+
+The run config gives the engine its whole 131,072-token context and `--prompt-batch 2048`.  The prompt batch's scratch
+is about 1.4 MiB a token (2.9 GB at 2,048), the q4_0 cache for 131K is about 2.4 GB, the IQ3_XXS weights are 10.4 GB
+and the vision encoder adds 0.87 GB: 16.6 GB against a 16.4 GB card.  As the cache filled, decode halved.
+
+Through the server (`strata-qwen3.8-27b-iq3_xxs.json`, port 8080, vision resident, q4_0, 131K context):
+
+| prompt tokens | prompt batch | prefill | decode | VRAM | drafts |
+| --- | --- | --- | --- | --- | --- |
+| 23,929 | 2048 | 1,080.8 tok/s | 55.4 tok/s | - | 0 of 1 |
+| 35,836 | 2048 | 1,002.1 | 54.4 | - | 0 of 1 |
+| 41,815 | 2048 | 950.9 | 61.8 | - | 0 of 1 |
+| 55,402 | 2048 | 871.9 | 48.9 | - | 53 of 90 |
+| 64,296 | 2048 | 838.8 | **32.0** | 15,6xx | 63 of 84 |
+| 33,010 | 512 | 866.4 | **67.6** | 14,661 | 18 of 21 |
+| 61,833 | 512 | 722.2 | **70.3** | 14,863 | 22 of 25 |
+
+The prompt batch is the knob that moved.  At 512 the long-context decode doubles (32.0 -> 70.3 at 62K) and the card
+settles 1.5 GB below its limit; prefill gives up a few percent at the long end and more at short prompts (a 512-row batch
+multiplies in smaller tiles), so the trade is real but it is the difference between usable and not at 128K on this card.
+The tracked host-tuning file now carries 512.
+
+Standalone, with no server and no vision encoder and `--max-context` set to the prompt's length, the same file at batch
+2048 reads 1,205.6 tok/s prefill and 69.3 decode at 8K, 1,038.7 / 72.3 at 32K, 867.6 / 70.5 at 64K, and 671.7 / 47.4
+at 120K.  The server's gap to those numbers is the 131K allocation and the encoder, not the engine.
+
+## System RAM: what it can and cannot do for a dense 27B (2026-11-03)
+
+Dense is the whole point: every token reads every weight, so there is no cold part of the model to park in host memory.
+A layer left in RAM has to cross PCIe once a token; 4 GB of the 10.4 GB at the card's measured 20-25 GB/s is 160-200 ms
+a token, 5-6 tok/s before anything else.  The engine has no such path for dense weights, and adding one would be slower
+than the long-context numbers it would try to improve.  The MoE path is different: a token routes to a few experts, which
+is why `--cpu-share` and the staging buffer (`--stage-mib`, `--stage-ahead`) exist there.
+
+What host memory does hold here, and helps:
+
+* the conversation caches parked between chats (`--conversation-cache-slots`), so a long context is not read again;
+* the prompt cache's checkpoints (`--prompt-cache`, `--prompt-cache-every`), which is why a follow-up turn reads only the
+  new tokens (measured above: 18 of 61,833 tokens re-read);
+* the vision encoder, which can move off the card (`"gpu": false` in the run config drops `--gpu`), freeing 0.87 GB at
+  the cost of CPU image encoding - the one genuinely cold component in this model;
+* ComfyUI's weights, which AryaInfer unloads before the engine starts (POST /free), so the two do not share the card.
+
+The road to NInfer's 173 tok/s at 20K is therefore not offload: it is the two gaps measured in the section above - a
+tensor-core (FP16 MMA) matrix path for the 3-bit weights (prefill) and more tokens a draft round (decode) - plus the
+integer-MMA attention for the very long contexts.
