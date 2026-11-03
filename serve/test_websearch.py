@@ -552,6 +552,34 @@ class PageSettings(unittest.TestCase):
         self.assertFalse(out["ok"])
         self.assertIn("json", out["error"])
 
+    def test_the_reader_returns_the_page_text(self):
+        code, out = self.call("/search", {"read": {"url": self.base + "/page", "settings": self.card()}})
+        self.assertEqual(code, 200, out)
+        self.assertTrue(out["ok"], out)
+        self.assertGreater(out["chars"], 0)
+        self.assertIn("Reading a page", out["text"])
+        self.assertNotIn("<script", out["text"])                        # text, never the page's HTML
+        self.assertNotIn("not text", out["text"])                       # a script body is not page text
+
+    def test_the_reader_refuses_a_private_address_unless_allowed(self):
+        code, out = self.call("/search", {"read": {"url": self.base + "/page"}})   # nothing saved: allow_local off
+        self.assertEqual(code, 200, out)
+        self.assertFalse(out["ok"])
+        self.assertIn("local or private address", out["error"])
+
+    def test_the_reader_caps_the_text(self):
+        body = self.card(max_fetch_chars=500)
+        code, out = self.call("/search", {"read": {"url": self.base + "/long", "settings": body}})
+        self.assertEqual(code, 200, out)
+        self.assertTrue(out["ok"], out)
+        self.assertTrue(out["truncated"])
+        self.assertLessEqual(len(out["text"]), 700)                     # the cut note rides along
+
+    def test_the_reader_needs_an_address(self):
+        code, out = self.call("/search", {"read": {}})
+        self.assertEqual(code, 400, out)
+        self.assertIn("url", out["error"]["message"])
+
     def test_the_page_only(self):
         req = urllib.request.Request(self.base_url + "/search", data=b'{"set": {}}',
                                      headers={"Content-Type": "text/plain"})

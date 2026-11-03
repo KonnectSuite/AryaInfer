@@ -13,8 +13,8 @@ body { margin: 0; overflow: hidden; }
 .app[data-collapsed="true"] { grid-template-columns: var(--st-sidebar-w-min) minmax(0, 1fr); }
 .app-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .st-header { position: relative; z-index: 2; flex: none; }
-main { flex: 1; min-height: 0; display: flex; }
-.view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+main { flex: 1; min-height: 0; min-width: 0; display: flex; }
+.view { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; }
 .view[hidden] { display: none; }
 #drawer-close .st-icon { transform: rotate(-90deg); }
 
@@ -356,6 +356,49 @@ main { flex: 1; min-height: 0; display: flex; }
   .facts { grid-template-columns: 1fr; gap: 2px; }
   .facts dd { margin-bottom: var(--st-s-2); }
   .st-chip-btn>span { max-width: 110px; }
+}
+
+/* ---------------------------------------------------------------- workbench (the right panel) */
+.view--chat { flex-direction: row; }
+.chat-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.workbench { position: relative; flex: none; width: var(--st-panel-w); min-width: 320px; max-width: 720px; display: none;
+             flex-direction: column; min-height: 0; background: var(--st-surface); border-left: 1px solid var(--st-line); }
+.workbench[data-open="true"] { display: flex; }
+.workbench__resize { position: absolute; left: -3px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 3; }
+.workbench__resize:hover, .workbench__resize:focus-visible { background: color-mix(in srgb, var(--st-accent) 35%, transparent); }
+.workbench__head { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 12px; border-bottom: 1px solid var(--st-line); }
+.wb-tabs { flex: 1; grid-template-columns: repeat(4, 1fr); }
+.wb-tabs button { height: 28px; font-size: var(--st-fs-xs); }
+.workbench__body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.wb-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 12px; }
+.wb-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wb-select { height: 32px; font-size: var(--st-fs-sm); flex: 1; min-width: 120px; max-width: 100%; }
+.seg--two { grid-template-columns: repeat(2, 1fr); }
+.seg--two button { height: 30px; padding: 0 10px; font-size: var(--st-fs-xs); }
+.wb-bar .st-btn--icon { width: 30px; height: 30px; }
+.wb-stage { flex: 1; min-height: 0; display: flex; border: 1px solid var(--st-line); border-radius: var(--st-r-md); overflow: hidden;
+            background: var(--st-bg); }
+.wb-frame { flex: 1; width: 100%; border: 0; background: #fff; }
+.wb-source { flex: 1; margin: 0; padding: 12px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+             font: 400 12.5px/1.55 var(--st-font-mono); color: var(--st-ink-soft); background: var(--st-surface-2); }
+#wb-read-text { border: 1px solid var(--st-line); border-radius: var(--st-r-md); max-height: none; }
+.wb-empty { flex: 1; }
+.wb-files, .wb-activity { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 0; flex: 1; }
+.wb-file { display: flex; flex-direction: column; gap: 3px; padding: 9px 11px; border: 1px solid var(--st-line);
+           border-radius: 10px; background: var(--st-surface); cursor: pointer; text-align: left; color: var(--st-ink); }
+.wb-file:hover { border-color: var(--st-accent); }
+.wb-file__name { font-weight: 600; font-size: var(--st-fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-file__meta { font-size: var(--st-fs-xs); color: var(--st-ink-muted); }
+.wb-file__body { margin: 6px 0 0; padding: 10px; max-height: 320px; overflow: auto; border-radius: 8px; background: var(--st-surface-2);
+                 font: 400 12px/1.5 var(--st-font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.wb-activity .tool-call { margin: 0; }
+.wb-activity .st-badge { flex: none; }
+@media (max-width: 1100px) {
+  .workbench { position: fixed; right: 0; top: var(--st-header-h); bottom: 0; z-index: 35; width: min(var(--st-panel-w), 92vw);
+               box-shadow: var(--st-sh-pop); }
+}
+@media (max-width: 640px) {
+  .workbench { top: 0; width: 100vw; }
 }
 
 /* the model list (a hidden <select> keeps the state; the menu is what the page shows) */

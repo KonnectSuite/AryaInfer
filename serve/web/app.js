@@ -2006,6 +2006,7 @@ function updateAssistant(el, m, streaming) {
     if (streaming) bubble.classList.add("cursor"); else bubble.classList.remove("cursor");
   }
   el.querySelector(".meta-text").textContent = m.meta || (streaming ? "" : m.stopped ? "Stopped" : "");
+  wbMaybeAuto(m);
   el.querySelector("[data-msg-copy]").hidden = streaming || !m.text;
   // swipe controls: regenerate disabled while streaming; prev/next shown when there is more than one variant
   const rg = el.querySelector("[data-msg-regen]");
@@ -2024,6 +2025,7 @@ function renderChat() {
   chat.querySelectorAll(".st-msg").forEach((e) => e.remove());
   $("chat-empty").hidden = messages.length > 0;
   messages.forEach((m, i) => chat.appendChild(msgEl(m, i)));
+  if (wb.open) wbRender();
   scrollDown(true);
 }
 function nearBottom() { const s = $("chat-scroll"); return s.scrollHeight - s.scrollTop - s.clientHeight < 120; }
@@ -2377,6 +2379,315 @@ document.addEventListener("click", (e) => {
       !e.target.closest("[data-chat-menu]")) closeChatMenu();
   if (settingsOpen() && !$("settings-pop").contains(e.target) && !$("settings-btn").contains(e.target)) openSettings(false);
 });
+
+// ------------------------------------------------------------------ the Workbench (right panel)
+// What the conversation produced, beside it: the HTML, SVG and Markdown blocks in the answers (rendered in a
+// sandboxed frame that cannot reach this page, this server or the network), the files that were attached or read by a
+// tool, a reader for one address, and the tool trail of the answer. The width, the view and whether it is open are
+// kept for this browser; the content is always the active chat's.
+const WB_STORE = "workbench";
+const ARTIFACT_LANGS = new Set(["html", "svg", "markdown", "md"]);
+let wb = {open: false, tab: "artifact", mode: "preview", width: 420, selected: null, autoFor: null};
+
+function wbSave() { store.set(WB_STORE, {open: wb.open, tab: wb.tab, mode: wb.mode, width: wb.width}); }
+function wbLoad() {
+  const saved = store.get(WB_STORE, null);
+  if (saved && typeof saved === "object") wb = {...wb, ...saved};
+  wb.width = Math.min(720, Math.max(320, +wb.width || 420));
+  $("workbench").style.width = `${wb.width}px`;
+  $("workbench").dataset.open = String(!!wb.open);
+  $("wb-toggle").setAttribute("aria-pressed", String(!!wb.open));
+  $("wb-toggle").setAttribute("aria-label", wb.open ? "Close the workbench" : "Open the workbench");
+}
+function wbOpen(open, tab) {
+  wb.open = !!open;
+  if (tab) wb.tab = tab;
+  $("workbench").dataset.open = String(wb.open);
+  $("wb-toggle").setAttribute("aria-pressed", String(wb.open));
+  $("wb-toggle").setAttribute("aria-label", wb.open ? "Close the workbench" : "Open the workbench");
+  if (wb.open) { wbShowTab(wb.tab); wbRender(); }
+  wbSave();
+}
+function wbShowTab(tab) {
+  wb.tab = tab;
+  for (const b of document.querySelectorAll("[data-wb-tab]")) b.setAttribute("aria-selected", String(b.dataset.wbTab === tab));
+  for (const p of document.querySelectorAll("[data-wb-pane]")) p.hidden = p.dataset.wbPane !== tab;
+  if (tab === "artifact") wbRenderArtifact();
+  if (tab === "files") wbRenderFiles();
+  if (tab === "activity") wbRenderActivity();
+  if (tab === "reader") $("wb-url").focus();
+  wbSave();
+}
+function wbRender() { wbShowTab(wb.tab); }
+
+// ---- artifacts: the fenced HTML, SVG and Markdown blocks of the answers ----
+function wbArtifacts() {
+  const out = [];
+  messages.forEach((m, i) => {
+    if (m.role !== "assistant" || !m.text) return;
+    const re = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
+    let match, n = 0;
+    while ((match = re.exec(m.text))) {
+      const lang = (match[1] || "").toLowerCase();
+      if (!ARTIFACT_LANGS.has(lang)) continue;
+      n += 1;
+      out.push({id: `${i}-${n}`, lang: lang === "md" ? "markdown" : lang, code: match[2].trim(),
+                title: wbTitle(match[2], lang, n)});
+    }
+  });
+  return out;
+}
+function wbTitle(code, lang, n) {
+  const h = code.match(/<h1[^>]*>([^<]{1,80})<\/h1>/i) || code.match(/<title[^>]*>([^<]{1,80})<\/title>/i) ||
+            code.match(/^#\s+(.{1,80})$/m);
+  return h ? h[1].trim() : `${lang === "md" ? "Markdown" : lang.toUpperCase()} · ${n}`;
+}
+// The frame's own policy: no network at all, no access to this page, inline script and style only. Nothing the model
+// writes can reach the server, the user's other tabs or the internet through it.
+const WB_CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; ` +
+               `style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; media-src data: blob:">`;
+function wbDoc(a) {
+  if (a.lang === "markdown") {
+    return `<!doctype html><html><head><meta charset="utf-8">${WB_CSP}<style>` +
+           `body{margin:0;padding:16px;font:15px/1.55 system-ui,sans-serif;color:#1b2431}` +
+           `pre{background:#f2f5fa;padding:10px;border-radius:8px;overflow:auto}code{font-family:ui-monospace,monospace}` +
+           `h1,h2{margin:.4em 0 .3em;line-height:1.2}table{border-collapse:collapse}td,th{border:1px solid #d4ddea;padding:4px 8px}` +
+           `</style></head><body>${markdown(a.code)}</body></html>`;
+  }
+  const inner = a.lang === "svg"
+    ? `<!doctype html><html><head><meta charset="utf-8">${WB_CSP}<style>html,body{margin:0;height:100%;display:grid;` +
+      `place-items:center;background:#fff}svg{max-width:96%;max-height:96%}</style></head><body>${a.code}</body></html>`
+    : a.code;
+  if (/<head[\s>]/i.test(inner)) return inner.replace(/<head([^>]*)>/i, `<head$1><meta charset="utf-8">${WB_CSP}`);
+  if (/<html[\s>]/i.test(inner)) return inner.replace(/<html([^>]*)>/i, `<html$1><head>${WB_CSP}</head>`);
+  return `<!doctype html><html><head><meta charset="utf-8">${WB_CSP}</head><body>${inner}</body></html>`;
+}
+function wbRenderArtifact() {
+  const list = wbArtifacts();
+  const select = $("wb-artifact");
+  const ids = list.map((a) => a.id).join(",");
+  if (select.dataset.ids !== ids) {
+    select.dataset.ids = ids;
+    select.replaceChildren();
+    for (const a of list) {
+      const o = document.createElement("option");
+      o.value = a.id;
+      o.textContent = a.title;
+      select.append(o);
+    }
+    select.hidden = !list.length;
+  }
+  let a = list.find((x) => x.id === wb.selected);
+  if (!a && list.length) a = list[list.length - 1];
+  wb.selected = a ? a.id : null;
+  if (select.value !== wb.selected) select.value = wb.selected || "";
+  const empty = !a;
+  $("wb-none").hidden = !empty;
+  $("wb-stage").hidden = empty;
+  for (const id of ["wb-copy", "wb-download", "wb-open"]) $(id).hidden = empty;
+  $("wb-mode").hidden = empty;
+  if (empty) return;
+  select.value = wb.selected;
+  $("wb-source").textContent = a.code;
+  const source = wb.mode === "source";
+  $("wb-source").hidden = !source;
+  $("wb-frame").hidden = source;
+  // srcdoc, not a blob URL: a sandboxed frame has an opaque origin and may not load a blob made by this page
+  if (!source) $("wb-frame").srcdoc = wbDoc(a);
+}
+function wbCurrent() {
+  const list = wbArtifacts();
+  return list.find((a) => a.id === wb.selected) || list[list.length - 1] || null;
+}
+$("wb-artifact").onchange = () => { wb.selected = $("wb-artifact").value; wbRenderArtifact(); };
+for (const b of $("wb-mode").children) {
+  b.onclick = () => {
+    wb.mode = b.dataset.wbMode;
+    for (const x of $("wb-mode").children) x.setAttribute("aria-checked", String(x === b));
+    wbRenderArtifact();
+    wbSave();
+  };
+}
+for (const id of ["wb-copy", "wb-download", "wb-open"]) $(id).onclick = () => {
+  const a = wbCurrent();
+  if (!a) return;
+  if (id === "wb-copy") { copyText(a.code); return; }
+  const type = a.lang === "html" ? "text/html" : a.lang === "svg" ? "image/svg+xml" : "text/markdown";
+  const url = URL.createObjectURL(new Blob([a.code], {type}));
+  if (id === "wb-open") { window.open(url, "_blank", "noopener"); return; }
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${a.title.replace(/[\\/:*?"<>|]+/g, "-").slice(0, 50) || "artifact"}.${a.lang === "markdown" ? "md" : a.lang}`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+};
+
+// ---- files: what was attached, and what a tool read ----
+function wbFileList() {
+  const out = [];
+  messages.forEach((m, i) => {
+    if (m.role !== "user") return;
+    for (const f of m.files || []) if (f.text != null) out.push({name: f.name, text: f.text, meta: "attached", key: `a${i}-${out.length}`});
+    for (const img of m.images || []) if (img.url) out.push({name: img.name, image: img.url, meta: "attached picture", key: `i${i}-${out.length}`});
+  });
+  messages.forEach((m, i) => {
+    for (const t of m.tools || []) {
+      if (t.result == null || t.result.length < 2000) continue;
+      out.push({name: `${t.server ? `${t.server} / ` : ""}${t.tool || t.name}`, text: t.result, key: `t${i}-${t.id}`,
+                meta: `tool result · ${fmt(t.chars || t.result.length)} characters`});
+    }
+  });
+  return out;
+}
+function wbRenderFiles() {
+  const box = $("wb-files");
+  const files = wbFileList();
+  box.replaceChildren();
+  if (!files.length) {
+    const empty = document.createElement("div");
+    empty.className = "st-empty";
+    empty.innerHTML = `<span class="st-empty__title">No files yet</span><span>Attach one in the message box, or let a tool read one.</span>`;
+    box.append(empty);
+    return;
+  }
+  for (const f of files) {
+    const item = document.createElement("div");
+    item.className = "wb-file";
+    item.dataset.wbFile = f.key;
+    item.setAttribute("role", "button");
+    item.setAttribute("tabindex", "0");
+    item.innerHTML = `<span class="wb-file__name"></span><span class="wb-file__meta"></span>`;
+    item.querySelector(".wb-file__name").textContent = f.name;
+    item.querySelector(".wb-file__meta").textContent = f.meta;
+    if (f.image) {
+      const img = document.createElement("img");
+      img.src = f.image;
+      img.alt = f.name;
+      img.style.maxWidth = "100%";
+      img.style.marginTop = "6px";
+      img.style.borderRadius = "8px";
+      item.append(img);
+    } else {
+      const pre = document.createElement("pre");
+      pre.className = "wb-file__body";
+      pre.textContent = f.text;
+      pre.hidden = true;
+      item.append(pre);
+    }
+    box.append(item);
+  }
+}
+$("wb-files").onclick = (e) => {
+  const item = e.target.closest("[data-wb-file]");
+  const body = item && item.querySelector(".wb-file__body");
+  if (body) body.hidden = !body.hidden;
+};
+
+// ---- activity: the tool trail of the answer ----
+function wbRenderActivity() {
+  const box = $("wb-activity");
+  const m = (busy && busy.msg) || [...messages].reverse().find((x) => x.role === "assistant" && x.tools && x.tools.length);
+  box.replaceChildren();
+  if (!m || !(m.tools || []).length) {
+    const empty = document.createElement("div");
+    empty.className = "st-empty";
+    empty.innerHTML = `<span class="st-empty__title">No tool calls</span><span>The model's tool calls and their results show here while it answers.</span>`;
+    box.append(empty);
+    return;
+  }
+  const head = document.createElement("div");
+  head.className = "muted small";
+  const ran = m.tools.filter((t) => t.state === "done" || t.state === "error").length;
+  head.textContent = `${fmt(m.tools.length)} call${m.tools.length === 1 ? "" : "s"} · ${fmt(ran)} finished`;
+  box.append(head);
+  for (const t of m.tools) {
+    const row = document.createElement("div");
+    row.className = "wb-file";
+    const ok = t.state === "done" ? "ok" : t.state === "error" ? "failed" : t.state;
+    const bytes = t.chars ? `${fmt(t.chars)} characters · ` : "";
+    row.innerHTML = `<span class="wb-file__name"></span><span class="wb-file__meta"></span>`;
+    row.querySelector(".wb-file__name").textContent = `${t.tool || t.name}${t.server ? ` · ${t.server}` : ""}`;
+    row.querySelector(".wb-file__meta").textContent =
+      `${ok}${t.ms != null ? ` · ${(t.ms / 1000).toFixed(1)} s` : ""} · ${bytes}adds about ${fmt(Math.round((t.chars || (t.result || "").length) / 4))} tokens`;
+    if (t.result != null) {
+      const pre = document.createElement("pre");
+      pre.className = "wb-file__body";
+      pre.textContent = t.result;
+      pre.hidden = true;
+      row.append(pre);
+    }
+    box.append(row);
+  }
+}
+$("wb-activity").onclick = (e) => {
+  const item = e.target.closest(".wb-file");
+  const body = item && item.querySelector(".wb-file__body");
+  if (body) body.hidden = !body.hidden;
+};
+
+// ---- reader: one address as readable text, through the same fetch the page reader uses ----
+async function wbRead() {
+  const url = $("wb-url").value.trim();
+  const msg = $("wb-read-msg");
+  const say = (text, bad) => { msg.textContent = text; msg.className = `small ${bad ? "mcp-msg-bad" : "mcp-msg-ok"}`; };
+  if (!url) { say("Paste an address first.", true); return; }
+  if (!/^https?:\/\/[^\s/]+/i.test(url)) { say("The address must start with http:// or https://.", true); return; }
+  $("wb-read").disabled = true;
+  say("Reading…", false);
+  try {
+    const r = await fetch("search", {method: "POST", headers: headers(true), body: JSON.stringify({read: {url}})});
+    const j = await r.json();
+    if (!r.ok) { say((j.error && j.error.message) || `HTTP ${r.status}`, true); return; }
+    if (!j.ok) { say(j.error || "The page could not be read.", true); return; }
+    $("wb-read-text").textContent = j.text;
+    say(`${fmt(j.chars)} characters · ${(j.ms / 1000).toFixed(1)} s${j.truncated ? " · cut at the setting's limit" : ""}`, false);
+  } catch (e) {
+    say(String(e.message || e), true);
+  } finally {
+    $("wb-read").disabled = false;
+  }
+}
+$("wb-read").onclick = wbRead;
+$("wb-url").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); wbRead(); } };
+
+// ---- opening, closing, resizing ----
+$("wb-toggle").onclick = () => wbOpen(!wb.open);
+$("wb-close").onclick = () => wbOpen(false);
+for (const b of document.querySelectorAll("[data-wb-tab]")) b.onclick = () => wbShowTab(b.dataset.wbTab);
+let wbDrag = null;
+$("wb-resize").addEventListener("pointerdown", (e) => {
+  wbDrag = {x: e.clientX, width: $("workbench").getBoundingClientRect().width};
+  $("wb-resize").setPointerCapture(e.pointerId);
+});
+$("wb-resize").addEventListener("pointermove", (e) => {
+  if (!wbDrag) return;
+  wb.width = Math.min(720, Math.max(320, wbDrag.width + (wbDrag.x - e.clientX)));
+  $("workbench").style.width = `${wb.width}px`;
+});
+$("wb-resize").addEventListener("pointerup", () => { if (wbDrag) { wbDrag = null; wbSave(); } });
+$("wb-resize").addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  e.preventDefault();
+  wb.width = Math.min(720, Math.max(320, wb.width + (e.key === "ArrowLeft" ? 24 : -24)));
+  $("workbench").style.width = `${wb.width}px`;
+  wbSave();
+});
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || e.altKey) return;
+  if (e.key.toLowerCase() !== "b") return;
+  e.preventDefault();
+  wbOpen(!wb.open);
+});
+// Live: the first fenced page or drawing in an answer opens the panel on it, once per message.
+function wbMaybeAuto(m) {
+  if (!busy || busy.msg !== m) return;                 // only while that answer is being written
+  if (wb.open || !m || wb.autoFor === m) return;
+  if (!/```(html|svg|markdown|md)\b/i.test(m.text || "")) return;
+  wb.autoFor = m;
+  wbOpen(true, "artifact");
+}
+wbLoad();
+wbShowTab(wb.tab);
 
 // ------------------------------------------------------------------ start
 setBusy(false);

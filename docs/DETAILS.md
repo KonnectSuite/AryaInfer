@@ -2383,6 +2383,24 @@ The dialog keeps two keys of its own in each server's settings: `icon` (which ma
 name). AryaInfer ignores them; they are how the page draws the same card next time, and they travel with the server in
 `mcp-servers.json`.
 
+**The Workbench** is the panel on the right of the chat (the header button, or Ctrl/Cmd+Shift+B). It shows what
+the conversation produced, beside it:
+
+- **Artifact** - the first HTML, SVG or Markdown block in an answer opens the panel while it is being written. The
+  block is rendered in a frame with `sandbox="allow-scripts"` and no `allow-same-origin`, and with its own policy
+  (`default-src 'none'`, inline style and script only): a page the model wrote cannot read this page, call this
+  server, or reach the network. Preview and Source switch between the rendering and the code, and the block can be
+  copied, downloaded or opened in a tab of its own.
+- **Files** - what was attached to the chat and every tool result over 2,000 characters, with the tool and server it
+  came from.
+- **Reader** - one address as readable text, fetched by the server with the same rules as the `read_page` tool
+  (`check_url`, `allow_local`, `max_fetch_chars`). The reply is text, never HTML, so nothing from a page executes
+  here. `POST /search {"read": {"url": "..."}}` is that request; it is answered for this page only, like the rest.
+- **Activity** - the tool calls of the answer as they happen, with the arguments, the result, the time and an estimate
+  of the tokens the result adds to the next request (characters divided by four, and labelled as an estimate).
+
+The panel's width, its view and whether it is open are kept for this browser; its content is always the active chat's.
+
 ### API request monitor
 
 Off by default, since it keeps prompts and answers in memory: turn it on with `"api_monitor": true` in

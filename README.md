@@ -805,6 +805,9 @@ All twelve models are used the same way: the same app, the same API.
 - **Tools in the chat page:** give the model your own [MCP servers](docs/DETAILS.md#tools-from-mcp-servers) from
   **Settings > Tools > MCP servers** (a catalog of known servers, a pasted Claude Desktop block, or the fields by
   hand) and a [SearXNG web search](docs/SEARCH.md) beside it; both are offered from the next answer on.
+- **The Workbench:** the panel on the right renders what an answer produces - an HTML, SVG or Markdown block opens in
+  it while the model writes, in a sandboxed frame that cannot reach this page, this server or the network - and lists
+  the attached files, a reader for one address, and the tool calls behind the answer.
 - **From your phone or another PC:** `START-HERE.bat --setup --host 0.0.0.0 --api-key <secret>`. Always set a key.
 
 The following behavior and platform differences are inherited from the upstream

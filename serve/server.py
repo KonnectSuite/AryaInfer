@@ -6682,9 +6682,13 @@ def make_handler(svc: Service):
                 if "test" in req:
                     self._search_test(req["test"])
                     return
+                if "read" in req:
+                    self._search_read(req["read"])
+                    return
                 raw = req.get("set")
                 if not isinstance(raw, dict):
-                    raise ValueError('send {"set": {...}} to save the settings, or {"test": "a query"} to try them')
+                    raise ValueError('send {"set": {...}} to save the settings, {"test": "a query"} to try them, or '
+                                     '{"read": {"url": "<address>"}} to read one page')
                 path = Path(svc.search_path) if svc.search_path else websearch.path_for(svc.config_path)
                 with svc.config_lock:
                     settings = websearch.normalize(websearch.merge_secrets(raw, websearch.read_settings(path)))
@@ -6730,6 +6734,36 @@ def make_handler(svc: Service):
                              "unresponsive": diagnostic.get("unresponsive") or [],
                              "first_url": diagnostic.get("first_url", ""),
                              "ms": int((time.monotonic() - started) * 1000), "text": text[:3000]})
+
+        def _search_read(self, spec):
+            """One address as readable text for the Workbench's reader: the same rules as the read_page tool
+            (check_url, allow_local, the character cap), the same settings, and text only - never HTML."""
+            url = spec.get("url") if isinstance(spec, dict) else spec
+            if not isinstance(url, str) or not url.strip():
+                self._json(400, {"error": {"type": "invalid_request_error",
+                                           "message": 'send {"read": {"url": "<address>"}}'}})
+                return
+            path = Path(svc.search_path) if svc.search_path else websearch.path_for(svc.config_path)
+            raw = spec.get("settings") if isinstance(spec, dict) else None
+            try:
+                if isinstance(raw, dict):
+                    settings = websearch.normalize(websearch.merge_secrets(raw, websearch.read_settings(path)))
+                elif svc.search is not None:
+                    settings = svc.search.settings
+                else:
+                    settings = websearch.normalize(websearch.read_settings(path))
+            except ValueError as e:
+                self._json(400, {"error": {"type": "invalid_request_error", "message": str(e)}})
+                return
+            started = time.monotonic()
+            try:
+                text, chars, truncated, diagnostic = websearch.read_page(settings, url.strip())
+            except websearch.WebSearchError as e:
+                self._json(200, {"ok": False, "url": url, "error": str(e)})
+                return
+            self._json(200, {"ok": True, "url": diagnostic.get("url", url), "status": diagnostic.get("status"),
+                             "text": text, "chars": chars, "truncated": truncated,
+                             "ms": int((time.monotonic() - started) * 1000)})
 
         def _foreign_origin(self) -> bool:
             """A web page of another origin sent this.  The Origin must be this server's own address (host and port),
