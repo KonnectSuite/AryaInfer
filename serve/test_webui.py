@@ -207,6 +207,15 @@ class Contract(unittest.TestCase):
             self.assertIn(state, css)
         self.assertIn(".st-tool__label { display: none; }", css)   # a phone keeps the lights, not the words
 
+    def test_a_viewbox_only_svg_fills_its_frame(self):
+        # `max-height:96%` inside an auto-height grid row resolved to zero in Chrome: every viewBox-only SVG (the
+        # model's usual shape) previewed as a blank frame.  The wrapper flexes and gives the SVG the whole box.
+        body = self.js[self.js.index("function wbDoc(a)"):]
+        body = body[:body.index("\n}")]
+        self.assertIn("body{display:flex", body)
+        self.assertIn("svg{display:block;width:100%;height:100%}", body)
+        self.assertNotIn("svg{max-width:96%", body)
+
     def test_written_pages_render_in_the_answer(self):
         for needle in ("data-artifact-open", "st-artifact__frame", "function wbShowArtifact",
                        "codeBlock(m[2].trim(), rest, {live: true})",   # a streaming block stays code

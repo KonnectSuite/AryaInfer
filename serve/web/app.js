@@ -2917,9 +2917,13 @@ function wbDoc(a) {
            `h1,h2{margin:.4em 0 .3em;line-height:1.2}table{border-collapse:collapse}td,th{border:1px solid #d4ddea;padding:4px 8px}` +
            `</style></head><body>${markdown(a.code)}</body></html>`;
   }
+  // An SVG with only a viewBox has no intrinsic size, and `max-height:96%` inside an auto-height grid row resolved to
+  // zero in Chrome - the preview was a blank frame for every such drawing.  A flex box with width/height 100% lets the
+  // viewBox scale the drawing (preserveAspectRatio keeps it centred).
   const inner = a.lang === "svg"
-    ? `<!doctype html><html><head><meta charset="utf-8">${WB_CSP}<style>html,body{margin:0;height:100%;display:grid;` +
-      `place-items:center;background:#fff}svg{max-width:96%;max-height:96%}</style></head><body>${a.code}</body></html>`
+    ? `<!doctype html><html><head><meta charset="utf-8">${WB_CSP}<style>html,body{margin:0;height:100%;background:#fff}` +
+      `body{display:flex;align-items:center;justify-content:center}` +
+      `svg{display:block;width:100%;height:100%}</style></head><body>${a.code}</body></html>`
     : a.code;
   if (/<head[\s>]/i.test(inner)) return inner.replace(/<head([^>]*)>/i, `<head$1><meta charset="utf-8">${WB_CSP}`);
   if (/<html[\s>]/i.test(inner)) return inner.replace(/<html([^>]*)>/i, `<html$1><head>${WB_CSP}</head>`);
