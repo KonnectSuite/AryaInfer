@@ -92,3 +92,6 @@ dist-hip/
 /comfyui.json.*
 # a gallery written by mistake beside the source: it belongs under local-data
 /image-gallery/
+# the vision encoder's scratch folders beside the app (random suffix, .sve cache): never source
+/strata-vision-*/
+*.sve
