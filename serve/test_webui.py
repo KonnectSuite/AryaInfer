@@ -184,10 +184,23 @@ class Contract(unittest.TestCase):
             self.assertIn(call, self.room)
         self.assertIn('fetch("v1/chat/completions"', self.room)   # the same endpoint as the chat
         self.assertIn("fetch(`comfy?", self.room)                # relative: only this server
-        self.assertIn('strata_images = true', self.room)        # the agent gets the image tool
-        self.assertIn("reference_id", self.room)                # "change that one" names the last picture
+        self.assertIn("attached.length ? {references:", self.room)   # attached pictures ride with the request
+        self.assertIn('room.messages.push({role: "user", text, refs: attached})', self.room)
+        self.assertIn("room-bubble__refs", self.room)               # ... and are shown on that turn
+        self.assertIn("The next request edits the attached picture", self.room)
+        self.assertIn("refs: (m.refs || [])", self.room)            # they survive a reload
+        self.assertIn("reference_id", self.room)                    # "change that one" names the last picture
         self.assertNotIn("api_base", self.room)
         self.assertGreaterEqual(self.templates.count("prompt:"), 8)
+
+    def test_written_pages_render_in_the_answer(self):
+        for needle in ("data-artifact-open", "st-artifact__frame", "function wbShowArtifact",
+                       "codeBlock(m[2].trim(), rest, {live: true})",   # a streaming block stays code
+                       'scan(room.messages, "room-")', "sandbox=\"allow-scripts\""):
+            self.assertIn(needle, self.js, needle)
+        css = (WEB / "app.css").read_text(encoding="utf-8")
+        self.assertIn(".st-artifact__frame", css)
+        self.assertIn(".room-bubble__ref", css)
 
     def test_the_views_still_carry_what_the_other_suites_pin(self):
         for name in ("cc-card", "cc-slots-text", "cc-mem-text", "cc-facts", "cc-note"):

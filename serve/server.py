@@ -7049,10 +7049,23 @@ def make_handler(svc: Service):
             # none; nothing is offered to a request that asks for none.
             use_mcp = req.get("strata_mcp") is True and svc.mcp is not None
             use_search = req.get("strata_search") is True and svc.search is not None and svc.search.configured()
-            use_images = (req.get("strata_images") is True and svc.comfy is not None and svc.comfy.configured())
+            # "strata_images" is true (the chat) or {"references": [<gallery id>, ...]} - the pictures the user
+            # attached in the Images room, which this request's tool edits even when the model names no id.
+            want_images = req.get("strata_images")
+            image_refs: list[str] = []
+            if isinstance(want_images, dict):
+                refs = want_images.get("references")
+                if refs is None:
+                    refs = []
+                if not isinstance(refs, list) or not all(isinstance(r, str) for r in refs):
+                    raise ValueError('"strata_images.references" must be a list of gallery image ids')
+                image_refs = [r.strip() for r in refs if r and r.strip()][:4]
+                want_images = True
+            use_images = bool(want_images is True and svc.comfy is not None and svc.comfy.configured())
             own = {t.get("name") for t in tools or [] if isinstance(t, dict)}   # #592: a second line of defence
+            images_provider = comfyui.ComfyForRequest(svc.comfy, image_refs) if use_images else None
             providers = [p for p in (svc.mcp if use_mcp else None, svc.search if use_search else None,
-                                     svc.comfy if use_images else None) if p is not None]
+                                     images_provider) if p is not None]
             hub, extra = None, []
             if providers:
                 if not self._own_page("MCP tools, web search and images can be used"):   # they run with the user's rights

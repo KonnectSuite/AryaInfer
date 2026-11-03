@@ -1,4 +1,4 @@
-﻿// ------------------------------------------------------------------ the Images room
+// ------------------------------------------------------------------ the Images room
 // A conversation about pictures: the user says what they want (and what to change), the agent writes the prompt and
 // picks the ComfyUI workflow through the generate_image tool.  The room shows the answer the way the chat does - tool
 // block, thumbnails - and the agent may search the web for a reference description when that helps.  It talks to this
@@ -58,12 +58,19 @@ async function roomSystem() {
     "- Call generate_image once per request. To change the last picture, pass BOTH reference_id (its id) and an " +
     "image-to-image workflow: one without the other fails. A request for the same thing again may ask for two or " +
     "three variants with count.",
+    "- This room makes raster pictures through ComfyUI. When the user asks for an SVG, HTML, a diagram, a chart, an " +
+    "icon set or a UI mockup, do not call generate_image: answer with the code in a fenced block (```svg or ```html), " +
+    "which this page renders.",
     "- You may search the web when a factual reference helps (a plant, a landmark, a product, a style); turn what you " +
     "learn into the prompt. Web pictures cannot be downloaded into ComfyUI, so never claim to have used one.",
     "- After the tool answers, reply in one or two short sentences about what you made. Never invent image links.",
     `Workflows on this ComfyUI: ${workflows || "(none)"}.`,
     last,
-    refs.length ? `The user attached these gallery ids as references: ${refs.join(", ")}.` : "",
+    refs.length
+      ? `The user attached ${refs.length === 1 ? "this picture" : "these pictures"} to this request: ` +
+        `${refs.join(", ")}. Edit the first one with an image-to-image workflow; the server uses it even if you leave ` +
+        `reference_id out, so do not make a new picture from the text alone.`
+      : "",
   ].filter(Boolean).join("\n");
 }
 function roomRender() {
@@ -74,7 +81,9 @@ function roomRender() {
   $("room-tab-local").hidden = !health.image_generation;
   $("room-go").disabled = !comfyInfo.configured || !comfyInfo.reachable;
   $("room-cancel").hidden = !room.sending;
-  $("room-hint").textContent = !comfyInfo.configured
+  $("room-hint").textContent = room.refs.length
+    ? "The next request edits the attached picture" + (comfyInfo.reachable ? "." : "; ComfyUI is not answering yet.")
+    : !comfyInfo.configured
     ? "Images need a ComfyUI: press Setup, then point it at one."
     : !comfyInfo.reachable ? "ComfyUI is not answering: press Setup and check, or start it there."
     : "The agent writes the prompt and picks the workflow. Say what to change, or attach a picture to edit it.";
@@ -115,8 +124,20 @@ function roomMessage(m, i) {
   const row = document.createElement("div");
   row.className = `room-msg room-msg--${m.role}`;
   if (m.role === "user") {
-    row.innerHTML = `<div class="room-bubble"><span class="room-bubble__text"></span></div>`;
+    row.innerHTML = `<div class="room-bubble"><div class="room-bubble__refs" hidden></div>` +
+      `<span class="room-bubble__text"></span></div>`;
     row.querySelector(".room-bubble__text").textContent = m.text;
+    const refs = (m.refs || []).filter((r) => r && r.url);
+    const box = row.querySelector(".room-bubble__refs");
+    box.hidden = !refs.length;
+    for (const ref of refs) {
+      const pic = document.createElement("img");
+      pic.alt = "The picture this request edits";
+      pic.title = "The picture this request edits";
+      pic.src = ref.url;
+      pic.className = "room-bubble__ref";
+      box.append(pic);
+    }
     return row;
   }
   const wrap = document.createElement("div");
@@ -203,7 +224,10 @@ async function roomSend(event) {
   const text = $("room-prompt").value.trim();
   if (!text || room.sending) return;
   if (!comfyInfo.configured) { toast("info", "ComfyUI is not set up yet", "Press Setup and add its address first."); return; }
-  room.messages.push({role: "user", text});
+  // The attached pictures ride with this request, not just in the instructions: the server edits the first one even
+  // when the model forgets reference_id, and a text-to-image choice is replaced by the default edit workflow.
+  const attached = room.refs.map((r) => ({id: r.id, url: r.url})).filter((r) => r.id);
+  room.messages.push({role: "user", text, refs: attached});
   const m = {role: "assistant", text: "", reasoning: ""};
   room.messages.push(m);
   $("room-prompt").value = "";
@@ -212,7 +236,9 @@ async function roomSend(event) {
   const history = room.messages.slice(0, -1).map((x) => ({role: x.role, content: x.text}));
   const body = {model: health.model, stream: true, reasoning_effort: settings.thinking, max_tokens: 1600,
                 messages: [{role: "system", content: await roomSystem()}, ...history]};
-  if (settings.images !== false && comfyInfo.configured) body.strata_images = true;
+  if (settings.images !== false && comfyInfo.configured) {
+    body.strata_images = attached.length ? {references: attached.map((r) => r.id)} : true;
+  }
   if (settings.search !== false && searchInfo.configured) body.strata_search = true;
   room.abort = new AbortController();
   try {
@@ -225,6 +251,10 @@ async function roomSend(event) {
     room.abort = null;
     roomRemember(m);
     roomAvoidBlank();
+    if (!m.error && !m.stopped) {
+      room.refs = [];                    // the picture just made is the subject now ("make it darker")
+      $("room-prompt").placeholder = "Ask for a picture, or say what to change\u2026";
+    }
     roomPersist();
     roomRender();
   }
@@ -253,7 +283,8 @@ function roomPersist() {
   try {
     store.set(ROOM_KEY, {messages: room.messages.slice(-40).map((m) => ({
       role: m.role, text: m.text || "", reasoning: m.reasoning || "", tools: m.tools || [], meta: m.meta || "",
-      error: m.error || ""})), last: room.last});
+      error: m.error || "",
+      refs: (m.refs || []).map((r) => ({id: r.id, url: r.url}))})), last: room.last});
   } catch (e) { /* a full storage keeps this visit's thread only */ }
 }
 // Every picture this room made, newest first: the transcript is the memory, and the gallery backs it when a phone

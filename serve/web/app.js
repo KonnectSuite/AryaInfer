@@ -1669,10 +1669,29 @@ function inline(s) {
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
   return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code class="inline">${esc(codes[+i])}</code>`);
 }
-function codeBlock(lang, code) {
-  return `<div class="st-code"><div class="st-code__head"><span>${esc(lang || "code")}</span>` +
-    `<button class="st-btn st-btn--icon" data-code-copy aria-label="Copy code">${icon("copy")}</button></div>` +
-    `<pre><code>${esc(code)}</code></pre></div>`;
+// A fenced block that is a picture or a page is worth seeing: SVG, HTML and Markdown get a sandboxed preview above
+// the code, and a button that opens the same block in the Workbench's Artifact tab.  A very large block, and one that
+// is still streaming (its closing fence has not arrived), stay as code.
+function codeBlock(lang, code, opts = {}) {
+  const kind = opts.live ? null : wbKind(lang, code);
+  const render = Boolean(kind) && String(code || "").length <= 200_000;
+  const preview = render
+    ? `<div class="st-artifact"><iframe class="st-artifact__frame" sandbox="allow-scripts" ` +
+      `referrerpolicy="no-referrer" title="${esc(String(kind).toUpperCase())} preview" ` +
+      `srcdoc="${esc(wbDoc({lang: kind, code}))}"></iframe></div>`
+    : "";
+  const open = render
+    ? `<button class="st-btn st-btn--secondary st-code__open" type="button" data-artifact-open>` +
+      `Open in the panel</button>`
+    : "";
+  const body = render
+    ? `${preview}<details class="st-code__code"><summary>Code</summary><pre><code>${esc(code)}</code></pre></details>`
+    : `<pre><code>${esc(code)}</code></pre>`;
+  return `<div class="st-code"${kind ? ` data-kind="${kind}"` : ""}>` +
+    `<div class="st-code__head"><span>${esc(lang || kind || "code")}</span>` +
+    `<span class="st-code__acts">${open}` +
+    `<button class="st-btn st-btn--icon" data-code-copy aria-label="Copy code">${icon("copy")}</button></span></div>` +
+    `${body}</div>`;
 }
 function blocks(text) {
   const out = [], lines = text.split("\n");
@@ -1718,7 +1737,7 @@ function markdown(text) {
     html += blocks(rest.slice(0, m.index));
     rest = rest.slice(m.index + m[0].length);
     const end = rest.match(/(^|\n)```[ \t]*(\n|$)/);
-    if (!end) { html += codeBlock(m[2].trim(), rest); break; }         // still streaming
+    if (!end) { html += codeBlock(m[2].trim(), rest, {live: true}); break; }   // still streaming: no preview yet
     html += codeBlock(m[2].trim(), rest.slice(0, end.index));
     rest = rest.slice(end.index + end[0].length);
   }
@@ -2806,49 +2825,55 @@ function wbKind(lang, code) {
 }
 function wbArtifacts() {
   const out = [];
-  messages.forEach((m, i) => {
-    if (m.role !== "assistant" || !m.text) return;
-    const re = /```([a-zA-Z0-9_+-]*)[ \t]*\r?\n([\s\S]*?)```/g;
-    let match, n = 0;
-    while ((match = re.exec(m.text))) {
-      const lang = (match[1] || "").toLowerCase();
-      const kind = wbKind(lang, match[2]);
-      if (!kind) continue;
-      n += 1;
-      out.push({id: `${i}-${n}`, lang: kind, code: match[2].trim(), title: wbTitle(match[2], kind, n)});
-    }
-    // a block still being written: the last fence is open, so show what there is of it while the answer streams
-    const fences = (m.text.match(/```/g) || []).length;
-    if (fences % 2 === 1) {
-      const after = m.text.slice(m.text.lastIndexOf("```") + 3);
-      const nl = after.indexOf("\n");
-      if (nl >= 0) {
-        const body = after.slice(nl + 1);
-        const kind = wbKind(after.slice(0, nl).trim(), body);
-        if (kind) {
-          n += 1;
-          out.push({id: `${i}-${n}-draft`, lang: kind, code: body.trim(), draft: true,
-                    title: `${wbTitle(body, kind, n)} (writing…)`});
+  const scan = (list, prefix) => {
+    list.forEach((m, i) => {
+      if (m.role !== "assistant" || !m.text) return;
+      const re = /```([a-zA-Z0-9_+-]*)[ \t]*\r?\n([\s\S]*?)```/g;
+      let match, n = 0;
+      while ((match = re.exec(m.text))) {
+        const lang = (match[1] || "").toLowerCase();
+        const kind = wbKind(lang, match[2]);
+        if (!kind) continue;
+        n += 1;
+        out.push({id: `${prefix}${i}-${n}`, lang: kind, code: match[2].trim(), title: wbTitle(match[2], kind, n)});
+      }
+      // a block still being written: the last fence is open, so show what there is of it while the answer streams
+      const fences = (m.text.match(/```/g) || []).length;
+      if (fences % 2 === 1) {
+        const after = m.text.slice(m.text.lastIndexOf("```") + 3);
+        const nl = after.indexOf("\n");
+        if (nl >= 0) {
+          const body = after.slice(nl + 1);
+          const kind = wbKind(after.slice(0, nl).trim(), body);
+          if (kind) {
+            n += 1;
+            out.push({id: `${prefix}${i}-${n}-draft`, lang: kind, code: body.trim(), draft: true,
+                      title: `${wbTitle(body, kind, n)} (writing…)`});
+          }
         }
       }
-    }
-  });
-  // pictures the answers made or named: a generate_image call's results, a tool result's addresses, a Markdown image
-  messages.forEach((m, i) => {
-    if (m.role !== "assistant") return;
-    const seen = new Set();
-    const add = (url, alt) => {
-      if (!sameOriginImage(url) || seen.has(`img:${url}`)) return;
-      seen.add(`img:${url}`);
-      out.push({id: `img:${url}`, kind: "image", lang: "image", code: url, url,
-                title: alt ? String(alt).slice(0, 60) : "Image"});
-    };
-    for (const t of m.tools || []) {
-      for (const image of t.images || []) add(image.url, t.tool);
-      for (const match of (t.result || "").matchAll(IMAGE_URL)) add(match[0], t.tool);
-    }
-    for (const match of (m.text || "").matchAll(/!\[([^\]\n]{0,80})\]\(([^)\s]+)\)/g)) add(match[2], match[1]);
-  });
+    });
+    // pictures the answers made or named: a generate_image call's results, a tool result's addresses, a Markdown image
+    list.forEach((m) => {
+      if (m.role !== "assistant") return;
+      const seen = new Set();
+      const add = (url, alt) => {
+        if (!sameOriginImage(url) || seen.has(`img:${url}`)) return;
+        seen.add(`img:${url}`);
+        out.push({id: `img:${url}`, kind: "image", lang: "image", code: url, url,
+                  title: alt ? String(alt).slice(0, 60) : "Image"});
+      };
+      for (const t of m.tools || []) {
+        for (const image of t.images || []) add(image.url, t.tool);
+        for (const match of (t.result || "").matchAll(IMAGE_URL)) add(match[0], t.tool);
+      }
+      for (const match of (m.text || "").matchAll(/!\[([^\]\n]{0,80})\]\(([^)\s]+)\)/g)) add(match[2], match[1]);
+    });
+  };
+  scan(messages, "");
+  // the Images room has its own thread, and its answers belong in the panel too (an SVG made there opens like one
+  // made in the chat; its pictures open in the stage instead of doing nothing)
+  if (typeof room === "object" && room && Array.isArray(room.messages)) scan(room.messages, "room-");
   return out;
 }
 function wbTitle(code, lang, n) {
@@ -2923,6 +2948,24 @@ function wbShowImage(url) {
   wb.selected = found.id;
   wbOpen(true, "artifact");
 }
+// A rendered block's "Open in the panel": find that exact block in the artifact list and open it there.  The block's
+// text is the key (ids move as the thread grows) and the kind keeps an SVG from matching an HTML block of the same text.
+function wbShowArtifact(kind, code) {
+  const wanted = String(code || "").trim();
+  const found = wbArtifacts().find((a) => a.lang === kind && a.code === wanted);
+  if (!found) return;
+  wb.selected = found.id;
+  wbOpen(true, "artifact");
+}
+// The button is rendered inside both the chat's answers and the Images room's thread, so one listener on the document
+// serves both.
+document.addEventListener("click", (e) => {
+  const button = e.target.closest("[data-artifact-open]");
+  if (!button) return;
+  const box = button.closest(".st-code");
+  const code = box && box.querySelector("pre code");
+  if (code && box.dataset.kind) wbShowArtifact(box.dataset.kind, code.textContent);
+});
 $("wb-artifact").onchange = () => { wb.selected = $("wb-artifact").value; wbRenderArtifact(); };
 for (const b of $("wb-mode").children) {
   b.onclick = () => {

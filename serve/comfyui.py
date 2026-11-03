@@ -984,12 +984,15 @@ def _extra_args(text: str) -> list[str]:
 
 # ------------------------------------------------------------------------------------------------ the hub
 IMAGE_TOOL_DESCRIPTION = (
-    "Create or edit a picture with ComfyUI, the image engine on this PC. You write the image prompt yourself from what "
-    "the user asks - subject, style, light, composition - in the language that fits the picture, and you pick the "
-    "workflow by the shape and the job it is for. For an edit or a restyle of an existing picture in this room, pass "
-    "its id as reference_id and an image-to-image workflow; naming an image-to-image workflow without reference_id "
-    "edits the newest picture in the gallery. A reference_id with a text-to-image workflow fails, so pass both or "
-    "neither.")
+    "Create or edit a raster picture with ComfyUI, the image engine on this PC. You write the image prompt yourself "
+    "from what the user asks - subject, style, light, composition - in the language that fits the picture, and you "
+    "pick the workflow by the shape and the job it is for. This tool makes bitmaps only: when the user asks for an "
+    "SVG, HTML, CSS, a diagram, a chart, an icon system, a UI mockup or a logo built from shapes - anything they want "
+    "as code - write the code in a fenced block instead (```svg or ```html); the page renders it and offers to open it "
+    "in the panel. For an edit or a restyle of an existing picture, pass its id as reference_id and an image-to-image "
+    "workflow; naming an image-to-image workflow without reference_id edits the newest picture in the gallery, and a "
+    "picture the user attached to this request is edited even when you leave reference_id out. A reference_id with a "
+    "text-to-image workflow fails, so pass both or neither.")
 IMAGE_TOOL = {
     "name": "generate_image",
     "description": IMAGE_TOOL_DESCRIPTION,
@@ -1385,8 +1388,13 @@ class ComfyHub:
     def close(self) -> None:
         return None
 
-    def call(self, name: str, arguments: dict, cancel=None) -> dict:
-        """One tool call from the chat loop: generate the image(s) and answer with their addresses."""
+    def call(self, name: str, arguments: dict, cancel=None, references=None) -> dict:
+        """One tool call from the chat loop: generate the image(s) and answer with their addresses.
+
+        `references` are the pictures the user attached to *this request* (the Images room sends their ids).  They win
+        over everything the model says except a reference_id it named itself: attaching a picture is the instruction
+        to edit it, so a text-to-image choice is replaced by the default edit workflow rather than ignoring it.
+        """
         started = time.monotonic()
         arguments = arguments if isinstance(arguments, dict) else {}
         try:
@@ -1394,10 +1402,24 @@ class ComfyHub:
                 raise WorkflowError(f"there is no tool named {name!r}")
             reference = str(arguments.get("reference_id") or "").strip()
             named = str(arguments.get("workflow") or "").strip()
-            borrowed = None
-            if not reference and named:
-                # "change the last picture" is well defined for this room even when the page has lost its thread (a
-                # phone that evicted its storage, a reload): the gallery is on the server and is the record.  Only an
+            attached = [str(r) for r in (references or []) if str(r).strip()][:4]
+            borrowed, from_attachment, overrode = None, False, False
+            if not reference and attached:
+                found = self.gallery.get(attached[0])
+                if found is None:
+                    raise WorkflowError("the picture attached to this request is no longer in the gallery; attach it "
+                                        "again, or say which of your pictures to change")
+                reference, borrowed, from_attachment = found["id"], found, True
+            if attached and named:
+                try:
+                    asked = find_workflow(self.workflows(), named)
+                except WorkflowError:
+                    asked = None
+                if asked is not None and asked["role"] != "image-to-image":
+                    named, overrode = "", True     # the attachment is the subject: the default edit graph runs it
+            elif not reference and named:
+                # "change the last picture" is well defined even when the page has lost its thread (a phone that
+                # evicted its storage, a reload): the gallery is on the server and is the record.  Only an
                 # image-to-image call borrows it - a text-to-image graph must never edit something by surprise.
                 try:
                     asked = find_workflow(self.workflows(), named)
@@ -1408,13 +1430,17 @@ class ComfyHub:
                     if newest:
                         reference, borrowed = newest[0]["id"], newest[0]
             result = self.generate({"prompt": arguments.get("prompt"), "count": arguments.get("count") or 1,
-                                    "workflow": arguments.get("workflow"), "source": "chat",
+                                    "workflow": named, "source": "chat",
                                     "references": [{"id": reference}] if reference else []},
                                    cancel=cancel, take_turn=False)
             lines = [f"Generated {len(result['images'])} image(s) with {result['workflow']} (seed {result['seed']})."]
             if borrowed is not None:
                 made = borrowed.get("prompt") or "the previous picture"
-                lines.append(f"Edited the newest picture in the gallery, id {borrowed['id']} ({made[:80]}).")
+                where = "the picture attached to this request" if from_attachment else "the newest picture in the gallery"
+                lines.append(f"Edited {where}, id {borrowed['id']} ({made[:80]}).")
+            if overrode:
+                lines.append(f"The attached picture is a reference, so {result['workflow']} ran instead of the "
+                             "text-to-image graph that was named.")
             for image in result["images"]:
                 lines.append(f"{image['url']}")
             text = "\n".join(lines)
@@ -1430,6 +1456,38 @@ class ComfyHub:
             text = f"error: {type(e).__name__}: {e}"
             return {"server": self.name, "tool": name, "ok": False, "text": text, "chars": len(text),
                     "truncated": False, "ms": int((time.monotonic() - started) * 1000), "images": []}
+
+
+class ComfyForRequest:
+    """The image tool for one chat request: the same hub, plus the pictures the user attached to *this* request.
+
+    The tool loop takes a provider (settings, routes, tools, call), so the request's references ride here instead of in
+    the shared hub: two requests at once each edit their own attachment.
+    """
+
+    def __init__(self, hub: "ComfyHub", references=None):
+        self.hub = hub
+        self.references = [str(r) for r in (references or []) if str(r).strip()][:4]
+        self.name, self.source = hub.name, hub.source
+        self.settings = {"max_rounds": int((hub.settings or {}).get("max_rounds", 8))}
+
+    def routes(self) -> dict:
+        return self.hub.routes()
+
+    def template_tools(self, exclude=()) -> list[dict]:
+        return self.hub.template_tools(exclude=exclude)
+
+    def openai_tools(self) -> list[dict]:
+        return self.hub.openai_tools()
+
+    def call(self, name: str, arguments: dict, cancel=None) -> dict:
+        return self.hub.call(name, arguments, cancel, references=self.references)
+
+    def wait(self, timeout: float | None = None) -> None:
+        return self.hub.wait(timeout)
+
+    def close(self) -> None:
+        return None
 
 
 def gpu_turn_or_null(svc, owner, job: dict, cancel, take_turn: bool):

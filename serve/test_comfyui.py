@@ -310,6 +310,8 @@ class ToolCall(unittest.TestCase):
         self.assertIn("Qwen_Image_2_1_Turbo_Square_1024", tool["description"])
         self.assertIn("image to image", tool["description"])
         self.assertIn("1024x1024", tool["description"])
+        self.assertIn("raster", tool["description"])                 # bitmaps only: SVG/HTML are written as code
+        self.assertIn("svg", tool["description"].lower())
         self.assertIn("Qwen_Image_2_1_Turbo_Edit", tool["parameters"]["properties"]["workflow"]["description"])
         self.assertIn("reference_id", tool["parameters"]["properties"])
 
@@ -327,6 +329,36 @@ class ToolCall(unittest.TestCase):
         self.assertTrue(result["ok"], result)
         self.assertEqual(len(self.httpd.uploads), 1)
         self.assertIn(record["id"], result["text"])
+
+    def test_the_request_references_are_used(self):
+        # the room sends the pictures the user attached; the model need not repeat the id, and a text graph named by
+        # mistake is replaced by the default edit graph instead of ignoring the attachment
+        old = self.hub.gallery.add(fake.PNG, {"prompt": "the attached picture"})
+        newer = self.hub.gallery.add(fake.PNG, {"prompt": "something newer"})
+        result = self.hub.call("generate_image", {"prompt": "warmer light", "workflow": SQUARE},
+                               references=[old["id"]])
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(len(self.httpd.uploads), 1)                 # the attached picture went to ComfyUI
+        self.assertIn(old["id"], result["text"])
+        self.assertIn("attached", result["text"])
+        self.assertIn("Turbo_Edit", result["text"])                  # the edit graph, not the named square one
+        self.assertNotIn(newer["id"], result["text"])
+
+    def test_a_deleted_attachment_is_a_sentence(self):
+        result = self.hub.call("generate_image", {"prompt": "warmer"}, references=["0" * 32])
+        self.assertFalse(result["ok"])
+        self.assertIn("no longer in the gallery", result["text"])
+
+    def test_the_request_provider_carries_its_references(self):
+        record = self.hub.gallery.add(fake.PNG, {"prompt": "source"})
+        provider = C.ComfyForRequest(self.hub, [record["id"]])
+        self.assertEqual([t["name"] for t in provider.template_tools()], ["generate_image"])
+        self.assertGreaterEqual(provider.settings["max_rounds"], 1)
+        self.assertIn("generate_image", provider.routes())
+        result = provider.call("generate_image", {"prompt": "a change"})     # no reference_id, no workflow
+        self.assertTrue(result["ok"], result)
+        self.assertIn(record["id"], result["text"])
+        self.assertEqual(len(self.httpd.uploads), 1)
 
     def test_a_text_workflow_without_a_reference_makes_a_new_picture(self):
         self.hub.gallery.add(fake.PNG, {"prompt": "the earlier picture"})
@@ -514,6 +546,15 @@ class Http(unittest.TestCase):
         self.assertEqual(code, 200, view)
         self.assertIn("page", view)
         self.assertGreaterEqual(len(view["page"]["items"]), 1)
+
+    def test_the_image_opt_in_takes_references(self):
+        base = {"model": "mock", "messages": [{"role": "user", "content": "hi"}], "max_tokens": 4}
+        code, out, _ = self.call("/v1/chat/completions", {**base, "strata_images": {"references": "nope"}})
+        self.assertEqual(code, 400, out)
+        self.assertIn("strata_images.references", out["error"]["message"])
+        record = self.svc.comfy.gallery.add(fake.PNG, {"prompt": "attached"})
+        code, out, _ = self.call("/v1/chat/completions", {**base, "strata_images": {"references": [record["id"]]}})
+        self.assertIn(code, (200, 400), out)          # accepted: the mock engine decides what it does with the tools
 
     def test_the_page_only(self):
         code, out, _ = self.call("/comfy", {"set": {}}, ctype="text/plain")

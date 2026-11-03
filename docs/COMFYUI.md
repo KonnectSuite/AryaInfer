@@ -57,7 +57,18 @@ image prompt and picks the workflow itself (the tool description lists every gra
 ComfyUI for it. A follow-up ("warmer light", "put a croissant on the saucer") is an edit: the model passes the id of the
 last picture as `reference_id` with an image-to-image graph, so the composition carries over. The thread lives in the
 browser, so when a phone has thrown it away the room reads the newest pictures from the gallery instead, and an
-image-to-image call with no `reference_id` edits the newest picture - "change the last one" survives a reload. When the chat has web
+image-to-image call with no `reference_id` edits the newest picture - "change the last one" survives a reload.
+
+A picture attached with the paperclip goes with the **request**, not just the instructions: the page sends
+`strata_images: {"references": ["<id>"]}`, the server gives that request its own tool, and the picture is edited even
+when the model leaves `reference_id` out - and a text-to-image graph it names by mistake is replaced by the default
+image-to-image graph, because attaching a picture is the instruction to edit it. A bad list (or an id that is gone)
+answers with a sentence, not a crash.
+
+The tool is **raster only**. When the user asks for an SVG, HTML, a diagram, a chart, an icon set or a UI mockup, the
+model writes the code in a fenced block instead; the answer renders it in a sandboxed frame (no network, opaque
+origin, inline style and script only) with **Open in the panel** for the Workbench's Artifact tab. The code stays
+readable under the preview, and a block that is still streaming, or one larger than 200 KB, stays code. When the chat has web
 search on, the model may search for a factual reference and turn what it finds into the prompt; web pictures cannot be
 downloaded into ComfyUI, and the room never pretends otherwise.
 
@@ -156,5 +167,6 @@ does to MCP and web search: the image endpoints answer JSON from this page only,
 | a job ends with a workflow error | ComfyUI's own message is shown as-is | read it: a missing model and a bad node link look different there |
 | generation is slow or fails on a big prompt | the card ran out of room | lower `need_mib` won't help; unload other GPU users, or use a smaller graph |
 | a create graph refuses a size | its size is baked | use the graph for that size, or add `{{width}}`/`{{height}}` and re-import |
+
 
 

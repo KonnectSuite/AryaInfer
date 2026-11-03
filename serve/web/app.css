@@ -624,3 +624,16 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 
 
 
+
+/* ---------------- pieces the model writes: SVG, HTML, Markdown ---------------- */
+.st-code__acts { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.st-code .st-code__open { color: #cbd5e1; background: transparent; border-color: rgba(255, 255, 255, .18);
+                          height: 26px; padding: 0 8px; font-size: var(--st-fs-xs); }
+.st-artifact { background: #fff; border-bottom: 1px solid rgba(255, 255, 255, .08); }
+.st-artifact__frame { display: block; width: 100%; height: 240px; border: 0; background: #fff; }
+.st-code__code > summary { cursor: pointer; padding: 6px 12px; font-size: var(--st-fs-xs); color: #9aa3ab; }
+.st-code__code[open] > summary { border-bottom: 1px solid rgba(255, 255, 255, .06); }
+/* the picture a room request edits, shown in that turn */
+.room-bubble__refs { display: flex; gap: 6px; margin-bottom: 6px; }
+.room-bubble__ref { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; border: 1px solid var(--st-line); }
+@media (max-width: 640px) { .st-artifact__frame { height: 200px; } }
