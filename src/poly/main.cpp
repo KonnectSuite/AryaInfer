@@ -346,16 +346,19 @@ struct Session {
     bool look;                            // guess from repeats
     bool report = false;                  // --report-drafts: the statistics name the acceptance at each guess
     int tree_k = 0, tree_depth = 0;       // --tree K,D: the guesses verified as a tree (0: a chain)
+    int chain = 0, chain_min = 3;         // --lookup-chain: tokens the suffix drafter appends after the block's guesses
     strata::spec::SuffixDrafter repeats;
     strata::spec::DraftPolicy policy;
     Guesses guesses;                      // whether the block is asked in a round, and for how many (guesses.hpp)
     int piece_calls = kPiece;             // generate()'s pieces when it is given `between`
 
     Session(Engine& e, std::vector<int32_t> eos_ids, const CacheFlags& f, int lookup, bool report_drafts = false,
-            bool spec_measured = false, int tree_k = 0, int tree_depth = 0)
+            bool spec_measured = false, int tree_k = 0, int tree_depth = 0, int lookup_chain = 0,
+            int lookup_chain_min = 3)
         : engine(e), eos(std::move(eos_ids)), flags(f), kept(e, with_floor(f)), report(report_drafts),
           most(lookup > 0 || e.drafts() ? std::min<int>(e.max_window(), strata::spec::DraftPolicy::kMaxT) : 1),
-          look(lookup > 0 && most > 1), tree_k(tree_k), tree_depth(tree_depth),
+          look(lookup > 0 && most > 1), tree_k(tree_k), tree_depth(tree_depth), chain(lookup_chain),
+          chain_min(lookup_chain_min),
           repeats(std::max(lookup, 3), 64, (size_t) e.max_context() + 4096), policy(most) {
         guesses.measure_widths(spec_measured);
     }
@@ -375,6 +378,7 @@ struct Session {
         int64_t produced = 0, resume = 0, read = 0;
         int64_t gave_way = -1;   // where `between` stopped the read
         int64_t guessed = 0, guessed_right = 0;
+        int64_t chained = 0, chained_right = 0;   // --lookup-chain: the chained tokens proposed, and the ones accepted
         int64_t rounds = 0;   // the decode rounds, drafted in or not
         // --report-drafts: per guess position, the guesses made there and the ones accepted
         int64_t drafted_pos[8] = {}, accepted_pos[8] = {};
@@ -483,14 +487,15 @@ struct Session {
             on_token(t);
             ++r.produced;
             history.push_back(t);
-            if (look) repeats.append(t);
+            if (look || chain > 0) repeats.append(t);
             if (is_eos(t)) r.finish = "stop";
             else if (stop.load()) r.finish = "cancel";
             else return r.produced < max_new;
             return false;
         };
         if (max_new > 0) {
-            int32_t w[strata::spec::DraftPolicy::kMaxT], d[strata::spec::DraftPolicy::kMaxT];
+            int32_t w[strata::spec::DraftPolicy::kMaxT], d[strata::spec::DraftPolicy::kMaxT], cbuf[8];
+            float dprob[strata::spec::DraftPolicy::kMaxT] = {};
             const int block_window = engine.guesses_at_once() ? most : kBlockWindow;
             int32_t t = pick(engine.logits());   // picked, and not shown yet
             while (show(t)) {
@@ -570,9 +575,30 @@ struct Session {
                         float p = 0.f;
                         const Clock::time_point asked_at = Clock::now();
                         d[n_d] = engine.draft(from, n_d, &p);
+                        dprob[n_d] = p;
                         if (!guesses.takes(n_d, p, ms_since(asked_at))) break;
                     }
                     use = policy.choose(1 + n_d, k, match);
+                }
+                // --lookup-chain: the suffix drafter continues the context as the block's guesses leave it; the window
+                // verifies the guesses and the chained tokens together, so a guess that holds hands the chain the
+                // context it was matched on, and one that fails only ends the window sooner.
+                int chain_n = 0, chain_match = 0;
+                if (chain > 0 && !use.lookup && use.t > 1) {
+                    const int used = use.t - 1;
+                    const int chain_room = (int) std::min<int64_t>(
+                        chain, std::min<int64_t>(most - 1 - used, engine.max_context() - engine.pos() - 1 - used));
+                    if (chain_room > 0) {
+                        chain_n = repeats.propose_after(d, used, chain_room, cbuf);
+                        chain_match = repeats.last_match();
+                        if (chain_n > 0 && chain_match < chain_min) chain_n = 0;
+                        if (chain_n > 0 && std::getenv("STRATA_LOOKUP_CHAIN_FIXED") == nullptr) {
+                            double p_mtp = 1.0;
+                            for (int i = 0; i < used; ++i) p_mtp *= dprob[i];
+                            chain_n = policy.chain(use.t, p_mtp, chain_n, chain_match);
+                        }
+                        if (chain_n > 0) use.t += chain_n;
+                    }
                 }
                 if (use.t == 1) {
                     engine.eval(&t, 1, true);
@@ -582,7 +608,15 @@ struct Session {
                     continue;
                 }
                 w[0] = t;
-                if (!use.lookup) std::copy(d, d + use.t - 1, w + 1);
+                if (use.lookup) {
+                    // w + 1 holds the lookup proposal
+                } else if (chain_n > 0) {
+                    const int mtp_t = use.t - chain_n;   // the window's block guesses
+                    std::copy(d, d + mtp_t - 1, w + 1);
+                    std::copy(cbuf, cbuf + chain_n, w + 1 + (mtp_t - 1));
+                } else {
+                    std::copy(d, d + use.t - 1, w + 1);
+                }
                 engine.window(w, use.t);
                 // logits_of(i) is what follows w[i].  A guess that is what was picked has been through the model
                 // already; the token an answer ends with is shown and never fed, as without guesses.
@@ -599,6 +633,11 @@ struct Session {
                     if (j < right) ++r.accepted_pos[j];
                 }
                 policy.observe(use.lookup, use.t, right, match, count(use.t, right + 1));
+                if (chain_n > 0) {
+                    policy.observe_chain(use.t - chain_n, chain_n, right, chain_match, count(use.t, right + 1));
+                    r.chained += chain_n;
+                    r.chained_right += std::max(0, right - (use.t - chain_n - 1));
+                }
                 if (!more) break;
             }
         }
@@ -958,7 +997,9 @@ int serve(Session& ss) {
             std::fprintf(stderr, "strata drafts by pos:");
             for (int j = 0; j < 8 && r.drafted_pos[j] > 0; ++j)
                 std::fprintf(stderr, " %lld/%lld", (long long) r.accepted_pos[j], (long long) r.drafted_pos[j]);
-            std::fprintf(stderr, "; rounds %lld\n", (long long) r.rounds);
+            std::fprintf(stderr, "; rounds %lld", (long long) r.rounds);
+            if (r.chained > 0) std::fprintf(stderr, ", chained %lld of %lld", (long long) r.chained_right, (long long) r.chained);
+            std::fprintf(stderr, "\n");
         }
         // DONE <generated> <prompt> <prompt ms> <decode ms> <finish> <drafts accepted> <drafts offered> <reused>
         //      <experts from VRAM> <experts> <RAM blobs> <file blobs> <file MB> <prompt tokens read> <offloaded>
@@ -1134,12 +1175,19 @@ void usage() {
                  "  --no-draft             do not run the block that guesses ahead\n"
                  "  --draft-window N       the block that guesses ahead reads only the last N tokens of context\n"
                  "                         (0, the default: all of it; the guesses are about what comes next)\n"
+                 "  --lookup-chain N       after the block's guesses, append up to N tokens the suffix drafter proposes\n"
+                 "                         for the context as those guesses leave it (0, the default: off; 7 fits the\n"
+                 "                         window; the policy keeps only what pays)\n"
+                 "  --lookup-chain-min M   the shortest match a chained proposal extends (default 3)\n"
                  "  --check-topk           check the draft block's k likeliest against its likeliest, once (a test)\n"
                  "  --check-tree           check a tree shaped as a chain against the window, once (a test)\n"
                  "  --tree K,D             guesses as a tree: K children a row (1-2) and D deep (1-2), verified in one\n"
                  "                         pass; off by default, and a tree of 2,2 is 7 rows\n"
                  "  --report-drafts        name the acceptance at each guess position in the statistics (a guess at\n"
                  "                         position 0 is the first one after the token the model wrote)\n"
+                 "  --prefill-f16          read a prompt's matrices on the tensor cores: 3-bit weights dequantized to\n"
+                 "                         halves a tile at a time, cuBLAS fp16 in and fp32 sums (off by default;\n"
+                 "                         its rounding is not the MMQ path's)\n"
                  "  --spec-width block     the guesses' width from the block's own probabilities (the default), or\n"
                  "                         measured: from the acceptance the rounds measured, per position, and a\n"
                  "                         round's measured time by window (EAGLE-4's chain rule)\n"
@@ -1285,7 +1333,10 @@ int main(int argc, char** argv) {
             }
         }
         else if (a == "--draft-window") o.draft_window = std::atoi(val());
+        else if (a == "--lookup-chain") o.lookup_chain = std::clamp(std::atoi(val()), 0, 7);
+        else if (a == "--lookup-chain-min") o.lookup_chain_min = std::max(3, std::atoi(val()));
         else if (a == "--report-drafts") o.report_drafts = true;
+        else if (a == "--prefill-f16") o.prefill_f16 = true;
         else if (a == "--spec-width") {
             const std::string how = val();
             if (how != "block" && how != "measured") {
@@ -1411,7 +1462,8 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "strata-poly: conversation cache off: not enough free RAM to park conversations "
                                      "(--conversation-cache-mib N asks for one anyway)\n");
         }
-        Session ss(engine, eos, cache, lookup, o.report_drafts, o.spec_measured, o.tree_k, o.tree_depth);
+        Session ss(engine, eos, cache, lookup, o.report_drafts, o.spec_measured, o.tree_k, o.tree_depth,
+                   o.lookup_chain, o.lookup_chain_min);
         int rc = 0;
         if (want_serve) {
             rc = serve(ss);

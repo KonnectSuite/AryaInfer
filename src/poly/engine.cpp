@@ -12,6 +12,7 @@
 #include "qwen35.hpp"
 #include "runtime.hpp"
 #include "strata/poly/kernels.hpp"
+#include "strata/poly/prefill_f16.hpp"
 #include "strata/kernels/native_mmvq.hpp"
 
 #include "ggml.h"
@@ -2271,6 +2272,23 @@ void Engine::lin(const Dev& w, const float* x, float* y, int n, const void* xq, 
         if (w.type == kTypeF32) return gemv_f32(fp(w), x, y, w.n_in, w.n_out, per, n, st_);
         return gemv_bf16((const uint16_t*) w.p, x, y, w.n_in, w.n_out, per, n, st_);
     }
+#ifdef STRATA_PREFILL_F16
+    // --prefill-f16: the weight tile dequantized into shared memory inside the product and multiplied on the fp16
+    // tensor cores with fp32 sums.  The batch's rows are cast to halves once here, so the product's token tile is a
+    // copy.  Off by default: its rounding is not the MMQ path's.
+    if (opt_.prefill_f16 && n >= kStageRows && (rows_per_x == 0 || rows_per_x == w.n_out) &&
+        f16_type((int) w.type)) {
+        const size_t x_need = (size_t) n * (size_t) w.n_in;
+        if (pf16_x_n_ < x_need) {
+            pf16_x_ = (uint16_t*) dmalloc(x_need * sizeof(uint16_t), "a prompt batch's halves");
+            pf16_x_n_ = x_need;
+        }
+        cast_f16(x, pf16_x_, x_need, st_);
+        fused_gemm_f16(w.p, ggml_row_size((ggml_type) w.type, w.n_in), (int) w.type, pf16_x_, y, (int) w.n_in,
+                       (int) w.n_out, n, st_);
+        return;
+    }
+#endif
     // a prompt batch: llama.cpp's matrix-matrix kernels read the weights once for all the tokens
     if (mmq_ && n >= kStageRows && Mmq::fits((int) w.type, w.n_out, w.n_in)) {
         // A row too large for the halves its blocks keep their sums in goes in divided by a power of two, and x is

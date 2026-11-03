@@ -2064,7 +2064,8 @@ if(STRATA_NATIVE_EXPERTS AND (STRATA_ENABLE_CUDA OR STRATA_ENABLE_HIP) AND NOT S
     # as strata_mmq's does.
     set_source_files_properties(${_strata_mmq}/quantize.cu ${_strata_poly_mmq_instances} PROPERTIES LANGUAGE HIP)
   endif()
-  add_library(strata_poly_mmq STATIC src/poly/mmq.cu src/poly/fattn.cu src/prefill/ggml_cuda_host.cu ${_strata_mmq}/quantize.cu
+  add_library(strata_poly_mmq STATIC src/poly/mmq.cu src/poly/fattn.cu src/poly/prefill_f16.cu
+              src/prefill/ggml_cuda_host.cu ${_strata_mmq}/quantize.cu
               ${_strata_poly_mmq_instances})
   target_include_directories(strata_poly_mmq PRIVATE ${_strata_gg}/include ${_strata_gg}/src ${_strata_mmq}
                                                     ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -2103,6 +2104,9 @@ if(STRATA_NATIVE_EXPERTS AND (STRATA_ENABLE_CUDA OR STRATA_ENABLE_HIP) AND NOT S
                             src/poly/kolibri1.cpp src/poly/cpu_experts.cpp src/poly/kernels.cu src/poly/kernels_dsv4.cu
                             src/core/conversation_memory.cpp)
   target_include_directories(strata-poly PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${_strata_gpu_include_directories})
+  # --prefill-f16: the prompt batch's 3-bit matrices dequantized to halves and multiplied on the tensor cores
+  # (src/poly/prefill_f16.cu, built into strata_poly_mmq).  Off by default.
+  target_compile_definitions(strata-poly PRIVATE STRATA_PREFILL_F16=1)
   # the driver's virtual memory calls: the attention caches grow with the conversation; on HIP they are HIP's
   # memory management calls, which the HIP runtime itself provides (hip_compat/cuda.h)
   if(STRATA_ENABLE_HIP)

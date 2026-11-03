@@ -80,6 +80,7 @@ struct Options {
                                   ///< 0: 8, or 4 where every guess keeps a copy of the recurrent state
     bool draft = true;            ///< run the block that guesses ahead, when there is one and window is above 1
     bool report_drafts = false;   ///< --report-drafts: name the acceptance at each guess position in the statistics
+    bool prefill_f16 = false;     ///< --prefill-f16: a prompt batch's 3-bit matrices through halves and tensor cores
     bool check_topk = false;      ///< --check-topk: the draft block's k likeliest, against the one likeliest (a test)
     bool check_tree = false;      ///< --check-tree: a tree shaped as a chain, against window() (a test)
     int tree_k = 0;               ///< --tree K,D: the children a row, and the tree's depth (0: no tree)
@@ -87,6 +88,8 @@ struct Options {
     bool spec_measured = false;   ///< --spec-width measured: the window's width from the measured acceptance (Guesses)
     int draft_window = 0;         ///< --draft-window: the block that guesses ahead reads only the last this many tokens
                                   ///< of context (0: all of it)
+    int lookup_chain = 0;         ///< --lookup-chain: tokens the suffix drafter may append after the block's guesses
+    int lookup_chain_min = 3;     ///< --lookup-chain-min: the shortest match a chained proposal needs
     int draft_vocab = -1;         ///< the guesses come from the vocabulary's first this many tokens; 0: all of it;
                                   ///< -1: as many as the architecture's vocabulary has in order of use (guess_vocab())
     std::string draft_model;      ///< a file of the same model to take that block from, when the model's has none;
@@ -735,6 +738,8 @@ protected:
     int32_t tree_check_tok_[16] = {};   ///< --check-tree: the tree pass's top token at each row
     bool tree_check_pending_ = false;   ///< --check-tree: a chain-shaped tree ran, and the window is being checked
     double tree_time_[4] = {};          ///< window_tree(): ms in the GDN rows, the attention rows, the dense FFN, all
+    uint16_t* pf16_x_ = nullptr;        ///< --prefill-f16: the batch's rows, halves
+    size_t pf16_x_n_ = 0;
     int64_t ahead_pos_ = -1;            ///< draft() has left the block's row of this position as its token leaves it,
     int32_t ahead_tok_ = 0;             ///< which is this one
     const float* tree_in_ = nullptr;    ///< draft_topk(): the node's parent's hidden output, where it has one
