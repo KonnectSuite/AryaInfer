@@ -601,3 +601,29 @@ vision resident):
 `--kv q8_0` at 64K is the fastest read of the four, but its 15,768 MiB peak is the state the handoff describes as the
 start of the spill (after which even a short prompt decodes at 0.2 tok/s); it is not a default until the headroom is
 larger than this.  `--kv int8` is refused for this family by the engine.
+## The repository build, and what its new flags measure (2026-11-03)
+
+The installed engine (0.1.45, 2026-11-02 10:23) predates commit `dab05722`; the repository builds clean on this host
+with MSVC 14.44 + CUDA 13.1.2 (sm_89): `build-env/build-poly.cmd`, 128 targets, `build-poly/strata-poly.exe` (66 MB).
+It runs the same model at the installed engine's speed with no new flags (8K: 1,182.0 prefill / 71.4 decode against
+1,190.3 / 70.9), so the two are comparable.  Measured with both (IQ3_XXS, q4_0, batch 512, 8K prompt, 128 tokens):
+
+| arm | prefill | decode | note |
+| --- | --- | --- | --- |
+| installed 0.1.45 | 1,190.3 | 70.9 | the reference |
+| repository build | 1,182.0 | 71.4 | parity |
+| repository + `--prefill-f16` | 704.7 | 70.3 | the tensor-core path is slower for this 3-bit file |
+| repository + `--prefill-f16`, batch 2048 | 699.5 | 74.3 | no better with the larger tile |
+| repository + `--lookup-chain 4 --lookup-chain-min 2` | 1,192.4 | 76.1 | +6.6% decode at 8K; 72.1 at 32K, within noise |
+
+`--prefill-f16` dequantizes the weight tile to halves inside the product and multiplies with cuBLAS: for IQ3_XXS the
+dequant is the cost and the tensor cores do not pay for it on this card, so it is off.  `--lookup-chain` moves decode
+only when the text repeats earlier text (the suffix drafter has matches); the bench's filler has none, so the gain in
+a real session - code, an edited file, a long conversation - can be larger than these numbers and has to be measured
+on a real conversation before it is enabled.
+
+What is left, from the capy-flash comparison: **tokens a draft round**.  Their 27B 3-bit profile reports 139 tok/s on
+one 16 GB card with MTP 3 and an LM-head draft, against our ~70 with one MTP block and a chained window; the pass
+cost is comparable, the tokens per pass are not.  The engine's draft block reads one MTP block (`block_layer_`); the
+file is named `-mtp`, and whether it carries more than one MTP block, and how to verify three guesses a round with
+the LM head, is the next thing to check in the GGUF and `src/poly/qwen35.cpp` (draft), before any kernel work.
