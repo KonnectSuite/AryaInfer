@@ -791,3 +791,18 @@ can drop it by removing that entry and restarting.
 The per-row cost itself is still what the earlier pass-cost table says: about 13 ms against a 22.7 ms pass, i.e. the
 compute of an extra token on top of a weight read that does not overlap with it.  Closing that needs a small-batch
 quantized matmul that overlaps the two (a kernel project, not a flag), or a two-head draft this file does not have.
+## The 128K configuration needs no smaller twin, and where the tuning landed (2026-11-03)
+
+At a 62,000-token prompt on a free card (aryainfer, GDN MMA on, batch 512, one engine at a time): 128K context with
+the q4_0 cache read at **912.6 tok/s**, 64K context at **903.8**, and 64K with q8_0 at **905.4** - within the
+run-to-run spread, so capping the context or doubling the cache buys nothing and the 128K/q4_0 entry stays as it is.
+(All three generated at 65-66 tok/s in the 64-token samples.)
+
+The same prompt through the running server, on the arya model as configured (128K, q4_0, batch 512, vision on the CPU,
+`STRATA_GDN_MMA=1`): **61,787 tokens read at 911.9 tok/s, 33 tokens written at 58.8, the follow-up at 65.9**, 14,655
+MiB of VRAM - 68.8 s end to end for the whole long prompt.
+
+That is the week's bottom line on the original complaint.  The handoff recorded 56-65K prompts reading at 330 / 325
+tok/s and writing at 19.7 / 16.4 before the spill, and the first arm this session measured 722.2 tok/s at 61,833
+tokens with the vision encoder on the card.  The same prompt now reads at 911.9 (+26% over that arm, 2.8x the handoff's
+speed) and writes at 59-66 (3-4x), with 1.5 GB of headroom instead of the card's edge.
