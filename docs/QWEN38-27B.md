@@ -771,3 +771,23 @@ the fork wants: upstream stays untouched, our binary carries the fork's settings
 The kernel is opt-in upstream because its chunked arithmetic rounds differently from the stock recurrence; the state
 parity test (`poly_gdn_mma_state_test`, and `STRATA_FREEZE_EXPERTS=1`) is what checks it on a model, and the fork's
 model entry says it is on.
+## What did not work on decode, and the switches that changed nothing (2026-11-03)
+
+Two more attempts at the per-row cost, both measured on an empty card with one engine at a time:
+
+* **The batched MMQ kernel from four rows.**  The verify window is 2-8 rows and the engine sends it through
+  `native_mmvq` (one launch for up to eight rows); the batched MMQ path is gated at 32 rows.  Lowering the gate to
+  four in aryainfer measured **70.2 tok/s at window 4 and 71.8 at window 8, against 74.3 and 76.5 on the stock
+  path** - the matrix-matrix tiles do not pay off under eight rows.  Reverted.
+* **The documented prefill switches.**  On the same file at 8K and 32K, `STRATA_BF16_TC=1`, `STRATA_BF16_TC=1` with
+  `STRATA_XN_F16=1`, `STRATA_PA_V2T=1` and `STRATA_SELECT_SIMT=1` all read 1,182-1,186 tok/s at 8K and 1,012-1,023 at
+  32K, against 1,184.6 and 1,019.9 stock: no measurable change for this model on this card.  They stay off.
+
+The chunked GDN MMA from the section above remains the one win of the day on the reading side (8-9%).  For the
+writing side the engine's own warning stands: some measured long-response runs regressed with that kernel, so it is
+enabled per model in the arya config (an `env` entry) rather than in the binary, and a session that sees slow answers
+can drop it by removing that entry and restarting.
+
+The per-row cost itself is still what the earlier pass-cost table says: about 13 ms against a 22.7 ms pass, i.e. the
+compute of an extra token on top of a weight read that does not overlap with it.  Closing that needs a small-batch
+quantized matmul that overlaps the two (a kernel project, not a flag), or a two-head draft this file does not have.
