@@ -664,3 +664,27 @@ The HF repo the user found (`Feyd89/Qwen3.8-Flash-Next-NVFP4-capy-flash`) is NVF
 artifact cannot run here on any engine.  capy-flash's own comparison table is on an RTX 5070 Ti and puts its 27B at
 139 tok/s decode at 8K against Strata's 138 with route-tail-skip - parity on decode, not a blowout; the Flash Next
 numbers there are two-card sm_120 with 96 GB of RAM, which is not this machine.
+### capy-flash's model catalogue, and why none of it runs here (2026-11-03)
+
+From the repository's README and the Hugging Face APIs, the supported models are:
+
+| artifact | size | format | needs |
+| --- | --- | --- | --- |
+| `Feyd89/Qwen3.8-Flash-Next-NVFP4-capy-flash` | 126.6 GB | `.ninfer` parts, NVFP4 | sm_120 (Blackwell), CPU offload |
+| `Feyd89/Qwen3.8-Flash-Next-NVFP4-Vision-capy-flash` | 126.6 GB + Q8 vision | `.ninfer` + vision tower | sm_120, `--vision` |
+| `Feyd89/Qwen3.8-Flash-Next-GSQ-RCO-capy-flash` | 102 GB | `.ninfer` parts with GGUF i-quant experts + MTP B + draft shortlist | sm_120, 64 GB of RAM |
+| `Feyd89/Qwen3.8-27B-GSQ-3bit-capy-flash` | 12.5 GB | `.ninfer`, converted from ISTA-DASLab's 3-bit safetensors, official MTP layer | sm_120, one 16 GB card |
+| `Feyd89/Qwen3.8-27B-QUASAR-QAT-nvfp4-NInfer` | 17.4 GB | `.ninfer`, NVFP4 QAT | two sm_120 cards |
+
+The benchmark machine behind their numbers is a Ryzen 9 9900X, 96 GB DDR5-5600, **2x RTX 5070 Ti 16 GB** on PCIe 5.0
+x8 + x8, so their table is not this host's.
+
+Why none of them runs here: the NVFP4 artifacts need Blackwell's FP4 tensor cores, and this card is Ada (sm_89) -
+NVFP4 cannot run on it on any engine.  capy-flash itself is built and tested for sm_120 on Linux.  And the container
+is `.ninfer`, not GGUF: `strata-poly`/`strata.exe` cannot read it even if it is downloaded.  The 3-bit 27B artifact's
+base is ISTA-DASLab's `Qwen3.8-27B-3Bit-GSQ` safetensors, which is the same laboratory and recipe as the IQ3_XXS GGUF
+this host already runs; the difference in speed is the engine, not the weights.
+
+What transfers from it is the recipe: INT8 KV, an embedding table in RAM (already true here), and **MTP 3 with an
+LM-head draft**, which is where their 7 tokens a decode round come from.  That draft depth is the piece this engine
+does not have yet.
