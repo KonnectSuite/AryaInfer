@@ -189,8 +189,8 @@ async function loadHealth() {
     $("attach-btn").title = health.images ? "Attach a text file or a picture (or drop it here)"
                                           : "Attach a text file (or drop it here)";
     $("chat-empty-sub").textContent = `${health.model} runs on this PC. Nothing leaves it.`;
-    $("nav-images").hidden = !health.image_generation;
-    if (location.hash === "#images" && health.image_generation) showTab("images");
+    $("nav-images").hidden = !(health.image_generation || (health.comfyui && health.comfyui.configured));
+    if (location.hash === "#images" && !$("nav-images").hidden) showTab("images");
   } catch (e) {
     setTimeout(loadHealth, 2000);
   }
@@ -1332,6 +1332,266 @@ $("search-open").onclick = () => {
 $("search-close").onclick = () => $("search-dialog").close();
 $("search-dialog").addEventListener("click", (e) => { if (e.target === $("search-dialog")) $("search-dialog").close(); });
 
+// ------------------------------------------------------------------ images (ComfyUI)
+// The dialog behind Settings > Tools > Images: the endpoint, the workflows, the local server's Start/Stop and the Check
+// that names what a ComfyUI lacks.  Every call goes through this server (serve/comfyui.py), never to ComfyUI directly,
+// so a remote server behind a token works from the same page.
+let comfyInfo = {configured: false, reachable: false, workflows: [], server: {}, settings: {}, gallery: {}, jobs: []};
+let comfyCheck = null;
+
+async function loadComfy() {
+  try {
+    const r = await fetch("comfy", {headers: headers()});
+    if (!r.ok) return;
+    comfyInfo = await r.json();
+  } catch (e) { return; /* an older server: no images */ }
+  renderComfy();
+}
+function comfySettings() { return comfyInfo.settings || {}; }
+function renderComfy() {
+  const s = comfySettings(), server = comfyInfo.server || {};
+  const launch = s.launch || {}, free = s.free_vram || {}, gal = s.gallery || {};
+  const workflows = comfyInfo.workflows || [];
+  $("images-sum").textContent = !comfyInfo.configured ? "not set up"
+    : comfyInfo.reachable ? `ComfyUI ${comfyInfo.version || ""} · ${workflows.length} workflows`.trim()
+    : "set up, not reachable";
+  $("images-row").hidden = !comfyInfo.configured;
+  $("image-status").textContent = !comfyInfo.configured ? "not set up"
+    : comfyInfo.reachable ? `connected${comfyInfo.version ? ` · ComfyUI ${comfyInfo.version}` : ""}`
+    : "not reachable";
+  $("image-url").value = s.base_url || "";
+  $("image-headers").value = Object.entries(s.headers || {}).map(([k, v]) => `${k}: ${v}`).join("\n");
+  $("image-timeout").value = s.timeout_s || "";
+  $("image-launch-mode").value = launch.mode || "auto";
+  $("image-server-dir").value = launch.server_dir || "";
+  $("image-python").value = launch.python_exe || "";
+  $("image-extra-args").value = launch.extra_args || "";
+  $("image-task").value = launch.task_name || "";
+  $("image-auto-start").setAttribute("aria-checked", String(!!launch.auto_start));
+  $("image-policy").value = free.policy || "auto";
+  $("image-need").value = free.need_mib || "";
+  $("image-max-files").value = gal.max_files || "";
+  $("image-max-mib").value = gal.max_mib == null ? "" : gal.max_mib;
+  const device = comfyInfo.device || {};
+  $("image-server-state").textContent = [
+    server.hint || "",
+    comfyInfo.reachable ? `${device.name || "a GPU"} · ${fmt(device.vram_free_mib)} MiB free` : "",
+    (server.pids || []).length ? `process ${server.pids.join(", ")}` : "",
+    server.task_state ? `task: ${server.task_state}` : "",
+  ].filter(Boolean).join(" · ");
+  $("images-row-sub").textContent = comfyInfo.reachable
+    ? "a generate_image tool in this page's chat" : "set the server up first";
+  renderComfyWorkflows();
+  renderComfyCheck();
+}
+function renderComfyWorkflows() {
+  const box = $("image-workflows");
+  const list = comfyInfo.workflows || [];
+  const s = comfySettings();
+  box.replaceChildren();
+  if (!list.length) {
+    const empty = document.createElement("div");
+    empty.className = "st-empty";
+    empty.innerHTML = `<span class="st-empty__title">No workflows</span><span>Import an API-format graph to begin.</span>`;
+    box.append(empty);
+    return;
+  }
+  const checked = comfyCheck ? new Map((comfyCheck.workflows || []).map((w) => [w.name, w])) : new Map();
+  for (const w of list) {
+    const bad = checked.get(w.name);
+    const row = document.createElement("div");
+    row.className = "image-wf";
+    row.dataset.bad = String(!!(bad && !bad.ok));
+    row.dataset.name = w.name;
+    row.innerHTML = `<span class="image-wf__name"></span><span class="image-wf__meta">` +
+      `<span class="mcp-chip"></span><span class="image-wf__size"></span>` +
+      `${bad && !bad.ok ? `<span class="mcp-chip mcp-msg-bad" title=""></span>` : ""}</span>` +
+      `<span class="image-wf__pick"><button type="button" data-pick="text">Text</button>` +
+      `<button type="button" data-pick="edit">Edit</button></span>` +
+      `${w.source === "imported" ? `<button class="st-btn st-btn--icon image-wf__remove" type="button" data-remove aria-label="Remove">` +
+        icon("trash", "st-icon st-icon--sm") + `</button>` : ""}`;
+    row.querySelector(".image-wf__name").textContent = w.name;
+    row.querySelector(".mcp-chip").textContent = w.role === "image-to-image" ? "edit" : "text";
+    row.querySelector(".image-wf__size").textContent = w.baked_size
+      ? `${w.baked_size.width}×${w.baked_size.height}` : "source size";
+    const badChip = row.querySelector(".mcp-chip.mcp-msg-bad");
+    if (badChip) {
+      badChip.textContent = "needs attention";
+      badChip.title = [...(bad.missing_nodes || []), ...(bad.missing_models || [])].join(", ");
+    }
+    const textBtn = row.querySelector('[data-pick="text"]');
+    const editBtn = row.querySelector('[data-pick="edit"]');
+    textBtn.setAttribute("aria-pressed", String(s.active_text === w.name));
+    editBtn.setAttribute("aria-pressed", String(s.active_edit === w.name));
+    textBtn.disabled = w.role !== "text-to-image";
+    editBtn.disabled = w.role !== "image-to-image";
+    textBtn.onclick = () => setComfyDefault("active_text", w.name);
+    editBtn.onclick = () => setComfyDefault("active_edit", w.name);
+    const remove = row.querySelector("[data-remove]");
+    if (remove) remove.onclick = () => removeComfyWorkflow(w.name);
+    box.append(row);
+  }
+}
+function renderComfyCheck() {
+  const out = $("image-check-result");
+  if (!comfyCheck) { out.textContent = ""; out.className = "muted small"; return; }
+  const bad = (comfyCheck.workflows || []).filter((w) => !w.ok);
+  out.className = `muted small ${bad.length ? "mcp-msg-bad" : "mcp-msg-ok"}`;
+  if (!bad.length) {
+    out.textContent = `All ${(comfyCheck.workflows || []).length} workflows check out against ComfyUI ` +
+      `${comfyCheck.version || ""}.`.trim();
+    return;
+  }
+  out.textContent = bad.map((w) => {
+    const parts = [...(w.missing_nodes || []), ...(w.missing_models || [])];
+    return `${w.name}: ${parts.length ? parts.join(", ") : w.error || "failed"}`;
+  }).join("\n");
+  out.style.whiteSpace = "pre-wrap";
+}
+function comfyPayload() {
+  const s = comfySettings();
+  const number = (id, fallback) => {
+    const raw = $(id).value.trim();
+    return raw === "" ? fallback : Number(raw);
+  };
+  return {
+    base_url: $("image-url").value.trim(),
+    headers: mcpMap($("image-headers").value, ":"),
+    timeout_s: number("image-timeout", 600),
+    active_text: s.active_text || "",
+    active_edit: s.active_edit || "",
+    launch: {
+      mode: $("image-launch-mode").value,
+      server_dir: $("image-server-dir").value.trim(),
+      python_exe: $("image-python").value.trim(),
+      extra_args: $("image-extra-args").value,
+      task_name: $("image-task").value.trim(),
+      auto_start: $("image-auto-start").getAttribute("aria-checked") === "true",
+    },
+    free_vram: {policy: $("image-policy").value, need_mib: number("image-need", 10240)},
+    gallery: {max_files: number("image-max-files", 500), max_mib: number("image-max-mib", 8192)},
+    imported: s.imported || [],
+    max_rounds: s.max_rounds || 8,
+  };
+}
+async function comfyPost(body) {
+  const r = await fetch("comfy", {method: "POST", headers: headers(true), body: JSON.stringify(body)});
+  let j = null;
+  try { j = await r.json(); } catch (e) { /* not json */ }
+  if (!r.ok) throw new Error((j && j.error && j.error.message) || `HTTP ${r.status}`);
+  return j;
+}
+async function saveComfy(quiet) {
+  $("image-msg").textContent = "";
+  try {
+    await comfyPost({set: comfyPayload()});
+    await loadComfy();
+    $("image-msg").textContent = "Saved.";
+    $("image-msg").className = "muted small mcp-msg-ok";
+    if (!quiet) toast("success", "Images settings saved", comfyInfo.reachable
+      ? "The Images room and the chat's generate_image use this server."
+      : "The address is saved; ComfyUI is not answering yet.");
+  } catch (e) {
+    $("image-msg").textContent = e.message;
+    $("image-msg").className = "muted small mcp-msg-bad";
+    if (!quiet) toast("error", "Images settings were not saved", e.message, 7000);
+  }
+}
+async function setComfyDefault(key, name) {
+  const body = comfyPayload();
+  if (key === "active_edit") body.active_text = comfySettings().active_text || "";
+  body[key] = name;
+  try {
+    await comfyPost({set: body});
+    await loadComfy();
+  } catch (e) {
+    toast("error", "The default was not changed", e.message, 6000);
+  }
+}
+async function removeComfyWorkflow(name) {
+  if (!confirm(`Remove the imported workflow "${name}"?`)) return;
+  try {
+    await comfyPost({remove_workflow: name});
+    await loadComfy();
+    toast("success", "Workflow removed", name);
+  } catch (e) {
+    toast("error", "The workflow was not removed", e.message, 6000);
+  }
+}
+async function comfyServerAction(action) {
+  const buttons = ["image-start", "image-stop", "image-restart"];
+  for (const id of buttons) $(id).disabled = true;
+  const state = $("image-server-state");
+  state.textContent = action === "start" ? "Starting… this can take a minute or two."
+    : action === "stop" ? "Stopping…" : "Restarting…";
+  try {
+    const j = await comfyPost({[action]: true});
+    comfyInfo = {...comfyInfo, server: j.server || {}, reachable: !!(j.server && j.server.up),
+                 version: (j.server || {}).version};
+    renderComfy();
+    toast("success", action === "stop" ? "ComfyUI stopped" : "ComfyUI is running",
+          (j.server || {}).hint || "");
+  } catch (e) {
+    state.textContent = e.message;
+    toast("error", "The ComfyUI server was not changed", e.message, 9000);
+  } finally {
+    for (const id of buttons) $(id).disabled = false;
+  }
+}
+function openImagesDialog() {
+  closeSettings();
+  comfyCheck = null;
+  $("image-dialog").showModal();
+  loadComfy();
+}
+$("images-open").onclick = () => openImagesDialog();
+$("image-close").onclick = () => $("image-dialog").close();
+$("image-dialog").addEventListener("click", (e) => { if (e.target === $("image-dialog")) $("image-dialog").close(); });
+$("image-save").onclick = () => saveComfy(false);
+$("image-start").onclick = () => comfyServerAction("start");
+$("image-stop").onclick = () => comfyServerAction("stop");
+$("image-restart").onclick = () => comfyServerAction("restart");
+$("image-auto-start").onclick = () => $("image-auto-start").setAttribute(
+  "aria-checked", String($("image-auto-start").getAttribute("aria-checked") !== "true"));
+$("image-check").onclick = async () => {
+  const out = $("image-check-result");
+  out.className = "muted small";
+  out.textContent = "Checking…";
+  $("image-check").disabled = true;
+  try {
+    const j = await comfyPost({check: true});
+    comfyCheck = j.check;
+  } catch (e) {
+    out.className = "muted small mcp-msg-bad";
+    out.textContent = e.message;
+  } finally {
+    $("image-check").disabled = false;
+  }
+  renderComfyWorkflows();
+  renderComfyCheck();
+};
+$("image-import").onclick = () => $("image-file").click();
+$("image-file").onchange = async () => {
+  const file = $("image-file").files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const name = file.name.replace(/\.json$/i, "");
+    await comfyPost({import: {name, json: text}});
+    await loadComfy();
+    toast("success", "Workflow imported", name);
+  } catch (e) {
+    toast("error", "That workflow was not imported", e.message, 8000);
+  } finally {
+    $("image-file").value = "";
+  }
+};
+$("image-url").oninput = () => {
+  const url = $("image-url").value.trim();
+  $("image-url-note").textContent = !url ? "" : /^https?:\/\/[^\s/]+/i.test(url) ? ""
+    : "Start with http:// or https://, and leave out ?query and #hash.";
+};
+
 // ------------------------------------------------------------------ Model settings (GET / POST /config, #564)
 // A few documented keys of the run config (strata-<model>.json), for every client, from the next start on.  The
 // server lists them, checks every value and keeps every other key of the file as it is.
@@ -1460,7 +1720,7 @@ function markdown(text) {
 // 0.7 / 0.8 / 20 with a presence penalty). Before 0.1.45 the page sent 0.6 itself; a stored 0.6 with the other two
 // values untouched counts as "not set" too.
 const DEFAULTS = {thinking: "high", temperature: 1.0, top_p: 0.95, top_k: 20, max: "", seed: "", show: true, esp: true,
-                  mcp: true, search: true};
+                  mcp: true, search: true, images: true};
 const OLD_DEFAULT_TEMPERATURE = 0.6;
 function samplingUntouched(s) {
   const t = +s.temperature;
@@ -1752,6 +2012,7 @@ async function streamInto(m, el, signal) {
   if (projectionLoaded()) body.experimental_speed_projection = !!settings.esp;
   if (settings.mcp !== false && mcpInfo.tools > 0) body.strata_mcp = true;
   if (settings.search !== false && searchInfo.configured) body.strata_search = true;
+  if (settings.images !== false && comfyInfo.configured) body.strata_images = true;
 
   let firstAt = null, thinkStart = null, usage = null, frame = 0;
   const paint = () => { frame = 0; updateAssistant(el, m, true); scrollDown(); };
@@ -2271,6 +2532,7 @@ function loadDrawer(s = settings) {
   $("esp-row").hidden = !projectionLoaded();
   $("s-mcp").setAttribute("aria-checked", String(s.mcp !== false));
   $("s-search").setAttribute("aria-checked", String(s.search !== false));
+  $("s-images").setAttribute("aria-checked", String(s.images !== false));
   $("s-share").setAttribute("aria-checked", String(sharedOn));
   outputs();
 }
@@ -2322,6 +2584,7 @@ $("s-show").onclick = () => $("s-show").setAttribute("aria-checked", String($("s
 $("s-esp").onclick = () => $("s-esp").setAttribute("aria-checked", String($("s-esp").getAttribute("aria-checked") !== "true"));
 $("s-mcp").onclick = () => $("s-mcp").setAttribute("aria-checked", String($("s-mcp").getAttribute("aria-checked") !== "true"));
 $("s-search").onclick = () => $("s-search").setAttribute("aria-checked", String($("s-search").getAttribute("aria-checked") !== "true"));
+$("s-images").onclick = () => $("s-images").setAttribute("aria-checked", String($("s-images").getAttribute("aria-checked") !== "true"));
 $("s-share").onclick = () => $("s-share").setAttribute("aria-checked", String($("s-share").getAttribute("aria-checked") !== "true"));
 $("s-reset").onclick = () => loadDrawer(DEFAULTS);
 $("s-apply").onclick = async () => {
@@ -2738,7 +3001,7 @@ renderChat();
 const startQuestion = new URLSearchParams(location.search).get("q");   // /?q=... starts a chat (a shortcut)
 if (startQuestion) history.replaceState(null, "", location.pathname + location.hash);
 loadModels();
-loadHealth().then(loadMcp).then(loadSearch).then(() => { if (startQuestion) { $("input").value = startQuestion; send(); } });
+loadHealth().then(loadMcp).then(loadSearch).then(loadComfy).then(() => { if (startQuestion) { $("input").value = startQuestion; send(); } });
 showTab(location.hash.slice(1) || "chat");
 poll();
 

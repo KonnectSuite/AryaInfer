@@ -421,3 +421,20 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 @media (prefers-reduced-motion: reduce) {
   .app, .st-sidebar, .st-pop, .st-menu, .st-toast, .st-chip-btn__chev { transition: none; animation: none; }
 }
+
+/* the images dialog */
+.st-dialog__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 26px; }
+.st-dialog__col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.st-dialog__col .st-input { width: 100%; max-width: 100%; }
+.image-workflows { display: flex; flex-direction: column; gap: 4px; max-height: 300px; overflow-y: auto; }
+.image-wf { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--st-line);
+            border-radius: 10px; background: var(--st-surface); font-size: var(--st-fs-sm); }
+.image-wf[data-bad="true"] { border-color: color-mix(in srgb, var(--st-danger) 45%, var(--st-line)); }
+.image-wf__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.image-wf__meta { display: flex; gap: 6px; align-items: center; color: var(--st-ink-muted); font-size: var(--st-fs-xs); }
+.image-wf__pick { display: flex; gap: 4px; }
+.image-wf__pick button { height: 26px; padding: 0 8px; font-size: 11px; border-radius: 7px; }
+.image-wf__pick button[aria-pressed="true"] { background: var(--st-accent-tint); color: var(--st-accent-text);
+                                            border-color: transparent; }
+.image-wf__remove { width: 26px; height: 26px; }
+@media (max-width: 900px) { .st-dialog__cols { grid-template-columns: 1fr; } }

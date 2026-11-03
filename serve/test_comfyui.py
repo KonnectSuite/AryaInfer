@@ -3,6 +3,7 @@
     python -m unittest serve.test_comfyui -v
 """
 import json
+import sys
 import tempfile
 import urllib.error
 import urllib.request
@@ -361,6 +362,34 @@ class GalleryStore(unittest.TestCase):
         reopened = Gallery(Path(self.tmp.name), {"max_files": 3})
         self.assertEqual(reopened.items, [])
         self.assertTrue(list(Path(self.tmp.name).glob("index.json.corrupt-*")))
+
+
+class Launcher(unittest.TestCase):
+    """The launch rules that do not need a process: what is local, which plan applies, argument splitting."""
+
+    def test_only_this_machine_can_be_started(self):
+        for url, local in (("http://127.0.0.1:8188", True), ("http://localhost:8188", True),
+                           ("https://comfy.example.org", False), ("http://100.64.0.5:8188", False)):
+            with self.subTest(url=url):
+                self.assertEqual(C.is_local(url), local)
+
+    def test_extra_arguments_split_like_a_shell(self):
+        self.assertEqual(C._extra_args("--listen 127.0.0.1 --port 8188"), ["--listen", "127.0.0.1", "--port", "8188"])
+        self.assertEqual(C._extra_args('--extra-model-paths-config "C:/my models/extra.yaml"'),
+                         ["--extra-model-paths-config", "C:/my models/extra.yaml"])
+        self.assertEqual(C._extra_args(""), [])
+
+    def test_the_plan_follows_the_mode_and_what_exists(self):
+        with tempfile.TemporaryDirectory() as d:
+            settings = C.normalize({"launch": {"mode": "process", "server_dir": d, "python_exe": sys.executable}})
+            manager = C.ServerManager(lambda: settings)
+            self.assertEqual(manager._plan()["launch"], "process")
+            settings["launch"]["mode"] = "auto"
+            self.assertEqual(manager._plan()["launch"], "external")     # no task, no main.py
+            (Path(d) / "main.py").write_text("print('x')", encoding="utf-8")
+            self.assertEqual(manager._plan()["launch"], "process")      # main.py is there now
+            settings["launch"]["mode"] = "scheduled-task"
+            self.assertEqual(manager._plan()["launch"], "scheduled-task")
 
 
 class Http(unittest.TestCase):

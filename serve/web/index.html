@@ -397,6 +397,14 @@
       <div class="toggle-row" id="search-row" hidden><span>Use web search<br><span class="muted small"
         id="search-row-sub">SearXNG</span></span>
         <button class="st-toggle" id="s-search" type="button" role="switch" aria-checked="true" aria-label="Use web search"></button></div>
+      <div class="tool-row">
+        <span class="st-icon-tile" aria-hidden="true"><svg class="st-icon"><use href="web/sprite.svg#i-image"/></svg></span>
+        <span class="tool-row__text"><span>Images (ComfyUI)</span><span class="muted small" id="images-sum">not set up</span></span>
+        <button class="st-btn st-btn--secondary" id="images-open" type="button">Set up</button>
+      </div>
+      <div class="toggle-row" id="images-row" hidden><span>Let the model make images<br><span class="muted small"
+        id="images-row-sub">a generate_image tool in this page's chat</span></span>
+        <button class="st-toggle" id="s-images" type="button" role="switch" aria-checked="true" aria-label="Let the model make images"></button></div>
     </section>
     <section class="st-pop__section">
       <button class="st-nav" type="button" id="about-link">
@@ -624,7 +632,116 @@
   </div>
 </dialog>
 
-<!-- ============================ Model menu ============================ -->
+<!-- ============================ Images (ComfyUI) ============================ -->
+<dialog class="st-dialog st-dialog--wide" id="image-dialog" aria-labelledby="image-title">
+  <div class="st-dialog__head">
+    <span class="card-title" id="image-title">Images</span>
+    <span class="muted small" id="image-status">not set up</span>
+    <span class="st-dialog__spacer"></span>
+    <button class="st-btn st-btn--icon" id="image-close" type="button" aria-label="Close">
+      <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-x"/></svg></button>
+  </div>
+  <div class="st-dialog__body">
+    <div class="st-dialog__cols">
+      <section class="st-dialog__col">
+        <span class="st-label">ComfyUI server</span>
+        <div class="st-field">
+          <label class="st-label" for="image-url">Address <output>http or https</output></label>
+          <input class="st-input" id="image-url" placeholder="http://127.0.0.1:8188" autocomplete="off" spellcheck="false">
+          <span class="muted small" id="image-url-note"></span>
+        </div>
+        <div class="st-field">
+          <label class="st-label" for="image-headers">Request headers <output>Name: value, one per line</output></label>
+          <textarea class="st-input" id="image-headers" rows="2" spellcheck="false"
+                    placeholder="Authorization: Bearer ..."></textarea>
+          <span class="muted small">For a reverse proxy or a token in front of a remote ComfyUI. A value shown as
+            ******** stays as it is.</span>
+        </div>
+        <div class="st-field">
+          <label class="st-label" for="image-timeout">Timeout <output>seconds; a big picture can take minutes</output></label>
+          <input class="st-input" id="image-timeout" type="number" min="10" max="3600" step="10" placeholder="600">
+        </div>
+        <div class="toggle-row"><span>Start it with AryaInfer<br><span class="muted small">one launch when the server
+          starts and ComfyUI is down</span></span>
+          <button class="st-toggle" id="image-auto-start" type="button" role="switch" aria-checked="false" aria-label="Start ComfyUI with AryaInfer"></button></div>
+        <div class="st-field">
+          <label class="st-label" for="image-launch-mode">How Start reaches it</label>
+          <select class="st-input" id="image-launch-mode">
+            <option value="auto">Auto: a scheduled task, else python main.py</option>
+            <option value="scheduled-task">The scheduled task named below</option>
+            <option value="process">python main.py in the folder below</option>
+          </select>
+        </div>
+        <div class="st-field">
+          <label class="st-label" for="image-server-dir">ComfyUI folder <output>holds main.py</output></label>
+          <input class="st-input" id="image-server-dir" placeholder="C:\ComfyUI" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="st-field">
+          <label class="st-label" for="image-python">Python <output>the interpreter main.py runs with</output></label>
+          <input class="st-input" id="image-python" placeholder="C:\ComfyUI\.venv\Scripts\python.exe" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="st-field">
+          <label class="st-label" for="image-extra-args">Extra arguments</label>
+          <input class="st-input" id="image-extra-args" placeholder="--listen 127.0.0.1" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="st-field">
+          <label class="st-label" for="image-task">Scheduled task name</label>
+          <input class="st-input" id="image-task" placeholder="ComfyUI" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="cfg-actions">
+          <button class="st-btn st-btn--primary" id="image-start" type="button">Start</button>
+          <button class="st-btn st-btn--secondary" id="image-stop" type="button">Stop</button>
+          <button class="st-btn st-btn--secondary" id="image-restart" type="button">Restart</button>
+        </div>
+        <p class="muted small" id="image-server-state"></p>
+        <p class="muted small">A ComfyUI you started yourself is probed, not killed: Stop only ends the scheduled task
+          or a python process running ComfyUI's <code>main.py</code> on this address's port.</p>
+      </section>
+
+      <section class="st-dialog__col">
+        <span class="st-label">Workflows</span>
+        <p class="muted small">An API-format graph (ComfyUI's <b>Save (API Format)</b>) with
+          <code>{{prompt}}</code> and optionally <code>{{seed}}</code>, <code>{{image}}</code> or
+          <code>{{images}}</code>. See <code>docs/COMFYUI.md</code>.</p>
+        <div class="image-workflows" id="image-workflows"></div>
+        <div class="cfg-actions">
+          <button class="st-btn st-btn--secondary" id="image-import" type="button">Import JSON</button>
+          <input type="file" id="image-file" accept="application/json,.json" hidden>
+          <button class="st-btn st-btn--secondary" id="image-check" type="button">Check against ComfyUI</button>
+        </div>
+        <p class="muted small" id="image-check-result" role="status"></p>
+
+        <span class="st-label">Generation</span>
+        <div class="st-field">
+          <label class="st-label" for="image-policy">During an image job, the text model</label>
+          <select class="st-input" id="image-policy">
+            <option value="auto">Auto: keep it, shrink its cache, or unload it</option>
+            <option value="keep">Keep it loaded</option>
+            <option value="unload">Unload it and restore the conversation after</option>
+          </select>
+        </div>
+        <div class="st-field">
+          <label class="st-label" for="image-need">GPU memory to plan for <output>MiB</output></label>
+          <input class="st-input" id="image-need" type="number" min="512" max="98304" step="512" placeholder="10240">
+        </div>
+        <div class="st-field">
+          <label class="st-label" for="image-max-files">Keep at most <output>images in the gallery</output></label>
+          <input class="st-input" id="image-max-files" type="number" min="10" max="100000" step="10" placeholder="500">
+        </div>
+        <div class="st-field">
+          <label class="st-label" for="image-max-mib">Gallery size limit <output>MiB; 0 = no size limit</output></label>
+          <input class="st-input" id="image-max-mib" type="number" min="0" max="1000000" step="256" placeholder="8192">
+        </div>
+        <p class="muted small">The gallery lives in <code>local-data/image-gallery/</code> beside the app: the images
+          survive a restart and show in every browser. <a href="docs/COMFYUI.md" target="_blank" rel="noopener noreferrer">Installing ComfyUI</a>.</p>
+      </section>
+    </div>
+    <div class="cfg-actions">
+      <button class="st-btn st-btn--primary" id="image-save" type="button">Save</button>
+      <span class="muted small" id="image-msg" role="status"></span>
+    </div>
+  </div>
+</dialog>
 <div class="st-menu" id="model-menu" role="menu" aria-label="Models" hidden></div>
 
 <!-- ============================ Chat row menu ============================ -->

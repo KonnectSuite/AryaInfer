@@ -150,6 +150,20 @@ class Contract(unittest.TestCase):
         self.assertIn('$("wb-toggle").onclick', self.js)
         self.assertIn('$("wb-read").onclick', self.js)
 
+    def test_the_images_dialog_contract(self):
+        for name in ("image-dialog", "image-close", "image-status", "image-url", "image-url-note", "image-headers",
+                     "image-timeout", "image-launch-mode", "image-server-dir", "image-python", "image-extra-args",
+                     "image-task", "image-auto-start", "image-start", "image-stop", "image-restart",
+                     "image-server-state", "image-workflows", "image-import", "image-file", "image-check",
+                     "image-check-result", "image-policy", "image-need", "image-max-files", "image-max-mib",
+                     "image-save", "image-msg", "images-open", "images-sum", "images-row", "s-images"):
+            self.assertIn(name, self.page.by_id, name)
+        for call in ('$("images-open").onclick', '$("image-save").onclick', '$("image-check").onclick',
+                     '$("image-start").onclick', '$("image-stop").onclick', '$("image-restart").onclick'):
+            self.assertIn(call, self.js)
+        self.assertIn('fetch("comfy"', self.js)                       # relative: only this server
+        self.assertIn('body.strata_images = true', self.js)           # the chat's opt-in for the image tool
+
     def test_the_views_still_carry_what_the_other_suites_pin(self):
         for name in ("cc-card", "cc-slots-text", "cc-mem-text", "cc-facts", "cc-note"):
             self.assertIn(name, self.page.by_id)
