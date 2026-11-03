@@ -106,6 +106,15 @@ class Contract(unittest.TestCase):
             self.assertIn(name, self.page.by_id)
         for call in ('$("chat-list").onclick', '$("chat-menu").onclick', '$("chat-search").oninput'):
             self.assertIn(call, self.js)
+        # sessions are filed by day, and a chat can be archived (hidden but kept) or deleted
+        self.assertIn('data-chat-act="archive"', self.html)
+        for needle in ("function archiveChat(", "function chatGroupLabel(", '"Today"', '"Yesterday"',
+                       '"Previous 7 days"', '"Previous 30 days"', '"Older"', '"Archived"',
+                       "st-chat-item--archived", '[data-chat-act="archive"] span'):
+            self.assertIn(needle, self.js, needle)
+        css = (WEB / "app.css").read_text(encoding="utf-8")
+        for rule in (".st-chat-group", ".st-chat-item__tag", ".st-chat-item--archived"):
+            self.assertIn(rule, css, rule)
 
     def test_the_mcp_dialog_contract(self):
         for name in ("mcp-dialog", "mcp-list", "mcp-detail", "mcp-add", "mcp-add-view", "mcp-catalog",

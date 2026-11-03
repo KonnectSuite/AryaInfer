@@ -1864,6 +1864,13 @@ function ago(t) {
   if (s < 86400 * 7) return `${Math.round(s / 86400)}d`;
   return new Date(t).toLocaleDateString([], {month: "short", day: "numeric"});
 }
+// A chat is filed under the day it last changed: Today, Yesterday, the week before, the month before, Older.
+function chatGroupLabel(t) {
+  const start = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((start(new Date()) - start(new Date(t))) / 86400000);
+  return days <= 0 ? "Today" : days === 1 ? "Yesterday" : days <= 7 ? "Previous 7 days"
+    : days <= 30 ? "Previous 30 days" : "Older";
+}
 let chatFilter = "";
 function renderChats() {
   const query = chatFilter.trim().toLowerCase();
@@ -1871,7 +1878,7 @@ function renderChats() {
     `${c.title} ${c.messages.map((m) => m.text || "").join(" ")}`.toLowerCase().includes(query));
   // rebuild only when something visible changed, so the 1 s poll does not fight the pointer
   const stamp = JSON.stringify([activeChat, query, chats.length, Math.floor(Date.now() / 60000),
-                                items.map((c) => [c.id, c.title, c.updatedAt])]);
+                                items.map((c) => [c.id, c.title, c.updatedAt, !!c.archived])]);
   if (stamp === lastChatStamp) return;
   lastChatStamp = stamp;
   const list = $("chat-list");
@@ -1885,29 +1892,63 @@ function renderChats() {
     list.append(empty);
     return;
   }
-  for (const chat of items) {
-    const row = document.createElement("div");
-    row.className = "st-chat-item";
-    row.dataset.chat = chat.id;
-    row.setAttribute("role", "listitem");
-    row.setAttribute("aria-current", String(chat.id === activeChat));
-    row.tabIndex = 0;
-    const title = document.createElement("span");
-    title.className = "st-chat-item__title";
-    title.textContent = chat.title;
-    title.title = chat.title;
-    const when = document.createElement("span");
-    when.className = "st-chat-item__time";
-    when.textContent = ago(chat.updatedAt);
-    const menu = document.createElement("button");
-    menu.type = "button";
-    menu.className = "st-chat-item__menu";
-    menu.dataset.chatMenu = chat.id;
-    menu.setAttribute("aria-label", `Options for ${chat.title}`);
-    menu.innerHTML = icon("more", "st-icon st-icon--sm");
-    row.append(title, when, menu);
-    list.append(row);
+  // a search is one flat list (an archived match says so); otherwise the chats are filed by day and the archived
+  // ones wait at the end, out of the way but never lost.
+  const groups = [];
+  if (query) {
+    groups.push({label: "", chats: items});
+  } else {
+    for (const chat of items) {
+      if (chat.archived) continue;
+      const label = chatGroupLabel(chat.updatedAt);
+      const last = groups[groups.length - 1];
+      if (last && last.label === label) last.chats.push(chat);
+      else groups.push({label, chats: [chat]});
+    }
+    const archived = items.filter((c) => c.archived);
+    if (archived.length) groups.push({label: "Archived", chats: archived, archived: true});
   }
+  for (const group of groups) {
+    if (group.label) {
+      const head = document.createElement("div");
+      head.className = "st-chat-group";
+      head.setAttribute("role", "presentation");
+      head.textContent = group.label;
+      list.append(head);
+    }
+    for (const chat of group.chats) list.append(chatRow(chat, Boolean(query) && Boolean(chat.archived)));
+  }
+}
+function chatRow(chat, tagged) {
+  const row = document.createElement("div");
+  row.className = "st-chat-item" + (chat.archived ? " st-chat-item--archived" : "");
+  row.dataset.chat = chat.id;
+  if (chat.archived) row.dataset.archived = "true";
+  row.setAttribute("role", "listitem");
+  row.setAttribute("aria-current", String(chat.id === activeChat));
+  row.tabIndex = 0;
+  const title = document.createElement("span");
+  title.className = "st-chat-item__title";
+  title.textContent = chat.title;
+  title.title = chat.title;
+  const when = document.createElement("span");
+  when.className = "st-chat-item__time";
+  when.textContent = ago(chat.updatedAt);
+  const menu = document.createElement("button");
+  menu.type = "button";
+  menu.className = "st-chat-item__menu";
+  menu.dataset.chatMenu = chat.id;
+  menu.setAttribute("aria-label", `Options for ${chat.title}`);
+  menu.innerHTML = icon("more", "st-icon st-icon--sm");
+  if (tagged) {
+    const tag = document.createElement("span");
+    tag.className = "st-chat-item__tag";
+    tag.textContent = "Archived";
+    row.append(title, tag, when, menu);
+  } else {
+    row.append(title, when, menu);
+  }
+  return row;
 }
 function openChat(id) {
   if (busy) { toast("warn", "Still writing", "Stop the answer first."); return; }
@@ -1995,11 +2036,26 @@ function renameChat(id) {
   };
   input.onblur = () => finish(true);
 }
+// Archive hides a chat from the day groups without losing it; the menu's own label flips to Unarchive.
+function archiveChat(id) {
+  const chat = chats.find((c) => c.id === id);
+  if (!chat) return;
+  closeChatMenu();
+  chat.archived = !chat.archived;
+  store.set(CHAT_STORE, {version: 1, active: activeChat, items: chats});
+  lastChatStamp = null;
+  renderChats();
+  toast("info", chat.archived ? "Chat archived" : "Chat restored",
+        chat.archived ? "It waits at the end of the list, under Archived." : "It is back with its day.", 4000);
+}
 function openChatMenu(id, anchor) {
   const wasOpen = !$("chat-menu").hidden && chatMenuFor === id;
   closeChatMenu();
   if (wasOpen) return;
   chatMenuFor = id;
+  const chat = chats.find((c) => c.id === id);
+  const label = $("chat-menu").querySelector('[data-chat-act="archive"] span');
+  if (label) label.textContent = chat && chat.archived ? "Unarchive" : "Archive";
   $("chat-menu").hidden = false;
   placePopover($("chat-menu"), anchor);
 }
@@ -2013,6 +2069,7 @@ $("chat-menu").onclick = (e) => {
   const id = chatMenuFor;
   if (b.dataset.chatAct === "rename") renameChat(id);
   else if (b.dataset.chatAct === "export") exportChat(id);
+  else if (b.dataset.chatAct === "archive") archiveChat(id);
   else if (b.dataset.chatAct === "delete") deleteChat(id);
 };
 $("chat-list").onclick = (e) => {
