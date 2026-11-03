@@ -8,8 +8,8 @@ The session stopped on budget before Stage 3 code started.
 ## UPDATE (second budget, same day): AQ3 runs end to end
 
 - `tools/aryainfer_gsq3_convert.py` works (`--check` passes; GDN V heads reordered as llama.cpp does). Output file:
-  `build-env\models\Qwen3.8-27B-GSQ3-AQ3-mtp.gguf` (the sandbox would not let Python write under `C:\AI`; move it to
-  `C:\AI\Strata-data\models\qwen38-27b\` by hand). Packing is a dense little-endian 3-bit stream, NOT 10 per
+  `C:\AI\Strata-data\models\qwen38-27b\Qwen3.8-27B-GSQ3-AQ3-mtp.gguf` (11,002,628,160 bytes; written to `build-env\models\`
+  first because the sandbox would not let Python write under `C:\AI`, then placed by hand). Packing is a dense little-endian 3-bit stream, NOT 10 per
   int32; the format notes below are corrected by the converter's docstring.
 - Engine (all under `ARYAINFER_ENGINE`): `Engine::upload` tags I8 rows of `aq3_row_bytes(n_in)` as `kTypeAQ3` (200);
   `Engine::lin` sends n <= 8 to `aq3_gemv` (dp4a) and prompt batches to `aq3_to_q8_0` + MMQ Q8_0 (exact). Kernels in
