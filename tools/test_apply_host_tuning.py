@@ -49,6 +49,7 @@ class Tuning(unittest.TestCase):
             self.assertIn(same + ".bak-host-tuning", names)         # the earlier config is kept
             self.assertEqual(sorted(p.name for p in dest.glob("strata-*.json")),
                              sorted(src.name for src in T.configs()))
+            self.assertTrue((dest / "local-data").is_dir())          # where the engine's log goes exists too
             blob = json.dumps(json.loads((dest / same).read_text(encoding="utf-8")))
             self.assertNotIn("$INSTALL", blob)
             self.assertNotIn("$DATA", blob)

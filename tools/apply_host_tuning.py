@@ -56,6 +56,10 @@ def main(argv=None) -> int:
             shutil.copyfile(target, target.with_name(target.name + ".bak-host-tuning"))
         with open(target, "w", encoding="utf-8", newline="") as f:
             f.write(json.dumps(cfg, indent=1, ensure_ascii=False) + "\n")
+        log = cfg.get("log")
+        if isinstance(log, str) and log:
+            # the engine opens its log before it loads anything, and a fresh clone has no local-data folder
+            Path(log).parent.mkdir(parents=True, exist_ok=True)
     print(f"{len(todo)} run config{'s' * (len(todo) != 1)} {'checked' if a.dry_run else 'written'}; "
           "start the server as usual")
     return 0
