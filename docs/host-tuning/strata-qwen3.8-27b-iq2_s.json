@@ -1,0 +1,54 @@
+{
+ "exe": "$DATA\\engines\\strata-poly-qwen38\\strata-poly.exe",
+ "args": [
+  "--model",
+  "$DATA\\models\\qwen38-27b\\Qwen3.8-27B-GSQ-RCO-IQ2_S-mtp.gguf",
+  "--max-context",
+  "204800",
+  "--kv",
+  "q4_0",
+  "--vram-reserve-mib",
+  "512",
+  "--prompt-batch",
+  "256"
+ ],
+ "cwd": "$INSTALL",
+ "tokenizer": "$DATA\\models\\qwen38-27b\\tokenizer",
+ "model_name": "qwen3.8-27b-iq2_s",
+ "display_name": "AryaStrata Qwen3.8 27B IQ2_S - 200K vision",
+ "log": "$INSTALL\\strata-qwen3.8-27b-iq2_s.log",
+ "lib_dirs": [
+  "$DATA\\cuda\\13.1.2\\bin\\x64",
+  "$DATA\\cuda\\13.1.2\\bin",
+  "$DATA\\engines\\strata-0.1.54"
+ ],
+ "port": 8082,
+ "gpu": 0,
+ "vision": {
+  "exe": "$DATA\\engines\\strata-0.1.54\\strata-vision.exe",
+  "mmproj": "$DATA\\models\\qwen38-27b\\mmproj-Qwen3.8-27B-BF16.gguf",
+  "model": "$DATA\\models\\qwen38-27b\\Qwen3.8-27B-GSQ-RCO-IQ2_S-mtp.gguf",
+  "gpu": true,
+  "max_tokens": 1024,
+  "min_tokens": 1024
+ },
+ "switch_on_request": true,
+ "env": {},
+ "aliases": [
+  "qwen38-27b-iq2_s"
+ ],
+ "sampling": {
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20
+ },
+ "reasoning_budget_tokens": 8000,
+ "reasoning_loop_recovery": "recover",
+ "reasoning_effort": "medium",
+ "reasoning_budget_by_effort": {
+  "off": 0,
+  "low": 4000,
+  "medium": 8000,
+  "high": 10000
+ }
+}

@@ -1,0 +1,53 @@
+{
+ "exe": "$INSTALL\\engine-poly\\strata-poly.exe",
+ "args": [
+  "--model",
+  "$DATA\\models\\ornith-APEX-I-QUALITY\\Ornith-1.5-35B-A3B-APEX-MTP-I-Quality.gguf",
+  "--max-context",
+  "262144",
+  "--kv",
+  "q8_0",
+  "--expert-profile",
+  "$DATA\\packs\\ornith-apex-i-quality\\expert-profile.txt",
+  "--conversation-cache-mib",
+  "8192",
+  "--threads",
+  "15",
+  "--prompt-batch",
+  "2048"
+ ],
+ "cwd": "$INSTALL",
+ "tokenizer": "$DATA\\packs\\ornith-apex-i-quality\\tokenizer",
+ "model_name": "ornith-1.5-35b-a3b-apex-i-quality",
+ "display_name": "AryaStrata Ornith 1.5 35B-A3B APEX-I-QUALITY \u2014 256K vision",
+ "log": "$INSTALL\\strata-ornith-apex-i-quality.log",
+ "lib_dirs": [
+  "$INSTALL\\.venv\\Lib\\site-packages\\nvidia\\cu13\\bin\\x86_64"
+ ],
+ "port": 8080,
+ "gpu": 0,
+ "gpus_asked": true,
+ "vision": {
+  "exe": "$INSTALL\\engine-poly\\strata-vision.exe",
+  "mmproj": "$DATA\\models\\ornith-APEX-I-QUALITY\\mmproj.gguf",
+  "model": "$DATA\\models\\ornith-APEX-I-QUALITY\\Ornith-1.5-35B-A3B-APEX-MTP-I-Quality.gguf",
+  "gpu": true,
+  "max_tokens": 1024
+ },
+ "sampling": {
+  "temperature": 1,
+  "top_p": 0.95,
+  "top_k": 20,
+  "presence_penalty": 0.5
+ },
+ "reasoning_loop_recovery": "recover",
+ "reasoning_effort": "medium",
+ "reasoning_budget_tokens": 8000,
+ "reasoning_budget_by_effort": {
+  "off": 0,
+  "low": 4000,
+  "medium": 8000,
+  "high": 10000
+ },
+ "switch_on_request": true
+}

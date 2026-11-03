@@ -6,6 +6,10 @@ See [credits](../CREDITS.md). This fork will
 track configuration and changes against measurements on our own hardware.
 Inherited benchmark reports remain attributed to their original machines and authors.
 
+The run config this host uses for each installed model - context, KV format, drafting, VRAM reserve and thinking
+budget, with the machine's paths replaced by two placeholders - is kept in [host tuning](host-tuning/README.md), so the
+settings survive a fresh clone onto another folder.
+
 ## First target machine
 
 Detected locally on October 17, 2026. The user confirmed this PC as the target,
