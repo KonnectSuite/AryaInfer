@@ -2379,6 +2379,9 @@ class Vision:
 
     def _start(self):
         args, log, env = self.spawn
+        if os.environ.get("STRATA_SWITCH_DEBUG"):
+            print(f"[strata] vision start: exe {args[0]!r} exists {os.path.exists(args[0])}; cwd {str(self.dir)!r} "
+                  f"is dir {self.dir.is_dir()}; mmproj {args[2]!r} exists {os.path.exists(args[2])}", flush=True)
         # cwd is the encoder's directory: the ENC lines name the files relative to it (#480: no space in the line)
         self.proc = popen("the image encoder", args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                           stderr=log or subprocess.DEVNULL, text=True, encoding="utf-8", bufsize=1, env=env,
@@ -3596,6 +3599,15 @@ class Service:
             if old_ninfer is not None:                     # its process holds the card too
                 old_ninfer.stop()
                 self.ninfer = None
+                # the distro gives its device memory back once the server has ended; the next engine asks for the card
+                # at once, so wait until the figure is stable (or the card is clear) instead of failing its start
+                last = -1
+                for _ in range(60):
+                    free = self.free_vram_mib()
+                    if free >= 8192 or free == last:
+                        break
+                    last = free
+                    time.sleep(0.5)
             freed = self.free_vram_mib() if debug else None
             if str(cfg.get("backend") or "") == "ninfer":
                 # the AryaNinfer engine's own server answers this model; nothing of it starts through start_model()
@@ -3605,7 +3617,18 @@ class Service:
                     backend.start()
                 except (Exception, SystemExit) as e:
                     backend.close()
-                    raise SwitchFailed(f"{target['id']} did not start ({e})") from None
+                    print(f"[strata] {target['id']} did not start ({e}); starting {old_name} again ...", flush=True)
+                    try:
+                        for old in (old_vision, old_engine):
+                            if old is not None and hasattr(old, "restart"):
+                                old.restart()
+                        if old_engine is None and old_vision is None and old_ninfer is not None:
+                            old_ninfer.start()
+                            self.ninfer = old_ninfer
+                    except Exception as again:
+                        raise SwitchFailed(f"{target['id']} did not start ({e}), and {old_name} did not start again "
+                                           f"({again}): no model is loaded") from None
+                    raise SwitchFailed(f"{target['id']} did not start ({e}); {old_name} is loaded again") from None
                 self.ninfer, self.engine, self.vision = backend, None, None
                 self.tok, self.template = tok, template
                 self.model = cfg.get("model_name", target["id"])
@@ -3631,6 +3654,9 @@ class Service:
             try:
                 engine, vision, sampling_defaults, effort_end, groups = start_model(cfg, tok)
             except (Exception, SystemExit) as e:
+                if os.environ.get("STRATA_SWITCH_DEBUG"):
+                    import traceback
+                    traceback.print_exc()
                 print(f"[strata] {target['id']} did not start ({e}); starting {old_name} again ...", flush=True)
                 try:
                     for old in (old_vision, old_engine):
