@@ -79,3 +79,6 @@ dist-hip/
 
 # local run-config backups written next to the gitignored strata-*.json
 /strata-*.json.*
+
+# scratch folders a test run leaves in the working directory (test_server's temp models)
+/tmp*/
