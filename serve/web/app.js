@@ -183,6 +183,7 @@ $("api-key").value = store.get("apikey", "");
 $("api-key").onchange = () => { store.set("apikey", $("api-key").value.trim()); toast("success", "API key saved", "Kept in this browser only."); };
 
 let health = {model: "strata", images: false, max_context: 0};
+let healthShown = false;
 async function loadHealth() {
   try {
     health = await (await fetch("health")).json();
@@ -190,7 +191,11 @@ async function loadHealth() {
                                           : "Attach a text file (or drop it here)";
     $("chat-empty-sub").textContent = `${health.model} runs on this PC. Nothing leaves it.`;
     $("nav-images").hidden = !(health.image_generation || (health.comfyui && health.comfyui.configured));
-    if (location.hash === "#images" && !$("nav-images").hidden) showTab("images");
+    // the deep link is honoured once, on the first answer: a later retry must not move the view the user is on
+    if (!healthShown) {
+      healthShown = true;
+      if (location.hash === "#images" && !$("nav-images").hidden) showTab("images");
+    }
   } catch (e) {
     setTimeout(loadHealth, 2000);
   }
@@ -1653,6 +1658,8 @@ function inline(s) {
   const codes = [];
   s = s.replace(/`([^`\n]+)`/g, (_, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
   s = esc(s)
+    .replace(/!\[([^\]\n]{0,160})\]\((\/comfy\/files\/[0-9a-f]{32}\.png|web\/[A-Za-z0-9._-]+)\)/g,
+             '<img class="inline-img" src="$2" alt="$1" loading="lazy" data-wb-image="$2">')
     .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^*\w])\*([^*\n]+)\*(?![*\w])/g, "$1<em>$2</em>")
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
@@ -2196,6 +2203,24 @@ function msgEl(m, i) {
 // the result as the model read it.  Its body is built only while open: a result can be 20,000 characters.
 const TOOL_STATE = {writing: ["st-badge--reading", "Writing"], running: ["st-badge--generating", "Running"], done: ["", "Done"],
                     error: ["st-badge--error", "Error"], skipped: ["st-badge--queued", "Not run"]};
+// The images a tool call made (generate_image) or a tool result names.  Only this server's own files: a URL from
+// anywhere else stays text, so an answer cannot pull in a picture from the internet.
+const IMAGE_URL = /(?:\/comfy\/files\/[0-9a-f]{32}\.png|web\/[A-Za-z0-9._-]+\.(?:png|webp|jpg|jpeg|svg))/g;
+function sameOriginImage(url) {
+  return typeof url === "string" && (url.startsWith("/comfy/files/") || url.startsWith("web/")) &&
+         !url.includes("..");
+}
+function toolImages(t) {
+  const out = [], seen = new Set();
+  const add = (url, width, height) => {
+    if (!sameOriginImage(url) || seen.has(url)) return;
+    seen.add(url);
+    out.push({url, width, height});
+  };
+  for (const image of t.images || []) add(image.url, image.width, image.height);
+  for (const match of (t.result || "").matchAll(IMAGE_URL)) add(match[0]);
+  return out.slice(0, 6);
+}
 function toolHtml(t, k) {
   const [cls, label] = TOOL_STATE[t.state] || ["", t.state];
   const args = t.arguments == null ? "" : JSON.stringify(t.arguments, null, 2);
@@ -2208,12 +2233,19 @@ function toolHtml(t, k) {
               `${t.truncated ? ", cut for the model" : ""}</div><pre class="tool-call__pre">${esc(t.result)}</pre>`;
     }
   }
+  const pics = toolImages(t);
+  const thumbnails = pics.length
+    ? `<div class="tool-call__pics">` + pics.map((p) =>
+        `<button class="tool-pic" type="button" data-wb-image="${esc(p.url)}" title="Open in the workbench">` +
+        `<img src="${esc(p.url)}" alt="" loading="lazy"></button>`).join("") + `</div>`
+    : "";
   return `<details class="st-collapse tool-call" data-tool="${k}" data-state="${esc(t.state)}"${t.open ? " open" : ""}>` +
     `<summary>${icon("tool", "st-icon st-icon--sm")}<span class="tool-call__name" title="${esc(t.name || "")}">${esc(t.tool || t.name || "tool")}</span>` +
     (t.server ? `<span class="muted small">${esc(t.server)}</span>` : "") +
     `<span class="tool-call__preview muted">${esc(preview.slice(0, 200))}</span>` +
     `<span class="st-badge ${cls}">${esc(label)}</span>${t.ms != null && t.state !== "skipped" ? `<span class="muted small">${fmt(t.ms / 1000, 1)} s</span>` : ""}` +
-    `${icon("chevron", "st-icon st-icon--sm st-chev")}</summary><div class="st-collapse__body">${body}</div></details>`;
+    `${icon("chevron", "st-icon st-icon--sm st-chev")}</summary><div class="st-collapse__body">${body}</div></details>` +
+    thumbnails;
 }
 // the answer's text with the tool blocks where the model called them
 function answerHtml(m) {
@@ -2239,6 +2271,7 @@ function onTool(m, x) {
   } else if (x.event === "result") {
     Object.assign(t, {result: x.text, ok: x.ok, chars: x.chars, truncated: x.truncated, ms: x.ms,
                       state: x.skipped ? "skipped" : x.ok ? "done" : "error"});
+    if (Array.isArray(x.images) && x.images.length) t.images = x.images;   // a generate_image call made them
     setCompanion("writing");
   }
 }
@@ -2293,6 +2326,8 @@ function nearBottom() { const s = $("chat-scroll"); return s.scrollHeight - s.sc
 function scrollDown(force) { const s = $("chat-scroll"); if (force || nearBottom()) s.scrollTop = s.scrollHeight; }
 
 $("chat").addEventListener("click", (e) => {
+  const pic = e.target.closest("[data-wb-image]");
+  if (pic) { e.preventDefault(); wbShowImage(pic.dataset.wbImage); return; }   // a thumbnail: open it in the panel
   const rg = e.target.closest("[data-msg-regen]");
   if (rg) { regenerateMessage(+rg.closest(".st-msg").dataset.i); return; }
   const pv = e.target.closest("[data-msg-prev]");
@@ -2594,7 +2629,8 @@ $("s-apply").onclick = async () => {
               show: $("s-show").getAttribute("aria-checked") === "true",
               esp: $("s-esp").getAttribute("aria-checked") === "true",
               mcp: $("s-mcp").getAttribute("aria-checked") === "true",
-              search: $("s-search").getAttribute("aria-checked") === "true"};
+              search: $("s-search").getAttribute("aria-checked") === "true",
+              images: $("s-images").getAttribute("aria-checked") === "true"};
   store.set("sampling", settings);
   const share = $("s-share").getAttribute("aria-checked") === "true";
   openDrawer(false);
@@ -2729,6 +2765,22 @@ function wbArtifacts() {
       }
     }
   });
+  // pictures the answers made or named: a generate_image call's results, a tool result's addresses, a Markdown image
+  messages.forEach((m, i) => {
+    if (m.role !== "assistant") return;
+    const seen = new Set();
+    const add = (url, alt) => {
+      if (!sameOriginImage(url) || seen.has(`img:${url}`)) return;
+      seen.add(`img:${url}`);
+      out.push({id: `img:${url}`, kind: "image", lang: "image", code: url, url,
+                title: alt ? String(alt).slice(0, 60) : "Image"});
+    };
+    for (const t of m.tools || []) {
+      for (const image of t.images || []) add(image.url, t.tool);
+      for (const match of (t.result || "").matchAll(IMAGE_URL)) add(match[0], t.tool);
+    }
+    for (const match of (m.text || "").matchAll(/!\[([^\]\n]{0,80})\]\(([^)\s]+)\)/g)) add(match[2], match[1]);
+  });
   return out;
 }
 function wbTitle(code, lang, n) {
@@ -2782,16 +2834,26 @@ function wbRenderArtifact() {
   $("wb-mode").hidden = empty;
   if (empty) return;
   select.value = wb.selected;
-  $("wb-source").textContent = a.code;
+  $("wb-source").textContent = a.kind === "image" ? a.url : a.code;
   const source = wb.mode === "source";
+  const picture = a.kind === "image";
   $("wb-source").hidden = !source;
-  $("wb-frame").hidden = source;
+  $("wb-frame").hidden = source || picture;
+  $("wb-image").hidden = !picture || source;
+  if (picture) $("wb-image").src = a.url;
   // srcdoc, not a blob URL: a sandboxed frame has an opaque origin and may not load a blob made by this page
-  if (!source) $("wb-frame").srcdoc = wbDoc(a);
+  if (!source && !picture) $("wb-frame").srcdoc = wbDoc(a);
 }
 function wbCurrent() {
   const list = wbArtifacts();
   return list.find((a) => a.id === wb.selected) || list[list.length - 1] || null;
+}
+// A picture clicked in the chat: open the panel on it (the answer's own images are in its artifact list).
+function wbShowImage(url) {
+  const found = wbArtifacts().find((a) => a.kind === "image" && a.code === url);
+  if (!found) return;
+  wb.selected = found.id;
+  wbOpen(true, "artifact");
 }
 $("wb-artifact").onchange = () => { wb.selected = $("wb-artifact").value; wbRenderArtifact(); };
 for (const b of $("wb-mode").children) {
@@ -2805,7 +2867,15 @@ for (const b of $("wb-mode").children) {
 for (const id of ["wb-copy", "wb-download", "wb-open"]) $(id).onclick = () => {
   const a = wbCurrent();
   if (!a) return;
-  if (id === "wb-copy") { copyText(a.code); return; }
+  if (id === "wb-copy") { copyText(a.kind === "image" ? a.url : a.code); return; }
+  if (a.kind === "image") {                             // the server's own file: no blob needed
+    if (id === "wb-open") { window.open(a.url, "_blank", "noopener"); return; }
+    const link = document.createElement("a");
+    link.href = a.url;
+    link.download = `image-${Date.now()}.png`;
+    link.click();
+    return;
+  }
   const type = a.lang === "html" ? "text/html" : a.lang === "svg" ? "image/svg+xml" : "text/markdown";
   const url = URL.createObjectURL(new Blob([a.code], {type}));
   if (id === "wb-open") { window.open(url, "_blank", "noopener"); return; }

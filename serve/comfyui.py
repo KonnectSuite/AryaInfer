@@ -527,6 +527,13 @@ def _ssl_context():
     return ssl.create_default_context(cafile=certifi.where())
 
 
+def _png_size(data: bytes) -> tuple[int | None, int | None]:
+    """A PNG's width and height from its IHDR, so a record carries the real size a graph baked."""
+    if data[:8] != b"\x89PNG\r\n\x1a\n" or len(data) < 24:
+        return None, None
+    return int.from_bytes(data[16:20], "big"), int.from_bytes(data[20:24], "big")
+
+
 def _sniff_image(data: bytes) -> str | None:
     if data[:8] == b"\x89PNG\r\n\x1a\n":
         return "image/png"
@@ -1223,9 +1230,19 @@ class ComfyHub:
         name = str(spec.get("workflow") or "").strip()
         if not name:
             name = self.settings.get("active_edit" if editing else "active_text") or ""
-        if not name:
-            return find_workflow(workflows, None, role)
-        return find_workflow(workflows, name, role)
+        if name:
+            return find_workflow(workflows, name, role)
+        mine = [w for w in workflows if w["role"] == role]
+        if not mine:
+            raise WorkflowError(f"No {role} workflow is configured. Import one in Settings > Tools > Images"
+                                + (" (a graph with an {{image}} or {{images}} input)." if editing else "."))
+        # the shipped pack's own order by usefulness: Square for text, Turbo Edit for edits, not a cut-out graph
+        def score(w: dict) -> tuple:
+            n = w["name"].lower()
+            if editing:
+                return (0 if "turbo_edit" in n else 1 if "background" in n else 2, n)
+            return (0 if "square" in n else 1 if "wide" in n else 2 if "portrait" in n else 3, n)
+        return sorted(mine, key=score)[0]
 
     def generate(self, spec: dict, cancel: threading.Event | None = None, take_turn: bool | None = None) -> dict:
         """Run one generation to completion -> {images, seed, workflow, elapsed_ms}.  ComfyError when it fails."""
@@ -1266,9 +1283,10 @@ class ComfyHub:
                     used.append(prompt_id)
                     waited = client.wait(prompt_id, cancel)
                     png = client.view(waited["output"])
+                    actual_w, actual_h = _png_size(png)
                     record = self.gallery.add(png, {
                         "prompt": prompt, "workflow": workflow["name"], "provider": "comfyui", "seed": item_seed,
-                        "width": spec.get("width"), "height": spec.get("height"),
+                        "width": actual_w or spec.get("width"), "height": actual_h or spec.get("height"),
                         "source": spec.get("source") or ("edit" if uploaded else "generate"),
                         "parent": spec.get("parent") or None,
                         "queue_ms": waited["queue_ms"], "exec_ms": waited["exec_ms"],

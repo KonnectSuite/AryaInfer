@@ -1,0 +1,22 @@
+{
+ "version": 1,
+ "items": [
+  {
+   "id": "a3494843b17ae73a47cbbfa21ee809bf",
+   "file": "a3494843b17ae73a47cbbfa21ee809bf.png",
+   "created": 1793693525,
+   "favorite": false,
+   "prompt": "A single red apple on a plain white background, studio lighting, photorealistic, high definition, product photography style.",
+   "workflow": "Qwen_Image_2_1_Cutout_RGBA_1024",
+   "provider": "comfyui",
+   "seed": 1636968301,
+   "width": null,
+   "height": null,
+   "source": "chat",
+   "parent": null,
+   "queue_ms": 135,
+   "exec_ms": 15661,
+   "comfy_version": "0.37.4"
+  }
+ ]
+}

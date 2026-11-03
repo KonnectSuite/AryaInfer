@@ -140,7 +140,7 @@ class Contract(unittest.TestCase):
     def test_the_workbench_contract(self):
         for name in ("workbench", "wb-toggle", "wb-close", "wb-resize", "wb-artifact", "wb-mode", "wb-stage",
                      "wb-frame", "wb-source", "wb-none", "wb-files", "wb-url", "wb-read", "wb-read-msg",
-                     "wb-read-text", "wb-activity", "wb-copy", "wb-download", "wb-open"):
+                     "wb-read-text", "wb-activity", "wb-copy", "wb-download", "wb-open", "wb-image"):
             self.assertIn(name, self.page.by_id, name)
         # the frame that renders a model-written page: scripts yes, anything else no, and never this page's origin
         frame = self.html[self.html.index('id="wb-frame"') - 200: self.html.index('id="wb-frame"') + 400]
@@ -149,6 +149,8 @@ class Contract(unittest.TestCase):
         self.assertIn("default-src 'none'", self.js)                 # no network from an artifact
         self.assertIn('$("wb-toggle").onclick', self.js)
         self.assertIn('$("wb-read").onclick', self.js)
+        self.assertIn("function sameOriginImage(", self.js)          # only this server's pictures, never the internet
+        self.assertIn("data-wb-image", self.js)
 
     def test_the_images_dialog_contract(self):
         for name in ("image-dialog", "image-close", "image-status", "image-url", "image-url-note", "image-headers",
