@@ -910,7 +910,9 @@ Correctness: `src/poly/aq3_i8_test.cu` builds a synthetic AQ3 matrix, quantizes 
 the kernel with a double-precision CPU reference: worst |diff| 4.8e-7 on values up to 4.16, no non-finite values.  The
 engine's 24-token greedy greeting gives the same ids on both paths.
 
-Speed: not yet.  At 8K, batch 1024, 64 tokens, the int8 product reads 230.6 tok/s against 1,418.6 for the expansion
-path - 6x slower.  The block is 32 rows by 32 tokens, so its activations are read again for every 32 output rows (16
-MACs a byte, against MMQ's tiles) and staged by a byte copy on 128 threads.  The next step is a bigger tile (64-128
-rows by 128 tokens) with vectorized staging; the instruction is already the right one.
+Speed: closer, still behind.  At 8K, batch 1024, 64 tokens, the int8 product read 230.6 tok/s with its first 32 x 32
+tile and **682.6** with a 128 x 128 tile (sixteen warps, a warp's eight token groups in two passes of four, the
+activation copy 32 bytes at a time), against 1,428.4 for the expansion path.  The tile is now big enough to keep its
+activations for eight times as many output rows, but both the weight and activation staging are still load-sync-compute
+with no overlap; the next step is a double-buffered `cp.async` pipeline (what MMQ does) and a wider token tile, not
+another instruction change.

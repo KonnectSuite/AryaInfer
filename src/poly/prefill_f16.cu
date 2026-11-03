@@ -228,12 +228,12 @@ __global__ void cast_f16_kernel(const float* __restrict__ x, __half* __restrict_
     if (i < n) y[i] = __float2half(x[i]);
 }
 
-// AQ3 x Q8_0 products on the int8 tensor cores (opt-in: STRATA_AQ3_I8).  A block is 32 weight rows by 32 tokens, k in
-// tiles of 128 values - one AQ3 group, so one weight scale a row.  Eight warps: two row halves of 16 and four token
-// groups of 8; each 32-value chunk is one m16n8k32, and the group's scale and that chunk's activation scale are
-// applied to its int32 sum before it joins the fp32 accumulator.  The activation buffer is the q8_0 layout MMQ
-// already produces (a half scale and 32 int8 a 32-value block), so the tokens are quantized once a call.
-constexpr int I8_BM = 32, I8_BN = 32, I8_BK = 128;
+// AQ3 x Q8_1 products on the int8 tensor cores (opt-in: STRATA_AQ3_I8).  A block is 128 weight rows by 128 tokens, k
+// in tiles of 128 values - one AQ3 group, so one weight scale a row.  Sixteen warps: eight row bands of 16 and two
+// token halves; a warp does its eight token groups in two passes of four, so the weight fragment loads once a chunk
+// and the accumulators stay in registers.  The tile keeps its activations for eight times as many output rows as the
+// first version, which is where its time went.
+constexpr int I8_BM = 128, I8_BN = 128, I8_BK = 128;
 constexpr size_t kI8Smem = (size_t) (I8_BM * I8_BK + I8_BN * I8_BK) + (I8_BM + 4 * I8_BN) * sizeof(float);
 
 __global__ void fused_aq3_i8_kernel(const uint8_t* __restrict__ w, size_t row_bytes,
@@ -245,10 +245,11 @@ __global__ void fused_aq3_i8_kernel(const uint8_t* __restrict__ w, size_t row_by
     float* wsc = (float*) (b_s + I8_BN * I8_BK);     // a weight group scale a row
     float* bsc = wsc + I8_BM;                        // four activation block scales a token
     const int m0 = blockIdx.x * I8_BM, t0 = blockIdx.y * I8_BN;
-    const int tid = threadIdx.x, warp = tid >> 5, wr = warp >> 2, wt = warp & 3;
-    const int lane = tid & 31;
+    const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31;
+    const int rg = warp >> 1, th = warp & 1;         // row band 0..7 (16 rows), token half 0/1 (64 tokens)
     const int blocks_per_row = n_in / 32;
-    float acc[4] = {0.f, 0.f, 0.f, 0.f};
+    float acc[2][4][4];
+    for (auto& pass : acc) for (auto& g : pass) for (auto& v : g) v = 0.f;
     for (int kt = 0; kt < n_in / I8_BK; ++kt) {
         for (int c = tid; c < I8_BM * (I8_BK / 8); c += (int) blockDim.x) {
             const int m = c / (I8_BK / 8), j = c % (I8_BK / 8), col = m0 + m;
@@ -276,45 +277,54 @@ __global__ void fused_aq3_i8_kernel(const uint8_t* __restrict__ w, size_t row_by
             } else {
                 // native_quantize_q8_1's block: half2 ds (the scale, then the sum) and 32 int8
                 const uint8_t* blk = xq + ((size_t) tok * blocks_per_row + kt * 4 + c) * 36;
-                for (int i = 0; i < 32; ++i) out[i] = (int8_t) blk[4 + i];
+                const uint32_t* src = (const uint32_t*) (blk + 4);
+                uint32_t* dst = (uint32_t*) out;
+#pragma unroll
+                for (int i = 0; i < 8; ++i) dst[i] = src[i];
                 bsc[t * 4 + c] = __half2float(*(const __half*) blk);
             }
         }
         __syncthreads();
-        // The mma.cuh tile layout is written in terms of threadIdx.x as the lane, which is only true for a one-warp
-        // block; this block has eight, so the same mapping is done here with the lane.  A is 16 rows by 8 ints of 4
-        // codes (32 values), B is 8 tokens by 8 ints, and D's elements follow A's: row (l / 2) * 8 + lane / 4, token
-        // (lane % 4) * 2 + l % 2.
         for (int c = 0; c < 4; ++c) {
-            ggml_cuda_mma::tile<16, 8, int> A, D;
-            ggml_cuda_mma::tile<8, 8, int> B;
+            ggml_cuda_mma::tile<16, 8, int> A;
 #pragma unroll
             for (int l = 0; l < 4; ++l) {
-                // m16n8k32's A fragment: a0/a1 are the first 8 rows, a2/a3 the next 8, and each holds 8 of the
-                // row's 32 codes (two ints); the class mapping is the C one, not this.
+                // m16n8k32's A fragment: a0/a1 the first 8 rows, a2/a3 the next 8, 8 codes a register.
                 const int r = ((l & 1) * 8) + (lane >> 2), j = ((l >> 1) * 4) + (lane & 3);
-                A.x[l] = ((const int*) (a_s + (wr * 16 + r) * I8_BK + c * 32))[j];
+                A.x[l] = ((const int*) (a_s + (rg * 16 + r) * I8_BK + c * 32))[j];
             }
+            for (int pass = 0; pass < 2; ++pass) {
+                for (int g = 0; g < 4; ++g) {
+                    const int tg = th * 8 + pass * 4 + g;
+                    ggml_cuda_mma::tile<8, 8, int> B;
+                    ggml_cuda_mma::tile<16, 8, int> D;
 #pragma unroll
-            for (int l = 0; l < 2; ++l) {
-                const int r = lane >> 2, j = (l * 4) + (lane & 3);
-                B.x[l] = ((const int*) (b_s + (wt * 8 + r) * I8_BK + c * 32))[j];
-            }
-            D.x[0] = D.x[1] = D.x[2] = D.x[3] = 0;
-            ggml_cuda_mma::mma(D, A, B);
+                    for (int l = 0; l < 2; ++l) {
+                        const int r = lane >> 2, j = (l * 4) + (lane & 3);
+                        B.x[l] = ((const int*) (b_s + (tg * 8 + r) * I8_BK + c * 32))[j];
+                    }
+                    D.x[0] = D.x[1] = D.x[2] = D.x[3] = 0;
+                    ggml_cuda_mma::mma(D, A, B);
 #pragma unroll
-            for (int l = 0; l < 4; ++l) {
-                const int r = ((l >> 1) * 8) + (lane >> 2), tk = ((lane & 3) * 2) + (l & 1);
-                acc[l] += wsc[wr * 16 + r] * bsc[(wt * 8 + tk) * 4 + c] * (float) D.x[l];
+                    for (int l = 0; l < 4; ++l) {
+                        const int r = ((l >> 1) * 8) + (lane >> 2), tk = ((lane & 3) * 2) + (l & 1);
+                        acc[pass][g][l] += wsc[rg * 16 + r] * bsc[(tg * 8 + tk) * 4 + c] * (float) D.x[l];
+                    }
+                }
             }
         }
         __syncthreads();
     }
+    for (int pass = 0; pass < 2; ++pass) {
+        for (int g = 0; g < 4; ++g) {
+            const int tg = th * 8 + pass * 4 + g;
 #pragma unroll
-    for (int l = 0; l < 4; ++l) {
-        const int r = m0 + wr * 16 + ((l >> 1) * 8) + (lane >> 2);
-        const int tk = t0 + wt * 8 + ((lane & 3) * 2) + (l & 1);
-        if (r < n_out && tk < rows) y[(size_t) tk * n_out + r] = acc[l];
+            for (int l = 0; l < 4; ++l) {
+                const int r = m0 + rg * 16 + ((l >> 1) * 8) + (lane >> 2);
+                const int tk = t0 + tg * 8 + ((lane & 3) * 2) + (l & 1);
+                if (r < n_out && tk < rows) y[(size_t) tk * n_out + r] = acc[pass][g][l];
+            }
+        }
     }
 }
 
@@ -326,7 +336,7 @@ bool fused_gemm_i8(const void* w, size_t row_bytes, const void* xq, float* y, in
                    void* stream) {
     if (rows <= 0 || n_in <= 0 || n_in % I8_BK != 0) return false;
     const dim3 grid((unsigned) ((n_out + I8_BM - 1) / I8_BM), (unsigned) ((rows + I8_BN - 1) / I8_BN));
-    fused_aq3_i8_kernel<<<grid, 256, kI8Smem, (cudaStream_t) stream>>>((const uint8_t*) w, row_bytes,
+    fused_aq3_i8_kernel<<<grid, 512, kI8Smem, (cudaStream_t) stream>>>((const uint8_t*) w, row_bytes,
                                                                      (const uint8_t*) xq, y, n_in, n_out, rows);
     const cudaError_t launched = cudaPeekAtLastError();
     if (launched != cudaSuccess) {
