@@ -3291,6 +3291,7 @@ class Service:
                  fit_max_tokens: bool = False):
         self.engine, self.tok, self.template, self.model, self.vision = engine, tokenizer, template, model_name, vision
         self.ninfer: NinferBackend | None = None          # the AryaNinfer backend while its model is loaded
+        self.ninfer_budgets: dict = {}                    # its config's effort -> thinking budget, for Anthropic requests
         self.fit_max_tokens = fit_max_tokens          # --fit-max-tokens: clamp the output cap instead of 400
         self.drop_oldest = False                      # #17 (opt-in): a conversation too long loses its oldest turns
         self.preserve_thinking = False                # #25 (opt-in): earlier turns keep their thinking in the prompt
@@ -3630,6 +3631,7 @@ class Service:
                                            f"({again}): no model is loaded") from None
                     raise SwitchFailed(f"{target['id']} did not start ({e}); {old_name} is loaded again") from None
                 self.ninfer, self.engine, self.vision = backend, None, None
+                self.ninfer_budgets = dict(cfg.get("reasoning_budget_by_effort") or {})
                 self.tok, self.template = tok, template
                 self.model = cfg.get("model_name", target["id"])
                 self.sampling_defaults = dict(sampling_defaults_from_config(cfg) or {})
@@ -6790,10 +6792,40 @@ def make_handler(svc: Service):
 
         def _forward_ninfer(self, path: str, req: dict) -> None:
             """A request for the AryaNinfer model: forwarded whole to its server, whose OpenAI and Anthropic answers
-            are passed back as they come.  Streaming is the client's own flag, so the SSE bytes go straight on."""
+            are passed back as they come.  Streaming is the client's own flag, so the SSE bytes go straight on.
+
+            Thinking: this server's effort names (off/low/medium/high) are Ninfer's ladder's (none/low/medium/xhigh -
+            it has no "high"), written into the dialect each endpoint reads.  A numeric budget is Anthropic-only
+            (`thinking.budget_tokens`); the OpenAI-shaped endpoints take the effort, and the backend's
+            --default-thinking-budget caps those.  An effort the client leaves out is not written: the backend's own
+            default then applies (the calibration's behavior)."""
             backend = svc.ninfer
             body = dict(req)
             body["model"] = backend.model_id
+            effort = body.pop("reasoning_effort", None)
+            budget = body.pop("reasoning_budget_tokens", None)
+            kwargs = body.get("chat_template_kwargs")
+            if effort is None and isinstance(kwargs, dict):
+                effort = kwargs.get("reasoning_effort")
+            level = str(effort).strip().lower() if effort is not None else ""
+            ninfer_level = {"off": "none", "low": "low", "medium": "medium", "high": "xhigh"}.get(level)
+            if path == "/v1/chat/completions":
+                if ninfer_level is not None:
+                    body["reasoning_effort"] = ninfer_level
+            elif path == "/v1/responses":
+                if ninfer_level is not None:
+                    reasoning = body.get("reasoning")
+                    body["reasoning"] = dict(reasoning) if isinstance(reasoning, dict) else {}
+                    body["reasoning"]["effort"] = ninfer_level
+            elif path == "/v1/messages" and "thinking" not in body:
+                if ninfer_level == "none":
+                    body["thinking"] = {"type": "disabled"}
+                elif ninfer_level is not None:
+                    n = int(budget) if isinstance(budget, (int, float)) and not isinstance(budget, bool) and budget > 0 \
+                        else int(svc.ninfer_budgets.get(level) or 8000)
+                    body["thinking"] = {"type": "enabled", "budget_tokens": n}
+                elif isinstance(budget, (int, float)) and not isinstance(budget, bool) and budget > 0:
+                    body["thinking"] = {"type": "enabled", "budget_tokens": int(budget)}
             try:
                 upstream = backend.post(path, body)
             except urllib.error.HTTPError as e:
