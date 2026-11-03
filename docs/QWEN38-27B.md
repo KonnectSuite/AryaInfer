@@ -503,3 +503,30 @@ Phase 4 notes:
 What remains, if the tree is ever the priority: the GDN recurrence for a tree's rows as one kernel over a state table
 (the per-row copies are the measured cost), and the ancestor mask in the `fdec` decode-attention kernel.  Even then
 the arithmetic above says the tree would have to add more than ~5 ms of tokens per row to pay.
+
+## The AryaNinfer backend: a third Qwen3.8 27B (2026-11-02)
+
+The engine also serves roofkid's NInfer Qwen3.8 27B GSQ3 artifact (10.6 GiB) through its own server.  The registry
+entry `strata-qwen3.8-27b-ninfer-gsq3.json` starts `ninfer-serve` in WSL2 with the measured profile (`--kv-dtype
+rk4v4-e8 --spec mtp --draft-tokens 3 --lm-head-draft --ngram chain --prefill-chunk 2688 --vision
+--preserve-thinking`, 102,400 tokens of context) and forwards a request for that model whole: OpenAI Chat Completions,
+OpenAI Responses and Anthropic Messages, streaming included.  One model is on the card at a time, so the first request
+after a switch pays the start (about 37 s to this model, about 6 s back to the GGUF).
+
+Reproduced on this host against the recorded head-to-head (the same 20,051-token prompt and 64 greedy tokens):
+
+| | measured 2026-11-02 | recorded head-to-head |
+| --- | --- | --- |
+| prefill | 1.99k tok/s | 2.00k |
+| decode | 176.0 tok/s | 173.5 |
+| MTP acceptance | 91.5%, 7.00 tokens a round | 91.5%, 7.00 |
+| n-gram acceptance | 90.9% | 90.9% |
+| load | 29.8 s | 37.1 s |
+
+Through AryaStrata: `/v1/models` lists the model and its aliases; a request switches the loaded GGUF model to it and
+answers; switching back to the GGUF model works; a streaming request forwarded 13 SSE events.
+`serve/test_ninfer_backend.py` covers the registry entry and the process/proxy primitive without a GPU.
+
+Differences: 102,400-token context (the GGUF models keep 131,072 and 204,800), a WSL process to supervise, and none of
+the GGUF models' KV formats, slot tools or needle suite.  The two GGUF 27B models, the MoEs and the native engines are
+unchanged.

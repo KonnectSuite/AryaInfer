@@ -29,6 +29,7 @@ a second machine, a Windows laptop whose card has 8 GB.
 | GLM 5.3 Flash | `glm5-next` | `strata-poly` | GSQ-RCO 3.0bit, REAP50-Q3_K_M, UD-IQ2_XXS | draft block |
 | Qwen3.6-35B-A3B | `qwen35moe` | `strata-poly` | Unsloth UD-Q3_K_M, UD-Q2_K_XL and UD-Q4_K_M, 12.6 to 22.7 GB | draft block in the file |
 | Qwen3.8 27B | `qwen35` | `strata-poly` | IQ3_XXS-mtp 10.4 GB, IQ2_S-mtp 9.6 GB | draft block in the file |
+| Qwen3.8 27B, NInfer backend | NInfer `.ninfer` container (not GGUF) | `ninfer-serve`, started and forwarded by the AryaStrata server | roofkid Qwen3.8-27B GSQ3, 10.6 GiB | MTP 3 drafts and an n-gram chain, in that server |
 | Ornith 1.5 35B-A3B | `qwen35moe` | `strata-poly` | APEX-MTP-I-Compact, I-Mini and I-Quality, 14.4 to 23.7 GB; 8-bit Q8_0 37.8 GB | draft block in the file |
 | Gemma 4 26B-A4B | `gemma4` | `strata-poly` | Unsloth UD-Q3_K_M, UD-Q2_K_XL and UD-Q4_K_M, 10.5 to 16.9 GB; 8-bit Q8_0 26.9 GB | its draft model, a file of 0.46 GB |
 | Tiel Coder 35B-A3B | `qwen35moe` | `strata-poly` | peculiar-ragdoll's UD-Q3_K_XL, UD-IQ3_XXS and UD-Q4_K_XL, 13.6 to 22.7 GB; 8-bit UD-Q8_K_XL 38.5 GB | draft block in the file |
@@ -42,6 +43,13 @@ a second machine, a Windows laptop whose card has 8 GB.
 `strata` is the first engine and runs Qwen3.8 only; nothing in it changed. `strata-poly` is the engine that reads a
 GGUF in place, and it now has eight architectures. It was called `strata-glm`, after its first model; an install
 from then keeps its engine and moves to the new name the next time setup updates it.
+
+The Qwen3.8 27B NInfer row is served by the companion engine AryaNinfer (roofkid's NInfer): its `ninfer-serve`
+process is started on demand and stopped when another model loads, behind the same registry, endpoints and
+switching as every other model. Its artifact is roofkid's 3-bit `.ninfer` container rather than a GGUF, so the GGUF
+KV formats, slot files and needle tools do not apply to it, and its context is 102,400 tokens; its own server
+renders the chat template, thinking and vision. The measured numbers and the differences are in
+[the AryaNinfer backend section](QWEN38-27B.md#the-aryaninfer-backend-a-third-qwen38-27b-2026-11-02).
 
 The optional CUDA [GDN prefill adapter](DETAILS.md#strata-poly-chunked-gdn-prefill) uses
 `STRATA_GDN_MMA=1` for eligible Qwen35 reads. It is off by default; that section lists its shape and device limits.
