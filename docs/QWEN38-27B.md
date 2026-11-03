@@ -551,3 +551,53 @@ What host memory does hold here, and helps:
 The road to NInfer's 173 tok/s at 20K is therefore not offload: it is the two gaps measured in the section above - a
 tensor-core (FP16 MMA) matrix path for the 3-bit weights (prefill) and more tokens a draft round (decode) - plus the
 integer-MMA attention for the very long contexts.
+## What the other engines do, and what is portable here (2026-11-03)
+
+Research for this goal, read the same day: [capy-flash](https://github.com/ValerioDolci/capy-flash) (v0.8.0, the
+renamed ninfer-tp2), the [LocalLLM thread](https://www.reddit.com/r/LocalLLM/comments/1was9n0/running_qwen_38_27b_at_q4_on_16gb_vram_at_200k/)
+via its [summary](https://www.promppy.com/item/1529525), and [the Medium 128K write-up](https://adsanz.medium.com/fitting-qwen3-8-27b-on-16-gb-of-vram-with-128k-context-at-usable-speeds-78ac05d49175).
+Their numbers are their hardware (RTX 5070 Ti, sm_120); ours are this host's, so they are targets, not comparisons.
+
+capy-flash's `27b-16gb` profile is the closest thing to this problem: Qwen3.8-27B 3-bit on **one** 16 GB card,
+INT8 KV, 65,536 tokens, MTP 3, vision, **the token embedding in RAM**, 13.9 GB of VRAM. It reports 139 tok/s decode
+on an 8K prompt and 3,401 / 3,211 tok/s prefill at 4K / 16K on a 5070 Ti.  The LocalLLM thread reaches 200K on 16 GB
+with a Q4 file by pruning the non-ASCII rows of the embedding table (~700 MB), moving the table (and the MTP block, when
+off) to RAM (~3.6 GB) and streaming the cache adaptively.
+
+What is already true here, checked in the source:
+
+* the token embedding table is **already in host memory**: `tok_embd_` points into the mapped GGUF and `embed()`
+  converts the row on the CPU (`src/poly/engine.cpp`), so the 0.4 GB it would cost is not in the card;
+* the KV cache is q4_0 and the decode attention has the group-6 tensor-core kernel;
+* the conversation caches park in host RAM between chats.
+
+What the installed engine (0.1.45, 2026-11-02 10:23) does **not** have, but the repository does, is the two changes
+from commit `dab05722`:
+
+* `--prefill-f16`: a prompt batch's 3-bit matrices dequantized to halves and multiplied on the tensor cores
+  (`src/poly/prefill_f16.cu`), where the installed path falls back to dp4a on the CUDA cores;
+* `--lookup-chain N` / `--lookup-chain-min N`: the suffix drafter appends tokens after the block's own guesses, which
+  is the lever for tokens a draft round (ours ~3.5, capy's MTP 3 reports ~7).
+
+`STRATA_FATTN` was tested and does not apply to this model: the engine answers "no kernel for it on this card, or
+--prompt-batch too large", and the documented kernel is for heads of 256 values while this model's shape is not that;
+`STRATA_FDEC` is already on.
+
+The task that follows: build `strata-poly` from this repository (CUDA 13.1, MSVC 14.44, sm_89), then measure
+`--prefill-f16` and `--lookup-chain` against today's numbers (1,205.6 / 69.3 at 8K, 1,038.7 / 72.3 at 32K, 867.6 /
+70.5 at 64K standalone; 722.2 prefill and 70.3 decode at 62K through the server with the 512-row batch).
+The arms tried for this, measured 2026-11-03 (server path unless marked standalone, IQ3_XXS, q4_0 unless said,
+vision resident):
+
+| arm | prompt | prefill | decode | VRAM | note |
+| --- | --- | --- | --- | --- | --- |
+| 131K, batch 512 | 61,833 | 722.2 | 70.3 | 14,863 MiB | the default now |
+| 131K, batch 2048 | 64,296 | 838.8 | 32.0 | 15,6xx | the cliff this fixed |
+| 64K, q8_0, batch 512 | 61,783 | 851.0 | 68.4 | 15,768 MiB peak | faster read, at the card's edge |
+| 120K, batch 2048 (standalone) | 119,997 | 671.7 | 47.4 | - | no vision, per-run context |
+| 120K, batch 256 (standalone) | 119,997 | 650.7 | 58.4 | - | the batch barely matters at 120K |
+| `STRATA_FATTN=1` | - | - | - | - | refused: "no kernel for it on this card, or --prompt-batch too large" |
+
+`--kv q8_0` at 64K is the fastest read of the four, but its 15,768 MiB peak is the state the handoff describes as the
+start of the spill (after which even a short prompt decodes at 0.2 tok/s); it is not a default until the headroom is
+larger than this.  `--kv int8` is refused for this family by the engine.
