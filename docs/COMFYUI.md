@@ -1,4 +1,4 @@
-# Images through ComfyUI
+﻿# Images through ComfyUI
 
 AryaInfer can generate and edit pictures with a [ComfyUI](https://github.com/comfyanonymous/ComfyUI) on this machine
 or on another one. The chat page never talks to ComfyUI directly: every call goes through AryaInfer's own server,
@@ -14,7 +14,7 @@ you did not start") are adapted from that plugin (Apache-2.0), and the six graph
 
 | route | best for | notes |
 | --- | --- | --- |
-| **Desktop app** | most people on Windows | https://comfy.org/download — starts on `127.0.0.1:8188` |
+| **Desktop app** | most people on Windows | https://comfy.org/download â€” starts on `127.0.0.1:8188` |
 | **Windows portable** | a self-contained folder | unzip and run its launcher; point AryaInfer at that folder if it should start it |
 | **comfy-cli** | scripted installs | `pip install "comfy-cli>=1.14.0"`, then `comfy install` |
 | **Manual** | custom PyTorch builds | clone ComfyUI, install `requirements.txt`, `python main.py` |
@@ -104,13 +104,13 @@ graph whose node classes or model files the server does not have, before a run f
 
 `launch.mode` says how Start reaches this machine's ComfyUI:
 
-- `auto` — the named scheduled task if Task Scheduler has one, else `python main.py --port <port>` in the configured
+- `auto` â€” the named scheduled task if Task Scheduler has one, else `python main.py --port <port>` in the configured
   folder, else "external": AryaInfer says so and starts nothing;
-- `scheduled-task` — `schtasks /run` and `/end` on `launch.task_name` (the way ComfyUI Desktop is often run);
-- `process` — `python main.py` from `launch.server_dir` with `launch.python_exe`.
+- `scheduled-task` â€” `schtasks /run` and `/end` on `launch.task_name` (the way ComfyUI Desktop is often run);
+- `process` â€” `python main.py` from `launch.server_dir` with `launch.python_exe`.
 
 Stop only ever ends a python process whose command line runs ComfyUI's `main.py` on the configured port, or the
-scheduled task it started. **It never kills whatever else holds that port** — on this machine Tailscale listens there
+scheduled task it started. **It never kills whatever else holds that port** â€” on this machine Tailscale listens there
 for the tailnet, and killing that would break remote access rather than stop ComfyUI. Start is refused for a remote
 endpoint; start it there.
 
@@ -126,6 +126,11 @@ through the same code the sd-cli images use (`serve/gputurn.py`):
 | `unload` | save the conversation, stop the engine, run the job, and restore the conversation after the next start |
 
 `need_mib` is what the job is planned with (default 10 GiB; the shipped graphs fit in about that on a 16 GB card).
+
+The same card runs both engines, so AryaInfer hands it back and forth: starting the text engine asks ComfyUI to unload
+its weights (`POST /free`) first, and ComfyUI reloads them from disk on the next picture. Without that, the text engine
+loads into whatever ComfyUI left free and runs partly on the CPU - measured on this host as 30 tok/s decode and 57 tok/s
+prefill for Qwen3.8 27B, against 57 tok/s and 882 tok/s with the card to itself.
 
 ## Where the images go
 
@@ -149,3 +154,4 @@ does to MCP and web search: the image endpoints answer JSON from this page only,
 | a job ends with a workflow error | ComfyUI's own message is shown as-is | read it: a missing model and a bad node link look different there |
 | generation is slow or fails on a big prompt | the card ran out of room | lower `need_mib` won't help; unload other GPU users, or use a smaller graph |
 | a create graph refuses a size | its size is baked | use the graph for that size, or add `{{width}}`/`{{height}}` and re-import |
+

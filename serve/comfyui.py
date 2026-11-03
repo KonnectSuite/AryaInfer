@@ -663,6 +663,15 @@ class ComfyClient:
         subfolder = answer.get("subfolder") if isinstance(answer.get("subfolder"), str) else ""
         return f"{subfolder}/{stored}" if subfolder else stored
 
+    def free_memory(self) -> None:
+        """Ask ComfyUI to unload its weights (POST /free).  Its models reload from disk on the next picture, which is
+        the price of giving the card back to the text engine."""
+        try:
+            with self._open("free", b'{"unload_models": true, "free_memory": true}', timeout=30) as r:
+                r.read(1024)
+        except ComfyError:
+            pass
+
     def interrupt(self) -> None:
         with contextlib.suppress(ComfyError):
             self._json("interrupt", {})
@@ -1039,6 +1048,12 @@ class ComfyHub:
 
     def need_mib(self, job: dict) -> int:
         return int(self.settings["free_vram"]["need_mib"])
+
+    def free_memory(self) -> None:
+        """Give the GPU back to the text engine: ComfyUI's weights come out of VRAM when this machine is the one
+        running both, and come back from disk on the next picture.  Another machine's ComfyUI is left alone."""
+        if self.configured() and is_local(self.settings["base_url"]):
+            self.client(30).free_memory()
 
     def configured(self) -> bool:
         return bool(self.settings.get("base_url"))

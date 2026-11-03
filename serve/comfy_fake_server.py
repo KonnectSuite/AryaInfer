@@ -159,6 +159,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/interrupt":
             server.interrupts += 1
             return self._json(200, {})
+        if path == "/free":
+            server.freed += 1
+            return self._json(200, {})
         return self._json(404, {"error": "not found"})
 
 
@@ -169,6 +172,7 @@ def comfy_server(mode: str = "ok", delay: float = 0.0):
     httpd.uploads: list[dict] = []
     httpd.deleted: list[str] = []
     httpd.interrupts = 0
+    httpd.freed = 0
     httpd.mode, httpd.delay = mode, delay
     httpd.missing_node = None
     httpd.missing_model = None
@@ -192,6 +196,7 @@ if __name__ == "__main__":
     else:
         httpd = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
         httpd.prompts, httpd.uploads, httpd.deleted, httpd.interrupts = {}, [], [], 0
+        httpd.freed = 0
         httpd.mode, httpd.delay, httpd.missing_node, httpd.missing_model = "ok", 0.0, None, None
         print(f"listening on http://127.0.0.1:{args.port}", flush=True)
         httpd.serve_forever()

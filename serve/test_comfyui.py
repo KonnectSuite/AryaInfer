@@ -320,6 +320,14 @@ class ToolCall(unittest.TestCase):
         self.assertTrue(result["ok"], result)
         self.assertEqual(len(self.httpd.uploads), 1)
 
+    def test_the_card_is_handed_back_to_the_engine(self):
+        # the text engine and ComfyUI share one GPU: loading the engine asks ComfyUI to let go first
+        self.hub.free_memory()
+        self.assertEqual(self.httpd.freed, 1)
+        remote = hub_for(self.tmp.name, "https://comfy.example.org")
+        remote.free_memory()
+        self.assertEqual(self.httpd.freed, 1)          # another machine's ComfyUI is left alone
+
     def test_a_call_answers_with_the_addresses(self):
         result = self.hub.call("generate_image", {"prompt": "a lighthouse", "count": 1})
         self.assertTrue(result["ok"], result)

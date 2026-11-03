@@ -4060,6 +4060,11 @@ class Service:
                         trace["queue_s"] += round(loading - waiting, 3)
                         trace["state"] = "loading"
                 try:
+                    # ComfyUI's weights sit in the same card: ask it to let go before the engine takes its place,
+                    # or the engine sizes itself against what is left and runs partly on the CPU (30 tok/s instead of
+                    # 60-80, and a prefill at a tenth).  Its models reload from disk on the next picture.
+                    if self.comfy is not None and not self.loaded():
+                        self.comfy.free_memory()
                     self.ensure_loaded()
                 finally:
                     if trace is not None:

@@ -10,7 +10,7 @@
   "--vram-reserve-mib",
   "512",
   "--prompt-batch",
-  "256"
+  "2048"
  ],
  "cwd": "$INSTALL",
  "tokenizer": "$DATA\\models\\qwen38-27b\\tokenizer",
