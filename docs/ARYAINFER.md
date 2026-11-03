@@ -1,6 +1,6 @@
-# AryaStrata
+# AryaInfer
 
-AryaStrata is KonnectSuite's fork of [PolyStrata](https://github.com/VecSzn/PolyStrata),
+AryaInfer is KonnectSuite's fork of [PolyStrata](https://github.com/VecSzn/PolyStrata),
 which is a fork of [Niko1221's original Strata](https://github.com/Niko1221/Strata).
 See [credits](../CREDITS.md). This fork will
 track configuration and changes against measurements on our own hardware.
@@ -175,7 +175,7 @@ were moved or redownloaded. The local removal inventory is saved under
 
 ## New-fork results
 
-AryaStrata's first Qwen inference checks passed on October 17, 2026:
+AryaInfer's first Qwen inference checks passed on October 17, 2026:
 
 - Release engine 0.1.45 (CUDA 13.0, including sm_89) installed in this checkout.
 - Existing Qwen3.8 IQ3_XXS shards, prepared pack and MTP data reused in place.
@@ -271,8 +271,35 @@ FreeToken directory in Ubuntu approximately **21.85 GiB**, about **53.38 GiB**
 combined. These are file-byte totals; deleting files in WSL does not necessarily
 shrink its Windows virtual disk immediately. No WSL disk compaction was run.
 
-The active AryaStrata Qwen downloads, pack, tokenizer, MTP data and vision
+The active AryaInfer Qwen downloads, pack, tokenizer, MTP data and vision
 projector were preserved. Its server remained loaded with image input enabled
 and a 262,144-token context ceiling after cleanup. NInfer and image-generation
 applications were outside this removal. Repository dependencies and historical
 source integrations are not standalone installed inference engines.
+
+## Engine 0.1.56 and DFlash2 (2026-11-02)
+
+The native Strata engine was updated to **0.1.56** from the v0.2.10 release, installed side by side in
+`C:\AI\Strata-data\engines\strata-0.1.56` (0.1.54 kept for rollback).  The three native Flash-Next run configs
+(base, Swift 1.5 and Swift 1.5 abliterated) point at 0.1.56 and keep a `.bak-0.1.54` copy.  DFlash2 is on for them
+with `--draft dflash2 --draft-model C:\AI\Strata-data\models\dflash2-flash-next\Qwen3.8-Flash-Next.dflash2.pack`,
+a pack built by `tools/dflash2_pack.py` from `incoai/Qwen3.8-Flash-Next-DFlash2` (Q8_0, 81 tensors, 760 MiB).  The
+engine reports a 106,299-token draft head (178.4 MiB) and the drafter at 992 MiB of VRAM, windows up to 6 tokens and
+no MTP layer.
+
+Measured on this host the same day, Flash-Next IQ3_XXS, 256 greedy tokens on a short prompt:
+
+| engine | decode | drafts accepted |
+| --- | --- | --- |
+| 0.1.54 + MTP | 75.8 tok/s | 134 of 206 |
+| 0.1.56 + DFlash2 | 77.6 tok/s | 129 of 192 |
+
+Within noise at that length: the update's value here is the 0.1.56 fix list (tool calls on the Anthropic and
+Responses routes, the sampling-penalty window, parked conversations, the dequantizer NaN fix), not decode.  A
+longer-context A/B has not been run.
+
+Rollback: restore the `.bak-0.1.54` configs and restart.
+
+Known follow-ups: `setup.py` still expects the prebuilt asset `strata-windows-x64.zip`, while v0.2.10 publishes
+`strata-engine-0.1.56-windows-x86_64-cuda-cuda13.tar.gz`, so a fresh setup needs the new asset naming; and the fork's
+engine source (0.1.45) still needs the source merge to the 0.1.56 commit `06698c674`.
