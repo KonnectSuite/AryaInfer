@@ -6888,7 +6888,7 @@ def make_handler(svc: Service):
                 if req.get("stream"):
                     self._sse()
                     while True:
-                        chunk = upstream.read(8192)
+                        chunk = upstream.read1(8192)   # read1: what has arrived, not 8192 bytes or the end
                         if not chunk:
                             break
                         self.wfile.write(chunk)
