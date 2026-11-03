@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AryaCode</title>
+<title>AryaInfer</title>
 <link rel="icon" href="web/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="web/tokens.css">
 <link rel="stylesheet" href="web/components.css">
@@ -19,7 +19,7 @@
 </head>
 <body>
 <header class="st-header">
-  <span class="st-header__brand"><img class="st-header__mark" src="web/brand-mark.svg" alt="AryaCode mark">AryaCode</span>
+  <span class="st-header__brand"><img class="st-header__mark" src="web/brand-mark.svg" alt="AryaInfer mark">AryaInfer</span>
   <nav class="st-tabs" role="tablist" aria-label="Views">
     <button class="st-tab" role="tab" id="tab-btn-chat" aria-controls="view-chat" aria-selected="true" data-tab="chat">
       <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-chat"/></svg>Chat</button>
@@ -166,11 +166,163 @@
         <p class="muted small cc-note" id="cc-note"></p>
       </div>
 
-      <div class="st-card mcp-card" id="mcp-card" hidden>
+      <div class="st-card mcp-card" id="mcp-card">
         <div class="req-head"><span class="card-title">MCP servers</span><span class="muted small" id="mcp-sum"></span></div>
         <div class="mcp-list" id="mcp-list"></div>
+        <form class="mcp-form" id="mcp-form" hidden>
+          <div class="st-field">
+            <label class="st-label" for="mcp-name">Name</label>
+            <input class="st-input" id="mcp-name" placeholder="files" autocomplete="off" spellcheck="false">
+            <span class="muted small">Letters, digits, "-" and "_"; the model sees it in front of each tool</span>
+          </div>
+          <div class="st-field">
+            <label class="st-label" for="mcp-kind">How AryaInfer reaches it</label>
+            <select class="st-input" id="mcp-kind">
+              <option value="stdio">A program it starts (stdio)</option>
+              <option value="http">An address (Streamable HTTP)</option>
+            </select>
+          </div>
+          <div id="mcp-stdio">
+            <div class="st-field">
+              <label class="st-label" for="mcp-command">Program</label>
+              <input class="st-input" id="mcp-command" placeholder="npx" autocomplete="off" spellcheck="false">
+              <span class="muted small">Found on PATH as usual; <code>npx</code> servers need Node.js</span>
+            </div>
+            <div class="st-field">
+              <label class="st-label" for="mcp-args">Arguments <output>one per line</output></label>
+              <textarea class="st-input" id="mcp-args" rows="4" spellcheck="false"
+                        placeholder="-y&#10;@modelcontextprotocol/server-filesystem&#10;C:\Users\me\Documents\notes"></textarea>
+            </div>
+            <div class="st-field">
+              <label class="st-label" for="mcp-env">Environment <output>KEY=VALUE, one per line</output></label>
+              <textarea class="st-input" id="mcp-env" rows="3" spellcheck="false" placeholder="MCP_TOKEN=..."></textarea>
+              <span class="muted small">A value shown as ******** stays as it is</span>
+            </div>
+            <div class="st-field">
+              <label class="st-label" for="mcp-cwd">Working folder <output>optional</output></label>
+              <input class="st-input" id="mcp-cwd" placeholder="Where the program starts" autocomplete="off" spellcheck="false">
+            </div>
+          </div>
+          <div id="mcp-http" hidden>
+            <div class="st-field">
+              <label class="st-label" for="mcp-url">Address</label>
+              <input class="st-input" id="mcp-url" placeholder="http://127.0.0.1:3000/mcp" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="st-field">
+              <label class="st-label" for="mcp-headers">Headers <output>Name: value, one per line</output></label>
+              <textarea class="st-input" id="mcp-headers" rows="3" spellcheck="false"
+                        placeholder="Authorization: Bearer ..."></textarea>
+            </div>
+          </div>
+          <div class="toggle-row"><span>Disabled<br><span class="muted small">kept here, not offered to the model</span></span>
+            <button class="st-toggle" id="mcp-disabled" role="switch" aria-checked="false" aria-label="Disabled"></button></div>
+        </form>
+        <div class="cfg-actions">
+          <button class="st-btn st-btn--secondary" id="mcp-add" type="button">Add a server</button>
+          <button class="st-btn st-btn--primary" id="mcp-save" type="button" hidden>Save</button>
+          <button class="st-btn st-btn--secondary" id="mcp-cancel" type="button" hidden>Cancel</button>
+          <span class="muted small" id="mcp-msg" role="status"></span>
+        </div>
         <p class="muted small mcp-note">Their tools run on this PC with your rights, when the model decides to call them
-          (in this page's chat only; switch it off in Sampling).</p>
+          (in this page's chat only; switch it off in Sampling). A server added here starts at once, without a restart;
+          the list is kept in <code>mcp-servers.json</code> beside the run config.</p>
+      </div>
+
+      <div class="st-card mcp-card" id="search-card">
+        <div class="req-head"><span class="card-title">Web search (SearXNG)</span>
+          <span class="muted small" id="search-sum"></span></div>
+        <p class="muted small">Your own <a href="https://docs.searxng.org" target="_blank" rel="noopener noreferrer">SearXNG</a>
+          instance, on this PC or a remote one. With it set up and on, the model gets <code>web_search</code> (a query,
+          then titles, addresses and snippets) and <code>read_page</code> (the text of one address from those results).
+          The instance must answer JSON: <code>search.formats</code> in its <code>settings.yml</code> needs
+          <code>json</code> next to <code>html</code>.</p>
+        <form class="mcp-form" id="search-form">
+          <div class="toggle-row"><span>Use web search<br><span class="muted small">offered in this page's chat</span></span>
+            <button class="st-toggle" id="search-enabled" role="switch" aria-checked="false" aria-label="Use web search"></button></div>
+          <div class="st-field">
+            <label class="st-label" for="search-url">Instance URL</label>
+            <input class="st-input" id="search-url" placeholder="http://127.0.0.1:8080" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="st-field">
+            <label class="st-label" for="search-auth">Authentication</label>
+            <select class="st-input" id="search-auth">
+              <option value="none">None (a LAN or Tailnet instance)</option>
+              <option value="bearer">Bearer token</option>
+              <option value="basic">User name and password</option>
+              <option value="header">Custom headers</option>
+            </select>
+          </div>
+          <div id="search-bearer" hidden>
+            <div class="st-field">
+              <label class="st-label" for="search-token">Token</label>
+              <input class="st-input" id="search-token" type="password" autocomplete="off" placeholder="********">
+              <span class="muted small">A value shown as ******** stays as it is</span>
+            </div>
+          </div>
+          <div id="search-basic" hidden>
+            <div class="st-field">
+              <label class="st-label" for="search-user">User name</label>
+              <input class="st-input" id="search-user" autocomplete="off">
+            </div>
+            <div class="st-field">
+              <label class="st-label" for="search-pass">Password</label>
+              <input class="st-input" id="search-pass" type="password" autocomplete="off" placeholder="********">
+            </div>
+          </div>
+          <div id="search-headers" hidden>
+            <div class="st-field">
+              <label class="st-label" for="search-headers-text">Headers <output>Name: value, one per line</output></label>
+              <textarea class="st-input" id="search-headers-text" rows="3" spellcheck="false"
+                        placeholder="Authorization: Bearer ..."></textarea>
+            </div>
+          </div>
+          <div class="st-field">
+            <label class="st-label" for="search-language">Language <output>empty = the instance's</output></label>
+            <input class="st-input" id="search-language" placeholder="en" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="st-field">
+            <label class="st-label" for="search-safe">Safe search</label>
+            <select class="st-input" id="search-safe">
+              <option value="">The instance’s default</option>
+              <option value="0">Off</option>
+              <option value="1">Moderate</option>
+              <option value="2">Strict</option>
+            </select>
+          </div>
+          <div class="st-field">
+            <label class="st-label" for="search-categories">Categories <output>empty = general</output></label>
+            <input class="st-input" id="search-categories" placeholder="general, news" autocomplete="off">
+          </div>
+          <div class="st-field">
+            <label class="st-label" for="search-time">Time range</label>
+            <select class="st-input" id="search-time">
+              <option value="">Any time</option>
+              <option value="day">Past day</option>
+              <option value="week">Past week</option>
+              <option value="month">Past month</option>
+              <option value="year">Past year</option>
+            </select>
+          </div>
+          <div class="st-field">
+            <label class="st-label" for="search-timeout">Timeout <output>seconds</output></label>
+            <input class="st-input" id="search-timeout" type="number" min="2" max="60" step="1" placeholder="20">
+          </div>
+          <div class="st-field">
+            <label class="st-label" for="search-max">Results per search <output>1-20</output></label>
+            <input class="st-input" id="search-max" type="number" min="1" max="20" step="1" placeholder="8">
+          </div>
+          <div class="toggle-row"><span>Offer the page reader<br><span class="muted small"><code>read_page</code>: one
+            address from a search result, as readable text</span></span>
+            <button class="st-toggle" id="search-readpage" role="switch" aria-checked="true" aria-label="Offer the page reader"></button></div>
+          <div class="toggle-row"><span>Read pages on this PC and the LAN<br><span class="muted small">otherwise only
+            public addresses are read (safer)</span></span>
+            <button class="st-toggle" id="search-local" role="switch" aria-checked="false" aria-label="Read pages on this PC and the LAN"></button></div>
+        </form>
+        <div class="cfg-actions">
+          <button class="st-btn st-btn--primary" id="search-save" type="button">Save</button>
+          <button class="st-btn st-btn--secondary" id="search-test" type="button">Test</button>
+          <span class="muted small" id="search-msg" role="status"></span>
+        </div>
       </div>
     </div>
   </section>
@@ -200,12 +352,12 @@
         <div class="toggle-row"><span>Dark theme</span>
           <button class="st-toggle" id="dark-toggle" role="switch" aria-checked="false" aria-label="Dark theme"></button></div>
         <p class="muted small">Chats, settings and the key are kept in this browser only.
-          <a href="https://github.com/KonnectSuite/AryaStrata" target="_blank" rel="noopener noreferrer">AryaStrata on GitHub</a></p>
+          <a href="https://github.com/KonnectSuite/AryaStrata" target="_blank" rel="noopener noreferrer">AryaInfer on GitHub</a></p>
       </div>
       <div class="st-card">
         <span class="card-title">Credits and host findings</span>
-        <p class="muted">The interface, wordmark, fonts and colors come from the AryaCode brand kit.
-          AryaStrata is a fork of <a href="https://github.com/VecSzn/PolyStrata" target="_blank" rel="noopener noreferrer">PolyStrata</a>,
+        <p class="muted">The interface, wordmark, fonts and colors come from the AryaAI brand kit.
+          AryaInfer is a fork of <a href="https://github.com/VecSzn/PolyStrata" target="_blank" rel="noopener noreferrer">PolyStrata</a>,
           which is a fork of <a href="https://github.com/Niko1221/Strata" target="_blank" rel="noopener noreferrer">Niko1221â€™s original Strata</a>.
           Thanks to both projects and their contributors.</p>
         <p class="muted">Configured for our i9-14900KF, RTX 4070 Ti SUPER 16 GB, 64 GB RAM, Windows 11 host.
@@ -239,7 +391,7 @@
       <div class="st-card cfg-card" id="cfg-card" hidden>
         <div class="req-head"><span class="card-title">Model settings</span><span class="muted small" id="cfg-file"></span></div>
         <p class="muted small">Kept in the model's run config for every client. An empty field is the default. They
-          take effect the next time the model starts (close AryaCode's window and start it again).</p>
+          take effect the next time the model starts (close AryaInfer's window and start it again).</p>
         <form class="cfg-form" id="cfg-form"></form>
         <div class="cfg-actions"><button class="st-btn st-btn--primary" id="cfg-save" type="button">Save</button>
           <span class="muted small" id="cfg-msg" role="status"></span></div>
@@ -287,6 +439,9 @@
     <div class="toggle-row" id="mcp-row" hidden><span>Use tools from MCP servers<br><span class="muted small"
       id="mcp-row-sub">the model may call them while it answers</span></span>
       <button class="st-toggle" id="s-mcp" role="switch" aria-checked="true" aria-label="Use tools from MCP servers"></button></div>
+    <div class="toggle-row" id="search-row" hidden><span>Use web search<br><span class="muted small"
+      id="search-row-sub">SearXNG</span></span>
+      <button class="st-toggle" id="s-search" role="switch" aria-checked="true" aria-label="Use web search"></button></div>
     <div class="toggle-row" id="esp-row" hidden><span>Experimental speed projection<br><span class="muted small">the
       engine's control vector; off = the stock model. Switching reads the chat again once</span></span>
       <button class="st-toggle" id="s-esp" role="switch" aria-checked="true" aria-label="Experimental speed projection"></button></div>

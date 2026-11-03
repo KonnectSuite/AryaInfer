@@ -65,8 +65,11 @@ from serve.frontend import (THINK_END, EFFORT, ChatTemplate, Event, OutputParser
                             budget_effort, effort_levels, forced_call, gemma_model_turn, images_of, literal_tags,
                             mark_think_literals, openai_to_messages, tool_choice_of, unmark_think_literals,
                             with_effort_instruction)
-from serve.mcp import McpCancelled, hub_from_config  # noqa: E402
+from serve.mcp import McpCancelled, check_name, check_server, hub_for, merge_config  # noqa: E402
+from serve.toolhub import ToolHub  # noqa: E402
+from serve import websearch  # noqa: E402
 from serve import runconfig  # noqa: E402
+from serve import webconf  # noqa: E402
 from serve import models as registry  # noqa: E402
 from serve.model_gate import Cancelled, ModelGate  # noqa: E402
 from serve import logit_bias as bias_api  # noqa: E402
@@ -3274,7 +3277,9 @@ class Service:
         self.last_request_at = None                      # when a request last started or finished
         self.started_at = time.time()
         self.status_lock = threading.Lock()
-        self.mcp = None                                  # serve/mcp.py's McpHub when MCP servers are configured
+        self.mcp = None                                  # serve/mcp.py's McpHub (always set: the page adds servers)
+        self.search = None                               # serve/websearch.py's SearchHub when SearXNG is set up
+        self.search_path = None                          # the web search settings file (websearch.json, or --search-config)
         # sharing the GPU with other programs (all off by default): unload the engine after this many idle seconds,
         # only start it again when this much VRAM is free, and run this command first (e.g. to unload another
         # server's model); the next request after an unload starts the engine again
@@ -6068,7 +6073,13 @@ def make_handler(svc: Service):
             if path == "/mcp":
                 # the MCP servers, their state and tools (the web app's switch and Monitor card)
                 if self._authorized():
-                    self._json(200, svc.mcp.status() if svc.mcp else {"servers": [], "tools": 0})
+                    self._json(200, svc.mcp.status() if svc.mcp else {"servers": [], "tools": 0},
+                               headers={"Cache-Control": "no-store"})
+                return
+            if path == "/search":
+                # the web search card: the settings (secrets masked), whether they are in use, the tools offered
+                if self._authorized():
+                    self._json(200, self._search_view(), headers={"Cache-Control": "no-store"})
                 return
             if path == "" or (path == "/api-monitor" and svc.api_monitor):
                 body = (ROOT / "serve" / "web" / ("monitor.html" if path else "index.html")).read_bytes()
@@ -6170,6 +6181,12 @@ def make_handler(svc: Service):
                 return
             if path == "/config":
                 self._config_post()
+                return
+            if path == "/mcp":
+                self._mcp_post()
+                return
+            if path == "/search":
+                self._search_post()
                 return
             if path in ("/api/models/load", "/api/models/unload"):
                 self._models_post(path)
@@ -6524,6 +6541,196 @@ def make_handler(svc: Service):
                 print(f"[strata] the Settings view changed {', '.join(changed)} in {Path(svc.config_path).name} "
                       f"(the earlier file: {bak.name}); used from the next start", flush=True)
             self._json(200, {**runconfig.view(new, svc.config_path), "changed": changed})
+
+        def _mcp_post(self):
+            """POST /mcp: the Monitor tab's editor - add, change, disable, remove or restart one MCP server.  JSON
+            from AryaStrata's own page only, as /config (the key is checked before).  The change reaches the page's
+            own file (mcp-servers.json) first, then the running servers: only the one it names starts or stops."""
+            body = self._body()
+            if not self._own_page("MCP servers can be changed"):
+                return
+            try:
+                req = json.loads(body or b"{}")
+                if not isinstance(req, dict):
+                    raise ValueError("send a JSON object")
+                changed = self._mcp_change(req)
+            except ValueError as e:
+                self._json(400, {"error": {"type": "invalid_request_error", "message": str(e)}})
+                return
+            except OSError as e:
+                self._json(500, {"error": {"type": "server_error",
+                                           "message": f"the MCP servers cannot be written: {e}"}})
+                return
+            print(f"[strata] the Monitor tab: {', '.join(changed)} (MCP servers)", flush=True)
+            self._json(200, {**(svc.mcp.status() if svc.mcp is not None else {"servers": [], "tools": 0}),
+                             "changed": changed})
+
+        def _mcp_change(self, req: dict) -> list[str]:
+            """One change of the servers the page manages -> what changed.  ValueError carries the sentence the page
+            shows for a 400; nothing is written or started then.  Only a server the page added may be changed here."""
+            hub = svc.mcp
+            if hub is None:
+                raise ValueError("this server has no MCP servers configured")
+            actions = [k for k in ("add", "update", "remove", "reconnect") if k in req]
+            if len(actions) != 1:
+                raise ValueError('send one of: {"add": {"<name>": {...}}}, {"update": {"name": "<name>", "config": '
+                                 '{...}}}, {"remove": ["<name>"]}, {"reconnect": "<name>"}')
+            action, value = actions[0], req[actions[0]]
+            path, names = webconf.path_for(svc.config_path), []
+            with svc.config_lock:                              # the file first: a change that would not survive a
+                stored = webconf.load(path)                    # restart is not applied to the running servers either
+                if action == "remove":
+                    names = value if isinstance(value, list) else [value]
+                    if not names or not all(isinstance(n, str) and n for n in names):
+                        raise ValueError('"remove" names at least one server: {"remove": ["<name>"]}')
+                    for name in names:
+                        self._mcp_owned(hub, stored, name)
+                    for name in names:
+                        stored.pop(name, None)
+                    webconf.save(path, stored)
+                elif action == "add":
+                    if not isinstance(value, dict) or len(value) != 1:
+                        raise ValueError('"add" is one server: {"add": {"<name>": {...}}}')
+                    (name, cfg), = value.items()
+                    name = check_name(name)
+                    if name in hub.servers or name in stored:
+                        raise ValueError(f"an MCP server named {name!r} is already configured")
+                    stored[name] = check_server(name, cfg)
+                    webconf.save(path, stored)
+                elif action == "update":
+                    name = value.get("name") if isinstance(value, dict) else None
+                    cfg = value.get("config") if isinstance(value, dict) else None
+                    if not isinstance(name, str) or not isinstance(cfg, dict):
+                        raise ValueError('"update" is {"name": "<name>", "config": {...}}')
+                    self._mcp_owned(hub, stored, name)
+                    stored[name] = check_server(name, merge_config(cfg, stored[name]))
+                    webconf.save(path, stored)
+                else:                                          # reconnect: nothing is written, the server restarts
+                    if not isinstance(value, str) or not value:
+                        raise ValueError('"reconnect" is a server name: {"reconnect": "<name>"}')
+                    self._mcp_owned(hub, stored, value)
+            # the running servers, outside the config lock: stopping one may wait on its process or its session
+            if action == "remove":
+                for name in names:
+                    hub.remove_server(name)
+                return [f"removed {name}" for name in names]
+            if action == "add":
+                hub.add_server(name, stored[name], "managed")
+                return [f"added {name}"]
+            if action == "update":
+                hub.replace_server(name, stored[name])
+                return [f"changed {name}"]
+            hub.reconnect(value)
+            return [f"restarted {value}"]
+
+        @staticmethod
+        def _mcp_owned(hub, stored: dict, name: str) -> None:
+            """The server must be one the page manages; another source is named, so the reader knows where it lives."""
+            if name not in hub.servers:
+                raise ValueError(f"there is no MCP server named {name!r}")
+            source = hub.source_of(name)
+            if source != "managed":
+                where = "the run config" if source == "config" else "--mcp-config"
+                raise ValueError(f"the MCP server {name!r} comes from {where}; change it there")
+            if name not in stored:
+                raise ValueError(f"the MCP server {name!r} is not in {webconf.FILE}")
+
+        def _search_view(self) -> dict:
+            """GET /search: the web search settings (secrets masked), whether they are in use, and the tools offered.
+
+            The settings shown are the ones in force - the run config's block with the page's file over it, as the
+            hub was built - so the card never reports a value the server is not using."""
+            path = Path(svc.search_path) if svc.search_path else websearch.path_for(svc.config_path)
+            error = ""
+            if svc.search is not None:
+                merged, configured = dict(svc.search.settings), svc.search.configured()
+            else:
+                merged = {**websearch.DEFAULTS, **self._config_block("search"), **websearch.read_settings(path)}
+                configured = False
+                try:
+                    merged = websearch.normalize(merged)
+                except ValueError as e:
+                    error = str(e)
+            out = {"configured": configured, "file": path.name,
+                   "tools": [t["name"] for t in (svc.search.tools() if svc.search is not None else websearch.TOOLS)],
+                   "settings": websearch.public_settings({k: v for k, v in merged.items() if k in websearch.DEFAULTS})}
+            if error:
+                out["error"] = error
+            return out
+
+        @staticmethod
+        def _config_block(key: str) -> dict:
+            """One object block of the run config (as the server read it at its start, or now)."""
+            if not svc.config_path:
+                return {}
+            try:
+                value = runconfig.load(svc.config_path).get(key)
+            except (OSError, ValueError):
+                return {}
+            return value if isinstance(value, dict) else {}
+
+        def _search_post(self):
+            """POST /search: the card's Save (the whole settings object) or Test (one real query).  JSON from
+            AryaInfer's own page only, as /config; a saved change is used from the next request on."""
+            body = self._body()
+            if not self._own_page("web search can be changed"):
+                return
+            try:
+                req = json.loads(body or b"{}")
+                if not isinstance(req, dict):
+                    raise ValueError("send a JSON object")
+                if "test" in req:
+                    self._search_test(req["test"])
+                    return
+                raw = req.get("set")
+                if not isinstance(raw, dict):
+                    raise ValueError('send {"set": {...}} to save the settings, or {"test": "a query"} to try them')
+                path = Path(svc.search_path) if svc.search_path else websearch.path_for(svc.config_path)
+                with svc.config_lock:
+                    settings = websearch.normalize(websearch.merge_secrets(raw, websearch.read_settings(path)))
+                    websearch.write_settings(path, settings)
+            except ValueError as e:
+                self._json(400, {"error": {"type": "invalid_request_error", "message": str(e)}})
+                return
+            except OSError as e:
+                self._json(500, {"error": {"type": "server_error",
+                                           "message": f"the web search settings cannot be written: {e}"}})
+                return
+            svc.search = websearch.SearchHub(settings) if settings["enabled"] and settings["base_url"] else None
+            print(f"[strata] web search {'on: ' + settings['base_url'] if svc.search is not None else 'off'}"
+                  " (Monitor > Web search)", flush=True)
+            self._json(200, self._search_view())
+
+        def _search_test(self, spec):
+            """One real search: the count, the time, the engines that answered and the first address (or why not)."""
+            if isinstance(spec, dict):
+                query, raw = spec.get("query"), spec.get("settings")
+            else:
+                query, raw = spec, None
+            query = query.strip() if isinstance(query, str) and query.strip() else "AryaInfer web search test"
+            path = Path(svc.search_path) if svc.search_path else websearch.path_for(svc.config_path)
+            try:
+                if isinstance(raw, dict):                       # the card's fields, saved or not
+                    settings = websearch.normalize(websearch.merge_secrets(raw, websearch.read_settings(path)))
+                elif svc.search is not None:
+                    settings = svc.search.settings
+                else:
+                    raise ValueError("there is nothing to test yet: set the instance's URL and save it")
+            except ValueError as e:
+                self._json(400, {"error": {"type": "invalid_request_error", "message": str(e)}})
+                return
+            started = time.monotonic()
+            try:
+                text, _, _, diagnostic = websearch.search(settings, query, None)
+            except websearch.WebSearchError as e:
+                self._json(200, {"ok": False, "query": query, "results": 0, "error": str(e)})
+                return
+            self._json(200, {"ok": True, "query": query, "results": diagnostic.get("results", 0),
+                             "engines": diagnostic.get("engines") or [],
+                             "unresponsive": diagnostic.get("unresponsive") or [],
+                             "first_url": diagnostic.get("first_url", ""),
+                             "ms": int((time.monotonic() - started) * 1000), "text": text[:3000]})
+
         def _foreign_origin(self) -> bool:
             """A web page of another origin sent this.  The Origin must be this server's own address (host and port),
             or an origin the config trusts (trusted_origins: the web app behind a reverse proxy or tunnel); no Origin
@@ -6653,30 +6860,39 @@ def make_handler(svc: Service):
                 tools = None
             force = forced_call(req.get("tool_choice"), tools)      # a bad value is a 400 before anything is sent
             messages, validator = prepare_format(req.get("response_format"), messages)
-            if validator is not None and (tools or req.get("strata_mcp")):
-                raise ValueError("structured response_format with tools/MCP is not supported")
+            if validator is not None and (tools or req.get("strata_mcp") or req.get("strata_search")):
+                raise ValueError("structured response_format with tools/MCP/web search is not supported")
             svc.load()
             max_req = max_new = int(req.get("max_completion_tokens") or req.get("max_tokens") or 0)   # 0/-1: the rest
             bias_api.validate_request(req, svc.engine, len(getattr(svc.tok, "tokens", ())) or None)
-            use_mcp = req.get("strata_mcp") is True and svc.mcp is not None      # the web app's opt-in (serve/mcp.py)
+            # The web app's opt-in: "strata_mcp" for the MCP servers (serve/mcp.py), "strata_search" for the SearXNG
+            # tools (serve/websearch.py).  Either, both or neither; nothing is offered to a request that asks for none.
+            use_mcp = req.get("strata_mcp") is True and svc.mcp is not None
+            use_search = req.get("strata_search") is True and svc.search is not None and svc.search.configured()
             own = {t.get("name") for t in tools or [] if isinstance(t, dict)}   # #592: a second line of defence
-            if use_mcp:
-                if not self._own_page("MCP tools can be used"):   # tools run with the user's rights on this PC
+            providers = [p for p in (svc.mcp if use_mcp else None, svc.search if use_search else None) if p is not None]
+            hub, extra = None, []
+            if providers:
+                if not self._own_page("MCP tools and web search can be used"):   # they run with the user's rights
                     return
-                svc.mcp.wait(10)                                  # servers still starting (only right after start)
-                extra = svc.mcp.template_tools(exclude=own)       # the request's own tools win a name clash
-                use_mcp = bool(extra)
-                tools = (tools or []) + extra or None
-            if force and use_mcp:
-                raise ValueError("a forced tool_choice with MCP tools is not supported")
+                for p in providers:
+                    p.wait(10)                                        # servers still starting (right after start only)
+                hub = providers[0] if len(providers) == 1 else ToolHub(providers)
+                extra = hub.template_tools(exclude=own)               # the request's own tools win a name clash
+                if not extra:
+                    hub = None
+                else:
+                    tools = (tools or []) + extra or None
+            if force and hub is not None:
+                raise ValueError("a forced tool_choice with MCP tools or web search is not supported")
             svc.reasoning_budget(req)                         # a bad value is a 400 before anything is sent
             stop_strings(req)                                 # ... and so is a bad stop / stop_sequences
             check_request_sampling(req)                       # ... and a sampling field of the wrong type
             cancel = self.cancel                             # watched since _post() (#430 #431 #1999)
             ids, thinking, max_new = svc.prepare(messages, tools, kw, max_new, force=force, req=req, cancel=cancel)
             _debug_req("openai", req, messages, tools, max_new, thinking, len(ids))
-            run = run_with_mcp(svc, svc.mcp, messages, tools, kw, ids, thinking, max_new, max_req, req, cancel,
-                               {t["name"] for t in extra}) if use_mcp else None
+            run = run_with_mcp(svc, hub, messages, tools, kw, ids, thinking, max_new, max_req, req, cancel,
+                               {t["name"] for t in extra}) if hub is not None else None
             chunks = openai_chunks(svc, req, ids, thinking, tools, max_new, cancel, run=run, force=force)
             if validator is not None:
                 chunks = structured_chunks(chunks, validator)
@@ -7745,6 +7961,9 @@ def main() -> int:
     ap.add_argument("--mcp-config", help="a JSON file with MCP servers in Claude Desktop's format ({\"mcpServers\": "
                                          "{...}}); the web app's chat can use their tools (also \"mcp_servers\" in "
                                          "the config)")
+    ap.add_argument("--search-config", help="a JSON file with the web search settings (a SearXNG instance and its "
+                                            "options); the default is websearch.json beside the run config, which the "
+                                            "web app's Monitor tab edits")
     ap.add_argument("--lazy", action="store_true", help="start the API unloaded (the engine and the vision encoder start with the first request)")
     ap.add_argument("--api-monitor", action="store_true",
                     help="the API request monitor at /api-monitor: keeps the last 100 requests' prompts and answers in "
@@ -7787,7 +8006,16 @@ def main() -> int:
     if a.engine == "strata" and not (tpath / "vocab.json").exists():
         ap.error(f"the model's tokenizer is missing ({tpath / 'vocab.json'}); run setup again")
     tok = load_tokenizer(tpath) or ByteTokenizer()
-    hub = hub_from_config(cfg, a.mcp_config)            # before the minutes of loading: a bad entry stops here
+    # before the minutes of loading: a bad entry stops here.  The page's own file (mcp-servers.json) is read here too,
+    # so a server it added is running as soon as the model is.
+    managed_path = webconf.path_for(a.config)
+    hub = hub_for(cfg, a.mcp_config, webconf.load(managed_path), managed_path.name)
+    # the web search settings: SearXNG; nothing is offered until the page's card turns it on (opt-in, off by default)
+    search_path = Path(a.search_config) if a.search_config else websearch.path_for(a.config)
+    try:
+        search_settings = websearch.settings_for(cfg, search_path)
+    except ValueError as e:
+        raise SystemExit(f"[strata] web search: {e}")
     overrides = {"fit_max_tokens": a.fit_max_tokens or None, "idle_unload_s": a.idle_unload,
                  "min_free_vram_mib": a.min_free_vram_mib, "before_load": a.before_load}
     try:
@@ -7809,6 +8037,8 @@ def main() -> int:
                   sampling_defaults=sampling_defaults)
     svc.overrides, svc.cfg_overrides = overrides, cfg_overrides
     svc.apply_settings(settings)
+    svc.search_path = str(search_path)                  # the settings file the page's card edits
+    svc.search = websearch.SearchHub(search_settings) if search_settings else None
     if a.engine != "strata":                            # the mock engine: no model card's sampling
         svc.model_arch = None
     if cfg.get("images"):                               # image generation (serve/images.py), set up by setup --images
@@ -7920,13 +8150,16 @@ def main() -> int:
         names = [e["id"] for e in svc.models() if e["status"] != "unavailable"]
         print(f"[strata] switch_on_request: a request naming another installed model loads it ({len(names)} in "
               f"/v1/models: {', '.join(names)})", flush=True)
-    if hub is not None:
-        import atexit
-        svc.mcp = hub
+    import atexit
+    svc.mcp = hub                                      # never None: the Monitor tab can add the first server
+    if hub.servers:
         print(f"[strata] starting {len(hub.servers)} MCP server{'s' * (len(hub.servers) != 1)} for the web app's "
               f"chat: {', '.join(hub.servers)}", flush=True)
-        hub.start()
-        atexit.register(hub.close)                      # the servers AryaStrata started end with it
+    hub.start()
+    atexit.register(hub.close)                          # the servers AryaStrata started end with it
+    if svc.search is not None:
+        print(f"[strata] web search: {svc.search.settings['base_url']} "
+              f"({', '.join(t['name'] for t in svc.search.tools())}) for the web app's chat", flush=True)
     svc.start_warm()                                    # before serve(): a first request finds its stop event
     httpd = serve(svc, host=a.host, port=a.port)
     svc.start_idle_unload()

@@ -1,10 +1,12 @@
 """serve/mcp.py - tools from MCP (Model Context Protocol) servers for the web app's chats.
 
 The user lists servers in the run config (`"mcp_servers"`, or Claude Desktop's `"mcpServers"` block pasted as is) or
-in a separate file (`--mcp-config`).  Each one is either a program AryaStrata starts (`command`, `args`, `env`, `cwd`:
-the stdio transport, newline-delimited JSON-RPC 2.0 on its stdin/stdout) or an address (`url`, `headers`: the
-Streamable HTTP transport, JSON-RPC POSTed, answered as JSON or as an event stream).  Both are implemented here with
-the standard library only; no MCP SDK is needed.
+in a separate file (`--mcp-config`).  The web app's Monitor tab adds, changes, disables and removes servers too; those
+live in `mcp-servers.json` beside the run config (serve/webconf.py) and are applied without a restart: the hub starts
+the one server that changed and leaves the others running.  Each one is either a program AryaStrata starts
+(`command`, `args`, `env`, `cwd`: the stdio transport, newline-delimited JSON-RPC 2.0 on its stdin/stdout) or an
+address (`url`, `headers`: the Streamable HTTP transport, JSON-RPC POSTed, answered as JSON or as an event stream).
+Both are implemented here with the standard library only; no MCP SDK is needed.
 
 `McpHub` owns every configured server: it starts them in the background when the server starts, offers their tools to
 the model as OpenAI function tools named `<server>__<tool>` (two servers may both have a `search`), and routes a call
@@ -383,7 +385,8 @@ class McpServer:
     def __init__(self, name: str, cfg: dict, settings: dict):
         self.name, self.cfg, self.settings = name, cfg, settings
         self.kind = "http" if cfg.get("url") else "stdio"
-        self.status = "idle"             # idle -> starting -> ready | failed; ready -> stopped when it ends
+        self.disabled = cfg.get("disabled") is True
+        self.status = "disabled" if self.disabled else "idle"   # idle -> starting -> ready | failed; ready -> stopped
         self.error = None
         self.tools: list[dict] = []
         self.info: dict = {}
@@ -392,6 +395,8 @@ class McpServer:
         self.last_start = 0.0
 
     def start(self) -> bool:
+        if self.disabled:                                # "disabled": true keeps the entry (and its settings) out of
+            return False                                 # the chat without starting the program behind it
         with self.lock:
             return self._start()
 
@@ -436,6 +441,8 @@ class McpServer:
             return False
 
     def call(self, tool: str, arguments: dict, timeout: float, cancel=None) -> dict:
+        if self.disabled:
+            raise McpError("the server is disabled")
         with self.lock:
             if self.transport is None or not self.transport.alive():
                 # it stopped since its last call (a crash, an expired session): start it again; one that failed to
@@ -491,20 +498,73 @@ def _clean(name: str) -> str:
     return re.sub(r"[^A-Za-z0-9_-]", "_", str(name)) or "x"
 
 
-class McpHub:
-    """Every configured server, and the merged, namespaced tool list the model sees."""
+SECRET_MASK = "********"      # a stored secret's stand-in in the page's editor: sent back unchanged, it is kept
 
-    def __init__(self, servers: dict[str, dict], settings: dict | None = None):
+
+def public_config(cfg: dict) -> dict:
+    """A server's settings with its env and header values masked: that is what GET /mcp may tell the page."""
+    out = {k: v for k, v in cfg.items() if k not in ("env", "headers")}
+    for key in ("env", "headers"):
+        block = cfg.get(key)
+        if isinstance(block, dict) and block:
+            out[key] = {k: SECRET_MASK for k in block}
+    return out
+
+
+def merge_config(new: dict, old: dict) -> dict:
+    """`new` with every masked value replaced by the stored one - a secret the page was never shown."""
+    out = {k: v for k, v in new.items() if k not in ("env", "headers")}
+    for key in ("env", "headers"):
+        block = new.get(key)
+        if not isinstance(block, dict):
+            continue
+        kept = old.get(key) if isinstance(old.get(key), dict) else {}
+        value = {}
+        for k, v in block.items():
+            if v == SECRET_MASK:
+                if k in kept:
+                    value[k] = kept[k]
+            else:
+                value[k] = v
+        if value:
+            out[key] = value
+    return out
+
+
+class McpHub:
+    """Every configured server, and the merged, namespaced tool list the model sees.
+
+    The web app's Monitor tab changes the list while the server runs: add_server, replace_server, remove_server and
+    reconnect touch only the server they name, so the others keep their processes, sessions and tools."""
+
+    def __init__(self, servers: dict[str, dict], settings: dict | None = None, sources: dict[str, str] | None = None,
+                 managed_file: str | None = None):
         self.settings = {**DEFAULTS, **(settings or {})}
+        self.lock = threading.RLock()                    # the page changes the list while chats read it
         self.servers = {name: McpServer(name, cfg, self.settings) for name, cfg in servers.items()}
+        self.sources = {name: (sources or {}).get(name, "config") for name in self.servers}
+        self.managed_file = managed_file                 # the file the page writes (None: no run config to sit beside)
         self.threads: list[threading.Thread] = []
         self._routes: dict[str, tuple[McpServer, str]] = {}
 
+    # ---------------------------------------------------------------------------------- starting and stopping
+    @staticmethod
+    def _thread(server: McpServer) -> threading.Thread:
+        return threading.Thread(target=server.start, daemon=True, name=f"mcp-{server.name}")
+
+    def _start_in_background(self, server: McpServer) -> None:
+        t = self._thread(server)
+        with self.lock:
+            self.threads = [x for x in self.threads if x.is_alive()]
+            self.threads.append(t)
+        t.start()
+
     def start(self, wait: bool = False):
         """Start every server on its own thread (npx may download a package first: that must not delay the chat)."""
-        self.threads = [threading.Thread(target=s.start, daemon=True, name=f"mcp-{s.name}")
-                        for s in self.servers.values()]
-        for t in self.threads:
+        threads = [self._thread(s) for s in self.servers.values() if not s.disabled]
+        with self.lock:
+            self.threads = threads
+        for t in threads:
             t.start()
         if wait:
             self.wait(None)
@@ -512,15 +572,86 @@ class McpHub:
     def wait(self, timeout: float | None) -> None:
         """Wait (up to `timeout` s in all) for servers that are still starting."""
         end = None if timeout is None else time.monotonic() + timeout
-        for t in self.threads:
+        with self.lock:
+            threads = list(self.threads)
+        for t in threads:
             t.join(None if end is None else max(0.0, end - time.monotonic()))
+        with self.lock:
+            self.threads = [t for t in self.threads if t.is_alive()]
 
+    def close(self):
+        with self.lock:
+            servers = list(self.servers.values())
+        for s in servers:
+            try:
+                s.close()
+            except Exception:  # noqa: BLE001 - closing is best effort
+                pass
+
+    # ---------------------------------------------------------------------------------- the page's changes
+    def source_of(self, name: str) -> str:
+        """Where a server's settings came from: "config", "file" (--mcp-config) or "managed" (the page's own)."""
+        with self.lock:
+            return self.sources.get(name, "config")
+
+    def add_server(self, name: str, cfg: dict, source: str = "managed") -> McpServer:
+        """A new server, started now; every other server is left as it is.  ValueError: unusable settings/name."""
+        name = check_name(name)
+        cfg = check_server(name, cfg)
+        with self.lock:
+            if name in self.servers:
+                raise ValueError(f"an MCP server named {name!r} is already configured")
+            server = McpServer(name, cfg, self.settings)
+            self.servers[name], self.sources[name], self._routes = server, source, {}
+        if not server.disabled:
+            self._start_in_background(server)
+        return server
+
+    def replace_server(self, name: str, cfg: dict) -> McpServer:
+        """`name`'s settings replaced (a new process or session), the other servers untouched."""
+        cfg = check_server(name, cfg)
+        with self.lock:
+            old = self.servers.get(name)
+            if old is None:
+                raise ValueError(f"there is no MCP server named {name!r}")
+            server = McpServer(name, cfg, self.settings)
+            self.servers[name], self._routes = server, {}
+        old.close()                                      # outside the lock: closing may wait on a pipe
+        if not server.disabled:
+            self._start_in_background(server)
+        return server
+
+    def remove_server(self, name: str) -> McpServer:
+        with self.lock:
+            server = self.servers.pop(name, None)
+            if server is None:
+                raise ValueError(f"there is no MCP server named {name!r}")
+            self.sources.pop(name, None)
+            self._routes = {}
+        server.close()
+        return server
+
+    def reconnect(self, name: str) -> McpServer:
+        """Start `name` again (its process may have died, or its session expired)."""
+        with self.lock:
+            server = self.servers.get(name)
+            if server is None:
+                raise ValueError(f"there is no MCP server named {name!r}")
+            if server.disabled:
+                raise ValueError(f"the MCP server {name!r} is disabled")
+        server.close()
+        self._start_in_background(server)
+        return server
+
+    # ---------------------------------------------------------------------------------- what the model sees
     def routes(self) -> dict[str, tuple[McpServer, str]]:
         """tool name the model sees -> (server, the tool's own name).  A server that stopped after it was ready keeps
         its tools here: a call starts it again."""
         out = {}
-        for s in self.servers.values():
-            if s.status not in ("ready", "stopped"):
+        with self.lock:
+            servers = list(self.servers.values())
+        for s in servers:
+            if s.disabled or s.status not in ("ready", "stopped"):
                 continue
             for t in s.tools:
                 name = f"{_clean(s.name)}__{_clean(t['name'])}"[:64]
@@ -577,54 +708,77 @@ class McpHub:
         return out
 
     def status(self) -> dict:
-        """GET /mcp: every server, its state and its tools (for the web app)."""
+        """GET /mcp: every server, its state and its tools (for the web app; its secrets are masked)."""
         routes = self.routes()
-        servers = []
-        for s in self.servers.values():
+        with self.lock:
+            servers, sources = list(self.servers.values()), dict(self.sources)
+        out = []
+        for s in servers:
             names = {tool: n for n, (srv, tool) in routes.items() if srv is s}
-            servers.append({"name": s.name, "transport": s.kind, "status": s.status, "error": s.error,
-                            "info": s.info,
-                            "tools": [{"name": names.get(t["name"], t["name"]), "tool": t["name"],
-                                       "description": str(t.get("description") or "")[:300]} for t in s.tools]})
-        return {"servers": servers, "tools": len(routes),
+            source = sources.get(s.name, "config")
+            out.append({"name": s.name, "transport": s.kind, "status": s.status, "error": s.error, "info": s.info,
+                        "disabled": s.disabled, "source": source, "editable": source == "managed",
+                        "config": public_config(s.cfg),
+                        "tools": [{"name": names.get(t["name"], t["name"]), "tool": t["name"],
+                                   "description": str(t.get("description") or "")[:300]} for t in s.tools]})
+        return {"servers": out, "tools": len(routes), "managed": self.managed_file,
                 "settings": {k: self.settings[k] for k in ("timeout_s", "max_result_chars", "max_rounds")}}
-
-    def close(self):
-        for s in self.servers.values():
-            try:
-                s.close()
-            except Exception:  # noqa: BLE001 - closing is best effort
-                pass
 
 
 # ------------------------------------------------------------------------------------------------ config
-def _check_server(name, cfg, where) -> dict:
+NAME_PATTERN = re.compile(r"[^A-Za-z0-9_-]")
+
+
+def check_name(name) -> str:
+    """A name the page may give a server: it becomes part of the tool names the model sees."""
+    name = str(name or "")
+    if not name or len(name) > 40 or NAME_PATTERN.search(name):
+        raise ValueError("a server's name is 1-40 characters of letters, digits, \"-\" or \"_\"")
+    return name
+
+
+def check_server(name, cfg) -> dict:
+    """One server's settings, checked -> cfg.  ValueError carries the sentence the page shows for a 400."""
     if not isinstance(cfg, dict):
-        raise SystemExit(f"[strata] {where}: MCP server {name!r} must be an object with \"command\" or \"url\"")
+        raise ValueError(f"MCP server {name!r} must be an object with \"command\" or \"url\"")
     if cfg.get("url"):
         if cfg.get("type") == "sse":
-            raise SystemExit(f"[strata] {where}: MCP server {name!r} uses the old SSE transport (\"type\": \"sse\"); "
-                             "AryaStrata speaks Streamable HTTP - most servers offer it at /mcp")
+            raise ValueError(f"MCP server {name!r} uses the old SSE transport (\"type\": \"sse\"); AryaStrata speaks "
+                             "Streamable HTTP - most servers offer it at /mcp")
+        if not isinstance(cfg.get("url"), str) or not cfg["url"].strip():
+            raise ValueError(f"MCP server {name!r}: \"url\" must be an address")
         if not isinstance(cfg.get("headers") or {}, dict):
-            raise SystemExit(f"[strata] {where}: MCP server {name!r}: \"headers\" must be an object")
+            raise ValueError(f"MCP server {name!r}: \"headers\" must be an object")
         return cfg
     if not isinstance(cfg.get("command"), str) or not cfg["command"].strip():
-        raise SystemExit(f"[strata] {where}: MCP server {name!r} needs \"command\" (a program to start) or \"url\"")
+        raise ValueError(f"MCP server {name!r} needs \"command\" (a program to start) or \"url\"")
     if not isinstance(cfg.get("args") or [], list):
-        raise SystemExit(f"[strata] {where}: MCP server {name!r}: \"args\" must be a list")
+        raise ValueError(f"MCP server {name!r}: \"args\" must be a list")
     if not isinstance(cfg.get("env") or {}, dict):
-        raise SystemExit(f"[strata] {where}: MCP server {name!r}: \"env\" must be an object")
+        raise ValueError(f"MCP server {name!r}: \"env\" must be an object")
     return cfg
 
 
-def servers_from(block, where: str) -> dict[str, dict]:
-    """{"name": {...}} with the entries checked; `"disabled": true` leaves one out."""
+def _check_server(name, cfg, where) -> dict:
+    try:
+        return check_server(name, cfg)
+    except ValueError as e:
+        raise SystemExit(f"[strata] {where}: {e}") from None
+
+
+def servers_from(block, where: str, keep_disabled: bool = False) -> dict[str, dict]:
+    """{"name": {...}} with the entries checked.  A `"disabled": true` entry is left out, unless the caller keeps it:
+    the hub keeps it, so the Monitor tab lists it and can switch it back on."""
     if block is None:
         return {}
     if not isinstance(block, dict):
         raise SystemExit(f"[strata] {where}: the MCP servers must be an object {{\"name\": {{...}}}}")
-    return {str(n): _check_server(n, c, where) for n, c in block.items()
-            if not (isinstance(c, dict) and c.get("disabled") is True)}
+    out = {}
+    for n, c in block.items():
+        if not keep_disabled and isinstance(c, dict) and c.get("disabled") is True:
+            continue
+        out[str(n)] = _check_server(n, c, where)
+    return out
 
 
 def settings_from(cfg: dict) -> dict:
@@ -645,25 +799,48 @@ def settings_from(cfg: dict) -> dict:
     return out
 
 
-def hub_from_config(cfg: dict, mcp_config_path: str | None = None) -> McpHub | None:
-    """The run config's `"mcp_servers"` (or `"mcpServers"`) plus the servers in the --mcp-config file (Claude
-    Desktop's format: {"mcpServers": {...}}); a name in both takes the file's entry.  None when there are none."""
-    servers = {}
-    servers.update(servers_from(cfg.get("mcp_servers"), "config mcp_servers"))
-    servers.update(servers_from(cfg.get("mcpServers"), "config mcpServers"))
+def _file_block(path: str, where: str):
+    """The mcpServers block of one JSON file (Claude Desktop's format); unreadable is an error that stops the start."""
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            data = json.load(f)
+    except (OSError, ValueError) as e:
+        raise SystemExit(f"[strata] {where}: {e}") from None
+    block = data.get("mcpServers", data.get("mcp_servers")) if isinstance(data, dict) else None
+    if block is None:
+        raise SystemExit(f"[strata] {where}: expected {{\"mcpServers\": {{...}}}}")
+    return block
+
+
+def hub_from_config(cfg: dict, mcp_config_path: str | None = None, managed: dict | None = None,
+                    managed_file: str | None = None) -> McpHub | None:
+    """The run config's `"mcp_servers"` (or `"mcpServers"`), then the --mcp-config file, then the servers the web app
+    manages (`managed`: mcp-servers.json, read by serve/webconf.py); a name in more than one place takes the last
+    entry.  A `"disabled": true` entry is kept (listed, not started).  None when there are no servers."""
+    servers: dict[str, dict] = {}
+    sources: dict[str, str] = {}
+    for key in ("mcp_servers", "mcpServers"):
+        for name, c in servers_from(cfg.get(key), f"config {key}", keep_disabled=True).items():
+            servers[name], sources[name] = c, "config"
     if mcp_config_path:
-        try:
-            with open(mcp_config_path, encoding="utf-8-sig") as f:
-                data = json.load(f)
-        except (OSError, ValueError) as e:
-            raise SystemExit(f"[strata] --mcp-config {mcp_config_path}: {e}") from None
-        block = data.get("mcpServers", data.get("mcp_servers")) if isinstance(data, dict) else None
-        if block is None:
-            raise SystemExit(f"[strata] --mcp-config {mcp_config_path}: expected {{\"mcpServers\": {{...}}}}")
-        servers.update(servers_from(block, f"--mcp-config {mcp_config_path}"))
+        where = f"--mcp-config {mcp_config_path}"
+        for name, c in servers_from(_file_block(mcp_config_path, where), where, keep_disabled=True).items():
+            servers[name], sources[name] = c, "file"
+    if managed:
+        where = f"{managed_file or 'mcp-servers.json'} (the Monitor tab's file)"
+        for name, c in servers_from(managed, where, keep_disabled=True).items():
+            servers[name], sources[name] = c, "managed"
     if not servers:
         return None
-    return McpHub(servers, settings_from(cfg))
+    return McpHub(servers, settings_from(cfg), sources, managed_file)
+
+
+def hub_for(cfg: dict, mcp_config_path: str | None = None, managed: dict | None = None,
+            managed_file: str | None = None) -> McpHub:
+    """The hub the server runs: the configured servers, else an empty one the Monitor tab can fill (always non-None,
+    so the page can add the first server without a restart)."""
+    return hub_from_config(cfg, mcp_config_path, managed, managed_file) or \
+        McpHub({}, settings_from(cfg), None, managed_file)
 
 
 if __name__ == "__main__":                               # python -m serve.mcp config.json: list what a config offers

@@ -1,4 +1,4 @@
-/* AryaCode web app - layout on top of tokens.css + components.css (the AryaCode UI kit). Colours, type, radii and
+/* AryaInfer web app - layout on top of tokens.css + components.css (the shared UI kit). Colours, type, radii and
    shadows come only from the kit's tokens. */
 [hidden] { display: none !important; }
 html, body { height: 100%; }
@@ -149,6 +149,16 @@ main { flex: 1; min-height: 0; display: flex; }
 .mcp-server__tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .mcp-server__tools .chip { height: 26px; padding: 0 10px; font-family: var(--st-font-mono); }
 .mcp-note { margin: 0; }
+/* the Monitor's MCP editor: one field per row (a program has four of them), the same look as the Sampling drawer */
+.mcp-form { display: grid; grid-template-columns: 1fr; gap: var(--st-s-3); align-items: start; }
+.mcp-form .st-field { max-width: 560px; }
+.mcp-form .st-input { width: 100%; max-width: 560px; }
+.mcp-form textarea.st-input { height: auto; min-height: 76px; resize: vertical; line-height: 1.45; }
+.mcp-form .st-field[hidden] { display: none; }
+.mcp-form .toggle-row { max-width: 560px; }
+.mcp-server__where { color: var(--st-ink-muted); font-size: var(--st-fs-xs); }
+.mcp-server__actions { display: flex; gap: var(--st-s-2); flex-wrap: wrap; margin-left: auto; }
+.mcp-server__actions .st-btn { height: 28px; padding: 0 10px; font-size: var(--st-fs-xs); }
 
 /* ---------------------------------------------------------------- about */
 .about .st-card { display: flex; flex-direction: column; gap: var(--st-s-3); }

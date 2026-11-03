@@ -19,7 +19,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from serve import mcp_fake_server as fake  # noqa: E402
 from serve.frontend import ChatTemplate  # noqa: E402
-from serve.mcp import McpCancelled, McpHub, hub_from_config  # noqa: E402
+from serve.mcp import (SECRET_MASK, McpCancelled, McpHub, hub_from_config, merge_config,  # noqa: E402
+                       public_config)
 from serve.server import ByteTokenizer, MockEngine, Service, serve  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -210,7 +211,12 @@ class Config(unittest.TestCase):
             hub = hub_from_config({"mcp_servers": {"a": {"command": "old"}},
                                    "mcpServers": {"c": stdio(), "off": {"command": "x", "disabled": True}},
                                    "mcp": {"timeout_s": 5, "max_result_chars": 100, "max_rounds": 3}}, path)
-            self.assertEqual(sorted(hub.servers), ["a", "b", "c"])
+            # a disabled entry is kept (the Monitor tab lists it and can switch it back on), but it is not started
+            self.assertEqual(sorted(hub.servers), ["a", "b", "c", "off"])
+            self.assertEqual(hub.servers["off"].status, "disabled")
+            self.assertEqual(hub.sources["off"], "config")
+            self.assertEqual(hub.sources["a"], "file")             # the file wins over the config's own "a"
+            self.assertFalse([t for t in hub.template_tools() if t["name"].startswith("off__")])
             self.assertEqual(hub.servers["a"].cfg["command"], sys.executable)   # the file wins a name clash
             self.assertEqual(hub.servers["b"].kind, "http")
             self.assertEqual((hub.settings["timeout_s"], hub.settings["max_result_chars"], hub.settings["max_rounds"]),
@@ -441,6 +447,207 @@ class NoServers(unittest.TestCase):
         finally:
             httpd.shutdown()
             httpd.server_close()
+
+
+# ------------------------------------------------------------------------------------------------ the page's editor
+class Editor(unittest.TestCase):
+    """Adding, changing, disabling and removing servers on a running hub: only that server starts or stops."""
+
+    def setUp(self):
+        self.hub = McpHub({"kept": stdio()}, {"timeout_s": 10, "max_result_chars": 500})
+        self.hub.start(wait=True)
+
+    def tearDown(self):
+        self.hub.close()
+
+    def test_add_change_disable_remove(self):
+        kept = self.hub.servers["kept"]
+        self.hub.add_server("extra", stdio())
+        self.hub.wait(30)
+        self.assertEqual(self.hub.servers["extra"].status, "ready")
+        self.assertIn("extra__echo", self.hub.routes())
+        self.assertIs(self.hub.servers["kept"], kept)                 # the other server was not restarted
+        self.assertEqual(kept.status, "ready")
+        self.assertEqual(self.hub.call("extra__add", {"a": 1, "b": 2})["text"], "3")
+        self.hub.replace_server("extra", stdio("--page", "5"))         # changed settings, same name
+        self.hub.wait(30)
+        self.assertEqual(self.hub.servers["extra"].status, "ready")
+        self.assertIn("extra__echo", self.hub.routes())
+        self.hub.replace_server("extra", {**stdio(), "disabled": True})   # disabled: kept, not offered, not started
+        self.assertEqual(self.hub.servers["extra"].status, "disabled")
+        self.assertNotIn("extra__echo", self.hub.routes())
+        self.assertFalse(self.hub.call("extra__echo", {"text": "x"})["ok"])
+        self.hub.remove_server("extra")
+        self.assertNotIn("extra", self.hub.servers)
+        self.assertNotIn("extra__echo", self.hub.routes())
+        self.assertEqual(self.hub.servers["kept"].status, "ready")
+
+    def test_reconnect_starts_a_server_that_died_again(self):
+        self.hub.add_server("mortal", stdio())
+        self.hub.wait(30)
+        self.assertFalse(self.hub.call("mortal__die", {})["ok"])      # the process exits mid-call
+        self.hub.reconnect("mortal")
+        self.hub.wait(30)
+        self.assertEqual(self.hub.servers["mortal"].status, "ready")
+        self.assertEqual(self.hub.call("mortal__echo", {"text": "back"})["text"], "back")
+
+    def test_names_and_settings_are_checked(self):
+        with self.assertRaises(ValueError):
+            self.hub.add_server("kept", stdio())                      # the name is taken
+        for name in ("", "my server", "a" * 41, "x/y"):
+            with self.assertRaises(ValueError):
+                self.hub.add_server(name, stdio())
+        for cfg in ({}, {"command": ""}, {"command": "a", "args": "b"}, {"url": "http://a", "type": "sse"},
+                    {"command": "a", "env": "X=1"}):
+            with self.assertRaises(ValueError):
+                self.hub.add_server("fresh", cfg)
+        self.assertNotIn("fresh", self.hub.servers)                   # a refused entry adds nothing
+        for call in (self.hub.remove_server, self.hub.reconnect):
+            with self.assertRaises(ValueError):
+                call("nobody")
+        with self.assertRaises(ValueError):
+            self.hub.replace_server("nobody", stdio())
+
+    def test_secrets_are_masked_and_kept(self):
+        cfg = {"command": "x", "env": {"TOKEN": "s3cret", "PLAIN": "1"},
+               "headers": {"Authorization": "Bearer t"}}
+        public = public_config(cfg)
+        self.assertEqual(public["env"], {"TOKEN": SECRET_MASK, "PLAIN": SECRET_MASK})
+        self.assertNotIn("s3cret", json.dumps(public))
+        merged = merge_config({"command": "y", "env": {"TOKEN": SECRET_MASK, "NEW": "n"}}, cfg)
+        self.assertEqual(merged["env"], {"TOKEN": "s3cret", "NEW": "n"})    # the mask keeps what is stored
+        self.assertNotIn("headers", merged)                                 # a block the page left out is gone
+
+
+class EditorHttp(unittest.TestCase):
+    """POST /mcp from the page: the file it writes, the servers it starts, and the gates in front of it."""
+
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        tok = ByteTokenizer()
+        self.engine = ScriptedEngine(tok, [call_script("fresh__echo", text="from the new server"),
+                                           "</think>\n\nIt answered."])
+        self.svc = Service(self.engine, tok, ChatTemplate(ROOT / "serve/chat_template.jinja"))
+        self.svc.config_path = os.path.join(self.dir.name, "strata-m.json")
+        self.hub = McpHub({"fixed": stdio()}, {"timeout_s": 10, "max_result_chars": 500},
+                          {"fixed": "config"})
+        self.svc.mcp = self.hub
+        self.hub.start(wait=True)
+        self.httpd = serve(self.svc, port=0)
+        self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+
+    def tearDown(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.hub.close()
+
+    def post(self, body, headers=None):
+        raw = body if isinstance(body, bytes) else json.dumps(body).encode()
+        req = urllib.request.Request(self.base + "/mcp", data=raw,
+                                     headers={"Content-Type": "application/json", **(headers or {})})
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            with e:
+                return e.code, json.loads(e.read() or b"{}")
+
+    def status(self):
+        with urllib.request.urlopen(self.base + "/mcp", timeout=10) as r:
+            return json.loads(r.read())
+
+    def server(self, name):
+        return next((s for s in self.status()["servers"] if s["name"] == name), None)
+
+    def file(self):
+        return json.loads((Path(self.dir.name) / "mcp-servers.json").read_text(encoding="utf-8"))
+
+    def chat(self, strata_mcp=True):
+        body = {"model": "m", "messages": [{"role": "user", "content": "use it"}], "strata_mcp": strata_mcp}
+        req = urllib.request.Request(self.base + "/v1/chat/completions", data=json.dumps(body).encode(),
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return json.loads(r.read())
+
+    def test_add_then_chat_without_a_restart(self):
+        code, body = self.post({"add": {"fresh": stdio()}})
+        self.assertEqual(code, 200, body)
+        self.assertEqual(body["changed"], ["added fresh"])
+        self.assertEqual(self.file()["mcpServers"], {"fresh": stdio()})     # the next start has it too
+        self.hub.wait(30)
+        self.assertEqual(self.server("fresh")["status"], "ready")
+        self.assertTrue(self.server("fresh")["editable"])
+        self.assertFalse(self.server("fixed")["editable"])                  # a hand-written entry stays hand-written
+        self.assertEqual(self.server("fixed")["source"], "config")
+        msg = self.chat()["choices"][0]["message"]                          # tools reach the model right away
+        self.assertEqual(msg["content"], "Let me check.It answered.")
+        self.assertEqual(msg["strata_mcp"][-1]["text"], "from the new server")
+        self.assertIn('"name": "fresh__echo"', self.engine.prompt_text(0))
+
+    def test_update_and_remove(self):
+        self.post({"add": {"fresh": stdio()}})
+        self.hub.wait(30)
+        code, body = self.post({"update": {"name": "fresh", "config": stdio("--page", "5")}})
+        self.assertEqual(code, 200, body)
+        self.assertEqual(body["changed"], ["changed fresh"])
+        self.assertEqual(self.file()["mcpServers"]["fresh"]["args"], [FAKE, "--page", "5"])
+        self.hub.wait(30)
+        self.assertEqual(self.server("fresh")["status"], "ready")
+        code, body = self.post({"remove": ["fresh"]})
+        self.assertEqual(code, 200, body)
+        self.assertEqual(self.file()["mcpServers"], {})
+        self.assertIsNone(self.server("fresh"))
+        self.assertEqual(sorted(s["name"] for s in self.status()["servers"]), ["fixed"])
+
+    def test_a_disabled_server_is_listed_and_switched_back_on(self):
+        code, _ = self.post({"add": {"off": {**stdio(), "disabled": True}}})
+        self.assertEqual(code, 200)
+        self.assertEqual(self.server("off")["status"], "disabled")
+        self.assertEqual(self.server("off")["config"]["disabled"], True)
+        self.assertNotIn("off__echo", self.hub.routes())
+        code, _ = self.post({"update": {"name": "off", "config": stdio()}})
+        self.assertEqual(code, 200)
+        self.hub.wait(30)
+        self.assertEqual(self.server("off")["status"], "ready")
+        self.assertIn("off__echo", self.hub.routes())
+
+    def test_secrets_never_leave_the_server(self):
+        code, _ = self.post({"add": {"vault": {**stdio(), "env": {"MCP_TOKEN": "s3cret"}}}})
+        self.assertEqual(code, 200)
+        self.assertEqual(self.server("vault")["config"]["env"], {"MCP_TOKEN": SECRET_MASK})
+        self.assertNotIn("s3cret", json.dumps(self.status()))
+        self.assertEqual(self.file()["mcpServers"]["vault"]["env"], {"MCP_TOKEN": "s3cret"})   # stored, not masked
+        code, _ = self.post({"update": {"name": "vault", "config": {**stdio(), "env": {"MCP_TOKEN": SECRET_MASK}}}})
+        self.assertEqual(code, 200)
+        self.assertEqual(self.file()["mcpServers"]["vault"]["env"], {"MCP_TOKEN": "s3cret"})
+
+    def test_a_refused_change_writes_nothing_and_starts_nothing(self):
+        for body in ({"add": {"fresh": {}}}, {"add": {"my server": stdio()}}, {"add": {"a": stdio(), "b": stdio()}},
+                     {"add": {"fresh": {"url": "http://a", "type": "sse"}}}, {"nonsense": True},
+                     {"update": {"name": "nobody", "config": stdio()}}):
+            with self.subTest(body=body):
+                code, out = self.post(body)
+                self.assertEqual(code, 400, out)
+                self.assertIn("message", out["error"])
+        self.assertFalse((Path(self.dir.name) / "mcp-servers.json").exists())
+        self.assertNotIn("fresh", self.hub.servers)
+
+    def test_a_hand_written_entry_is_named_where_it_lives(self):
+        code, out = self.post({"update": {"name": "fixed", "config": stdio()}})
+        self.assertEqual(code, 400)
+        self.assertIn("run config", out["error"]["message"])
+        self.assertEqual(self.post({"remove": ["fixed"]})[0], 400)
+
+    def test_the_page_only(self):
+        code, out = self.post({"add": {"fresh": stdio()}}, headers={"Origin": "http://evil.example"})
+        self.assertEqual(code, 403, out)
+        raw = json.dumps({"add": {"fresh": stdio()}}).encode()
+        req = urllib.request.Request(self.base + "/mcp", data=raw, headers={"Content-Type": "text/plain"})
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(ctx.exception.code, 415)
+        self.assertNotIn("fresh", self.hub.servers)
 
 
 if __name__ == "__main__":

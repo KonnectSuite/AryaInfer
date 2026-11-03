@@ -1,4 +1,4 @@
-// serve/web/app.js - the AryaCode web app: Chat, Monitor, About. No framework, no network beyond this server.
+// serve/web/app.js - the AryaInfer web app: Chat, Monitor, About. No framework, no network beyond this server.
 // The Monitor tab rebuilds PR #22's dashboard idea (code-martin) on the server's own /metrics.
 "use strict";
 
@@ -459,10 +459,12 @@ document.addEventListener("click", (e) => {
 });
 $("req-all").addEventListener("click", () => { reqShowAll = !reqShowAll; if (lastMetrics) render(lastMetrics); });
 
-// ------------------------------------------------------------------ MCP servers (GET /mcp)
-// Tools from the MCP servers in the run config: the chat offers them to the model (opt-in per request,
-// "strata_mcp": true, which only this page sends); the Monitor lists the servers and what they offer.
-let mcpInfo = {servers: [], tools: 0}, mcpRetry = null;
+// ------------------------------------------------------------------ MCP servers (GET / POST /mcp)
+// The servers and their tools: the chat offers them to the model (opt-in per request, "strata_mcp": true, which only
+// this page sends).  The Monitor also adds, changes, disables, removes and restarts them: POST /mcp writes
+// mcp-servers.json beside the run config and starts or stops the one server it names - no restart of the model.
+let mcpInfo = {servers: [], tools: 0, managed: null}, mcpRetry = null;
+let mcpEditing = null, mcpFormOpen = false;         // the name the form edits (null: a new server), and whether it shows
 async function loadMcp() {
   try {
     const r = await fetch("mcp", {headers: headers()});
@@ -474,25 +476,230 @@ async function loadMcp() {
   if ((mcpInfo.servers || []).some((s) => s.status === "starting")) mcpRetry = setTimeout(loadMcp, 3000);
 }
 const MCP_STATE = {ready: ["st-badge--generating", "Connected"], starting: ["st-badge--reading", "Starting"],
-                   failed: ["st-badge--error", "Failed"], stopped: ["st-badge--queued", "Stopped"], idle: ["", "Waiting"]};
+                   failed: ["st-badge--error", "Failed"], stopped: ["st-badge--queued", "Stopped"],
+                   disabled: ["st-badge--queued", "Disabled"], idle: ["", "Waiting"]};
 function renderMcp() {
   const servers = mcpInfo.servers || [];
-  $("mcp-card").hidden = !servers.length;
-  $("mcp-row").hidden = !servers.length;
+  $("mcp-card").hidden = false;                    // also the place a server is added: shown even with none
   const ready = servers.filter((s) => s.status === "ready" || s.status === "stopped");
-  $("mcp-sum").textContent = servers.length ? `${fmt(mcpInfo.tools)} tools · ${ready.length} of ${servers.length} servers connected` : "";
+  $("mcp-sum").textContent = servers.length
+    ? `${fmt(mcpInfo.tools)} tools · ${ready.length} of ${servers.length} servers connected` : "none yet";
+  $("mcp-row").hidden = !mcpInfo.tools;
   $("mcp-row-sub").textContent = mcpInfo.tools ? `${fmt(mcpInfo.tools)} tools from ${ready.map((s) => s.name).join(", ")}; the model calls them when it decides to`
                                                : "no server is connected yet (see the Monitor)";
   $("mcp-list").innerHTML = servers.map((s) => {
     const [cls, text] = MCP_STATE[s.status] || ["", s.status];
     const info = s.info && s.info.name ? ` · ${s.info.name}${s.info.version ? ` ${s.info.version}` : ""}` : "";
+    const where = s.editable ? ""
+      : `<span class="mcp-server__where">from ${s.source === "config" ? "the run config" : "--mcp-config"}; edit it there</span>`;
+    const actions = s.editable
+      ? `<div class="mcp-server__actions"><button class="st-btn st-btn--secondary" data-mcp-edit="${esc(s.name)}">Edit</button>` +
+        (s.disabled ? "" : `<button class="st-btn st-btn--secondary" data-mcp-reconnect="${esc(s.name)}">Restart</button>`) +
+        `<button class="st-btn st-btn--secondary" data-mcp-remove="${esc(s.name)}">Remove</button></div>` : "";
     return `<div class="mcp-server"><div class="mcp-server__head"><span class="st-badge ${cls}">${esc(text)}</span>` +
-      `<strong>${esc(s.name)}</strong><span class="muted small">${esc(s.transport)} · ${fmt(s.tools.length)} tools${esc(info)}</span></div>` +
+      `<strong>${esc(s.name)}</strong><span class="muted small">${esc(s.transport)} · ${fmt(s.tools.length)} tools${esc(info)}</span>` +
+      where + actions + `</div>` +
       (s.error ? `<div class="msg-error">${esc(s.error)}</div>` : "") +
       (s.tools.length ? `<div class="mcp-server__tools">${s.tools.map((t) => `<span class="chip" title="${esc(t.description || "")}">${esc(t.tool)}</span>`).join("")}</div>` : "") +
       `</div>`;
   }).join("");
+  $("mcp-form").hidden = !mcpFormOpen;
+  $("mcp-add").hidden = mcpFormOpen;
+  $("mcp-save").hidden = !mcpFormOpen;
+  $("mcp-cancel").hidden = !mcpFormOpen;
+  $("mcp-save").textContent = mcpEditing ? "Save" : "Add";
 }
+// the editor: KEY=VALUE (env) or Name: value (headers) lines, one per line
+function mcpLines(text) { return String(text || "").split("\n").map((x) => x.trim()).filter(Boolean); }
+function mcpMap(lines, sep) {
+  const out = {};
+  for (const line of mcpLines(lines)) {
+    const at = line.indexOf(sep);
+    if (at < 1) continue;
+    out[line.slice(0, at).trim()] = line.slice(at + sep.length).trim();
+  }
+  return out;
+}
+function mcpText(map, sep) { return Object.entries(map || {}).map(([k, v]) => `${k}${sep}${v}`).join("\n"); }
+function mcpFields() {                             // program vs address: one block of fields at a time
+  const http = $("mcp-kind").value === "http";
+  $("mcp-http").hidden = !http;
+  $("mcp-stdio").hidden = http;
+}
+function openMcpForm(name = null) {
+  const s = name ? (mcpInfo.servers || []).find((x) => x.name === name) : null;
+  const cfg = (s && s.config) || {};
+  mcpEditing = s ? s.name : null;
+  mcpFormOpen = true;
+  $("mcp-name").value = s ? s.name : "";
+  $("mcp-name").disabled = !!s;                    // the name is the file's key: remove and add to rename
+  $("mcp-kind").value = cfg.url ? "http" : "stdio";
+  $("mcp-command").value = cfg.command || "";
+  $("mcp-args").value = (cfg.args || []).join("\n");
+  $("mcp-env").value = mcpText(cfg.env, "=");      // a secret arrives as ******** and is kept when sent back
+  $("mcp-cwd").value = cfg.cwd || "";
+  $("mcp-url").value = cfg.url || "";
+  $("mcp-headers").value = mcpText(cfg.headers, ": ");
+  $("mcp-disabled").setAttribute("aria-checked", String(cfg.disabled === true));
+  $("mcp-msg").textContent = "";
+  mcpFields();
+  renderMcp();
+  $("mcp-name").focus();
+}
+function closeMcpForm() { mcpFormOpen = false; mcpEditing = null; $("mcp-msg").textContent = ""; renderMcp(); }
+function mcpFormConfig() {
+  const cfg = {};
+  if ($("mcp-kind").value === "http") {
+    cfg.url = $("mcp-url").value.trim();
+    const headers = mcpMap($("mcp-headers").value, ":");
+    if (Object.keys(headers).length) cfg.headers = headers;
+  } else {
+    cfg.command = $("mcp-command").value.trim();
+    const args = mcpLines($("mcp-args").value);
+    if (args.length) cfg.args = args;
+    const env = mcpMap($("mcp-env").value, "=");
+    if (Object.keys(env).length) cfg.env = env;
+    if ($("mcp-cwd").value.trim()) cfg.cwd = $("mcp-cwd").value.trim();
+  }
+  if ($("mcp-disabled").getAttribute("aria-checked") === "true") cfg.disabled = true;
+  return cfg;
+}
+async function mcpSend(body, done) {
+  try {
+    const r = await fetch("mcp", {method: "POST", headers: headers(true), body: JSON.stringify(body)});
+    let j = null;
+    try { j = await r.json(); } catch (e) { /* not json */ }
+    if (!r.ok) throw new Error((j && j.error && j.error.message) || `HTTP ${r.status}`);
+    mcpInfo = j;
+    renderMcp();
+    toast("success", done, "");
+    return true;
+  } catch (e) {
+    $("mcp-msg").textContent = e.message;
+    toast("error", "The MCP server was not changed", e.message, 7000);
+    return false;
+  }
+}
+$("mcp-kind").onchange = mcpFields;
+$("mcp-disabled").onclick = () => $("mcp-disabled").setAttribute(
+  "aria-checked", String($("mcp-disabled").getAttribute("aria-checked") !== "true"));
+$("mcp-add").onclick = () => openMcpForm();
+$("mcp-cancel").onclick = closeMcpForm;
+$("mcp-save").onclick = async () => {
+  const cfg = mcpFormConfig();
+  const name = mcpEditing || $("mcp-name").value.trim();
+  const ok = mcpEditing ? await mcpSend({update: {name, config: cfg}}, `Saved ${name}`)
+                        : await mcpSend({add: {[name]: cfg}}, `Added ${name}`);
+  if (ok) { mcpFormOpen = false; mcpEditing = null; renderMcp(); }
+};
+$("mcp-list").onclick = async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.mcpEdit) openMcpForm(b.dataset.mcpEdit);
+  else if (b.dataset.mcpReconnect) await mcpSend({reconnect: b.dataset.mcpReconnect}, `Restarted ${b.dataset.mcpReconnect}`);
+  else if (b.dataset.mcpRemove) {
+    if (!confirm(`Remove the MCP server "${b.dataset.mcpRemove}"? Its tools are no longer offered to the model.`)) return;
+    await mcpSend({remove: [b.dataset.mcpRemove]}, `Removed ${b.dataset.mcpRemove}`);
+  }
+};
+
+// ------------------------------------------------------------------ Web search (GET / POST /search)
+// A SearXNG instance the model may search with.  The tools are web_search and read_page, offered only when this card
+// has a URL and its switch is on; the chat asks for them with "strata_search": true, which only this page sends.
+let searchInfo = {configured: false, settings: {}, tools: []};
+async function loadSearch() {
+  try {
+    const r = await fetch("search", {headers: headers()});
+    if (!r.ok) return;
+    searchInfo = await r.json();
+  } catch (e) { return; /* an older server: no web search */ }
+  renderSearch();
+}
+function searchToggle(id, on) { $(id).setAttribute("aria-checked", String(!!on)); }
+function searchOn(id) { return $(id).getAttribute("aria-checked") === "true"; }
+function searchAuthFields() {
+  const auth = $("search-auth").value;
+  $("search-bearer").hidden = auth !== "bearer";
+  $("search-basic").hidden = auth !== "basic";
+  $("search-headers").hidden = auth !== "header";
+}
+function renderSearch() {
+  const s = searchInfo.settings || {};
+  searchToggle("search-enabled", s.enabled);
+  $("search-url").value = s.base_url || "";
+  $("search-auth").value = s.auth || "none";
+  $("search-token").value = s.token || "";
+  $("search-user").value = s.basic_user || "";
+  $("search-pass").value = s.basic_pass || "";
+  $("search-headers-text").value = Object.entries(s.headers || {}).map(([k, v]) => `${k}: ${v}`).join("\n");
+  $("search-language").value = s.language || "";
+  $("search-safe").value = s.safesearch == null ? "" : String(s.safesearch);
+  $("search-categories").value = s.categories || "";
+  $("search-time").value = s.time_range || "";
+  $("search-timeout").value = s.timeout_s || "";
+  $("search-max").value = s.max_results || "";
+  searchToggle("search-readpage", s.read_page !== false);
+  searchToggle("search-local", s.allow_local === true);
+  searchAuthFields();
+  $("search-sum").textContent = searchInfo.configured
+    ? `${(searchInfo.tools || []).join(", ")} · ${s.base_url}` : "not set up";
+  $("search-row").hidden = !searchInfo.configured;
+  $("search-row-sub").textContent = searchInfo.configured
+    ? `${(searchInfo.tools || []).join(", ")} from ${s.base_url}` : "";
+  if (searchInfo.error) $("search-msg").textContent = searchInfo.error;
+}
+function searchPayload() {                       // the whole settings object the server checks and saves
+  const body = {
+    enabled: searchOn("search-enabled"), base_url: $("search-url").value.trim(), auth: $("search-auth").value,
+    token: $("search-token").value, basic_user: $("search-user").value.trim(), basic_pass: $("search-pass").value,
+    headers: mcpMap($("search-headers-text").value, ":"),
+    language: $("search-language").value.trim(), safesearch: $("search-safe").value,
+    categories: $("search-categories").value.trim(), time_range: $("search-time").value,
+    read_page: searchOn("search-readpage"), allow_local: searchOn("search-local"),
+  };
+  const timeout = $("search-timeout").value.trim(), max = $("search-max").value.trim();
+  if (timeout !== "") body.timeout_s = Number(timeout);
+  if (max !== "") body.max_results = Number(max);
+  return body;
+}
+async function searchPost(body) {
+  const r = await fetch("search", {method: "POST", headers: headers(true), body: JSON.stringify(body)});
+  let j = null;
+  try { j = await r.json(); } catch (e) { /* not json */ }
+  if (!r.ok) throw new Error((j && j.error && j.error.message) || `HTTP ${r.status}`);
+  return j;
+}
+$("search-auth").onchange = searchAuthFields;
+for (const id of ["search-enabled", "search-readpage", "search-local"]) $(id).onclick = () => searchToggle(id, !searchOn(id));
+$("search-save").onclick = async () => {
+  $("search-msg").textContent = "";
+  try {
+    searchInfo = await searchPost({set: searchPayload()});
+    renderSearch();
+    toast("success", "Web search saved", searchInfo.configured
+      ? "The chat offers web_search and read_page from its next turn."
+      : "It is off, so the model is not offered the tools.");
+  } catch (e) {
+    $("search-msg").textContent = e.message;
+    toast("error", "Web search was not saved", e.message, 7000);
+  }
+};
+$("search-test").onclick = async () => {         // one real query, with the fields as they are (saved or not)
+  const query = prompt("What should the test search for?", "AryaInfer web search");
+  if (query === null) return;
+  $("search-msg").textContent = "Searching…";
+  try {
+    const r = await searchPost({test: {query, settings: searchPayload()}});
+    if (!r.ok) throw new Error(r.error || "the search failed");
+    const engines = (r.engines || []).join(", ") || "none named";
+    const down = (r.unresponsive || []).map((u) => u.engine).filter(Boolean);
+    $("search-msg").textContent =
+      `${r.results} results in ${(r.ms / 1000).toFixed(1)} s · engines: ${engines}` +
+      (down.length ? ` · no answer: ${down.join(", ")}` : "") + (r.first_url ? ` · first: ${r.first_url}` : "");
+  } catch (e) {
+    $("search-msg").textContent = e.message;
+  }
+};
 
 // ------------------------------------------------------------------ Model settings (GET / POST /config, #564)
 // A few documented keys of the run config (strata-<model>.json), for every client, from the next start on.  The
@@ -621,7 +828,8 @@ function markdown(text) {
 // fields: the server picks the card's set for the request's thinking state (thinking 1.0 / 0.95 / 20, not thinking
 // 0.7 / 0.8 / 20 with a presence penalty). Before 0.1.45 the page sent 0.6 itself; a stored 0.6 with the other two
 // values untouched counts as "not set" too.
-const DEFAULTS = {thinking: "high", temperature: 1.0, top_p: 0.95, top_k: 20, max: "", seed: "", show: true, esp: true, mcp: true};
+const DEFAULTS = {thinking: "high", temperature: 1.0, top_p: 0.95, top_k: 20, max: "", seed: "", show: true, esp: true,
+                  mcp: true, search: true};
 const OLD_DEFAULT_TEMPERATURE = 0.6;
 function samplingUntouched(s) {
   const t = +s.temperature;
@@ -676,6 +884,7 @@ async function streamInto(m, el, signal) {
   if (settings.max) body.max_tokens = +settings.max;
   if (projectionLoaded()) body.experimental_speed_projection = !!settings.esp;
   if (settings.mcp !== false && mcpInfo.tools > 0) body.strata_mcp = true;
+  if (settings.search !== false && searchInfo.configured) body.strata_search = true;
 
   let firstAt = null, thinkStart = null, usage = null, frame = 0;
   const paint = () => { frame = 0; updateAssistant(el, m, true); scrollDown(); };
@@ -1180,7 +1389,7 @@ function openDrawer(open) {
   $("drawer").dataset.open = String(open);
   $("drawer").setAttribute("aria-hidden", String(!open));
   $("scrim").hidden = !open;
-  if (open) { loadDrawer(); loadShared(); loadMcp(); }
+  if (open) { loadDrawer(); loadShared(); loadMcp(); loadSearch(); }
 }
 function loadDrawer(s = settings) {
   for (const b of $("s-thinking").children) b.setAttribute("aria-checked", String(b.dataset.v === s.thinking));
@@ -1190,6 +1399,7 @@ function loadDrawer(s = settings) {
   $("s-esp").setAttribute("aria-checked", String(s.esp !== false));
   $("esp-row").hidden = !projectionLoaded();
   $("s-mcp").setAttribute("aria-checked", String(s.mcp !== false));
+  $("s-search").setAttribute("aria-checked", String(s.search !== false));
   $("s-share").setAttribute("aria-checked", String(sharedOn));
   outputs();
 }
@@ -1240,6 +1450,7 @@ for (const id of ["s-temp", "s-topp", "s-topk"]) $(id).oninput = outputs;
 $("s-show").onclick = () => $("s-show").setAttribute("aria-checked", String($("s-show").getAttribute("aria-checked") !== "true"));
 $("s-esp").onclick = () => $("s-esp").setAttribute("aria-checked", String($("s-esp").getAttribute("aria-checked") !== "true"));
 $("s-mcp").onclick = () => $("s-mcp").setAttribute("aria-checked", String($("s-mcp").getAttribute("aria-checked") !== "true"));
+$("s-search").onclick = () => $("s-search").setAttribute("aria-checked", String($("s-search").getAttribute("aria-checked") !== "true"));
 $("s-share").onclick = () => $("s-share").setAttribute("aria-checked", String($("s-share").getAttribute("aria-checked") !== "true"));
 $("s-reset").onclick = () => loadDrawer(DEFAULTS);
 $("s-apply").onclick = async () => {
@@ -1248,7 +1459,8 @@ $("s-apply").onclick = async () => {
               top_k: +$("s-topk").value, max: $("s-max").value.trim(), seed: $("s-seed").value.trim(),
               show: $("s-show").getAttribute("aria-checked") === "true",
               esp: $("s-esp").getAttribute("aria-checked") === "true",
-              mcp: $("s-mcp").getAttribute("aria-checked") === "true"};
+              mcp: $("s-mcp").getAttribute("aria-checked") === "true",
+              search: $("s-search").getAttribute("aria-checked") === "true"};
   store.set("sampling", settings);
   const share = $("s-share").getAttribute("aria-checked") === "true";
   openDrawer(false);
@@ -1275,7 +1487,7 @@ renderChat();
 const startQuestion = new URLSearchParams(location.search).get("q");   // /?q=... starts a chat (a shortcut)
 if (startQuestion) history.replaceState(null, "", location.pathname + location.hash);
 loadModels();
-loadHealth().then(loadMcp).then(() => { if (startQuestion) { $("input").value = startQuestion; send(); } });
+loadHealth().then(loadMcp).then(loadSearch).then(() => { if (startQuestion) { $("input").value = startQuestion; send(); } });
 showTab(location.hash.slice(1) || "chat");
 poll();
 
