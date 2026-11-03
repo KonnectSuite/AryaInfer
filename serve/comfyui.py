@@ -1000,7 +1000,9 @@ class ComfyHub:
         self.cfg = {"uma": False}
         self.shipped = Path(shipped)
         self.settings_path = Path(settings_path) if settings_path else None
-        gallery_dir = (self.settings_path.parent if self.settings_path else ROOT / "local-data") / "image-gallery"
+        # under local-data wherever the settings file is: the app's own data folder, never beside the source
+        gallery_root = (self.settings_path.parent if self.settings_path else ROOT) / "local-data"
+        gallery_dir = gallery_root / "image-gallery"
         self.gallery = Gallery(gallery_dir, self.settings["gallery"], log=log)
         self.dir = self.gallery.dir
         self.manager = ServerManager(lambda: self.settings, log=log)

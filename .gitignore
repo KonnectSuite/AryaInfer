@@ -90,3 +90,5 @@ dist-hip/
 # the ComfyUI settings the page keeps beside the run config (may hold a proxy token)
 /comfyui.json
 /comfyui.json.*
+# a gallery written by mistake beside the source: it belongs under local-data
+/image-gallery/
