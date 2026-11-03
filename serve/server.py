@@ -3206,11 +3206,88 @@ def effort_level(value) -> str | None:
     return "off" if level is None else ("high" if level == "xhigh" else level)
 
 
+class NinferBackend:
+    """The AryaNinfer engine as a local HTTP backend: its `ninfer-serve` process (in WSL, from the repo's build) holds
+    one GSQ3 artifact and answers OpenAI and Anthropic requests on 127.0.0.1.  Requests for the model are forwarded to
+    it whole; the process is stopped when another model loads, so the card holds one engine at a time."""
+
+    def __init__(self, spec: dict, log: str | None = None):
+        self.command = [str(x) for x in spec.get("command") or []]
+        if not self.command:
+            raise ValueError("the config's ninfer block has no command")
+        self.host = str(spec.get("host") or "127.0.0.1")
+        self.port = int(spec.get("port") or 8097)
+        self.model_id = str(spec.get("model_id") or "qwen3.8-27b-ninfer-gsq3")
+        self.ready_s = float(spec.get("ready_s") or 300.0)
+        self.timeout_s = float(spec.get("request_timeout_s") or 3600.0)
+        self.log_path = log
+        self.proc: subprocess.Popen | None = None
+        self.log = None
+
+    @property
+    def base(self) -> str:
+        return f"http://{self.host}:{self.port}"
+
+    def start(self) -> None:
+        if self.proc is not None and self.proc.poll() is None:
+            return
+        if self.log_path:
+            Path(self.log_path).parent.mkdir(parents=True, exist_ok=True)
+            self.log = open(self.log_path, "ab")
+        print(f"[strata] starting the Ninfer backend on {self.base}", flush=True)
+        self.proc = subprocess.Popen(self.command, stdout=self.log if self.log is not None else subprocess.DEVNULL,
+                                     stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+        deadline = time.time() + self.ready_s
+        while time.time() < deadline:
+            if self.proc.poll() is not None:
+                raise RuntimeError(f"it exited ({self.proc.returncode}); see {self.log_path or 'its log'}")
+            try:
+                with urllib.request.urlopen(self.base + "/v1/models", timeout=2) as r:
+                    if r.status == 200:
+                        print(f"[strata] the Ninfer backend is ready ({self.model_id})", flush=True)
+                        return
+            except OSError:
+                pass
+            time.sleep(1.0)
+        raise RuntimeError(f"it did not answer within {self.ready_s:.0f} s")
+
+    def stop(self) -> None:
+        proc, self.proc = self.proc, None
+        if proc is not None:
+            with contextlib.suppress(OSError):
+                proc.terminate()
+            try:
+                proc.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(OSError):
+                    proc.kill()
+        # a WSL client's exit does not always end the server inside the distro
+        with contextlib.suppress(OSError, subprocess.SubprocessError):
+            subprocess.run(["wsl", "-e", "pkill", "-f", "ninfer-serve"], timeout=25, capture_output=True)
+
+    unload = stop
+
+    def close(self) -> None:
+        self.stop()
+        if self.log is not None:
+            with contextlib.suppress(OSError):
+                self.log.close()
+            self.log = None
+
+    def post(self, path: str, body: dict):
+        data = json.dumps(body).encode()
+        headers = {"Content-Type": "application/json",
+                   "Accept": "text/event-stream" if body.get("stream") else "application/json"}
+        req = urllib.request.Request(self.base + path, data=data, headers=headers, method="POST")
+        return urllib.request.urlopen(req, timeout=self.timeout_s)
+
+
 class Service:
     def __init__(self, engine: Engine, tokenizer, template: ChatTemplate, model_name: str = "qwen3.8-flash-next",
                  vision: Vision | None = None, sampling_defaults: dict | None = None,
                  fit_max_tokens: bool = False):
         self.engine, self.tok, self.template, self.model, self.vision = engine, tokenizer, template, model_name, vision
+        self.ninfer: NinferBackend | None = None          # the AryaNinfer backend while its model is loaded
         self.fit_max_tokens = fit_max_tokens          # --fit-max-tokens: clamp the output cap instead of 400
         self.drop_oldest = False                      # #17 (opt-in): a conversation too long loses its oldest turns
         self.preserve_thinking = False                # #25 (opt-in): earlier turns keep their thinking in the prompt
@@ -3508,13 +3585,48 @@ class Service:
                 if self.status.get("busy") or self.status.get("queued") or self.live_reqs:
                     raise ModelBusy("a request is still running; switch when it has finished")
             old_engine, old_vision, old_name = self.engine, self.vision, self.model
+            old_ninfer = self.ninfer
             debug = self.memory_debug or settings["memory_debug"]
             before = self.free_vram_mib() if debug else None
             print(f"[strata] switching the model: {old_name} -> {target['id']}", flush=True)
             for old in (old_engine, old_vision):          # first: the two models do not fit in memory together
                 if old is not None and hasattr(old, "unload"):
                     old.unload()
+            if old_ninfer is not None:                     # its process holds the card too
+                old_ninfer.stop()
+                self.ninfer = None
             freed = self.free_vram_mib() if debug else None
+            if str(cfg.get("backend") or "") == "ninfer":
+                # the AryaNinfer engine's own server answers this model; nothing of it starts through start_model()
+                backend = NinferBackend(cfg.get("ninfer") or {},
+                                        log=str(Path(target["config"]).with_suffix(".ninfer.log")))
+                try:
+                    backend.start()
+                except (Exception, SystemExit) as e:
+                    backend.close()
+                    raise SwitchFailed(f"{target['id']} did not start ({e})") from None
+                self.ninfer, self.engine, self.vision = backend, None, None
+                self.tok, self.template = tok, template
+                self.model = cfg.get("model_name", target["id"])
+                self.sampling_defaults = dict(sampling_defaults_from_config(cfg) or {})
+                self.effort_end = False
+                self._read_tokenizer(tok)
+                self.apply_settings(settings)
+                self.read_shared(target["config"])
+                self.config_path = target["config"]
+                self.backend = "ninfer"
+                self.gpu_indices = gpu_list(cfg)
+                self.gpu_index = (self.gpu_indices or [0])[0]
+                self.vision_held, self.last_image_at, self.warm_ids = False, 0.0, None
+                self.conv_log.reset()
+                with self.status_lock:
+                    self.rate.clear()
+                    self.last_timings = None
+                self.last_request_at = time.time()
+                self.counter = None
+                print(f"[strata] the model is now {self.model} (Ninfer, context {cfg.get('max_context')} tokens)",
+                      flush=True)
+                return
             try:
                 engine, vision, sampling_defaults, effort_end, groups = start_model(cfg, tok)
             except (Exception, SystemExit) as e:
@@ -6264,6 +6376,11 @@ def make_handler(svc: Service):
                     self.cancel = threading.Event()
                     self._watch_client(self.cancel)
                     self.held.enter_context(svc.use_model(req.get("model"), self.cancel))
+                if getattr(svc, "backend", None) == "ninfer" and svc.ninfer is not None and path in (
+                        "/v1/chat/completions", "/v1/messages", "/v1/responses"):
+                    # the AryaNinfer model answers from its own server: the request goes there whole
+                    self._forward_ninfer(path, req)
+                    return
                 if path == "/v1/responses":
                     self._responses(req)
                 elif path.startswith("/slots/"):
@@ -6643,6 +6760,48 @@ def make_handler(svc: Service):
                     yield item
             finally:
                 items.close()
+
+        def _forward_ninfer(self, path: str, req: dict) -> None:
+            """A request for the AryaNinfer model: forwarded whole to its server, whose OpenAI and Anthropic answers
+            are passed back as they come.  Streaming is the client's own flag, so the SSE bytes go straight on."""
+            backend = svc.ninfer
+            body = dict(req)
+            body["model"] = backend.model_id
+            try:
+                upstream = backend.post(path, body)
+            except urllib.error.HTTPError as e:
+                data = e.read() or b""
+                try:
+                    self._json(e.code, json.loads(data))
+                except ValueError:
+                    self._json(e.code, {"error": {"type": "server_error",
+                                                  "message": data.decode("utf-8", "replace")[:2000]}})
+                return
+            except (urllib.error.URLError, OSError) as e:
+                self._json(503, {"error": {"type": "server_error",
+                                           "message": f"the Ninfer backend is not answering: {e}"}})
+                return
+            try:
+                if req.get("stream"):
+                    self._sse()
+                    while True:
+                        chunk = upstream.read(8192)
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        self.wfile.flush()
+                else:
+                    data = upstream.read()
+                    try:
+                        self._json(200, json.loads(data))
+                    except ValueError:
+                        self._json(502, {"error": {"type": "server_error",
+                                                   "message": "the Ninfer backend sent no JSON"}})
+            except OSError:
+                self._note(outcome="disconnected")
+            finally:
+                with contextlib.suppress(OSError):
+                    upstream.close()
 
         def _openai(self, req):
             req = svc.with_shared(req, "openai")

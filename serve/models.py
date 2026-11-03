@@ -146,6 +146,16 @@ def describe(config: Path) -> dict | None:
         "status": "available", "problem": None,
     }
     tok = Path(cfg.get("tokenizer") or "")
+    if str(cfg.get("backend") or "") == "ninfer":   # a Ninfer artifact served by its own backend (ninfer-serve)
+        spec = cfg.get("ninfer") or {}
+        cmd = [str(a) for a in spec.get("command") or []]
+        ctx_n = _arg(cmd, "--max-context")
+        e["backend"] = "ninfer"
+        e["context"] = int(ctx_n) if ctx_n and str(ctx_n).isdigit() else cfg.get("max_context") or e["context"]
+        e["multimodal"] = "--vision" in cmd
+        e["mtp"] = True
+        e["display_name"] = cfg.get("display_name") or e["id"]
+        return e
     if not exe.exists():
         e["status"], e["problem"] = "unavailable", f"the engine is missing ({exe})"
     elif not (tok / "vocab.json").exists():
