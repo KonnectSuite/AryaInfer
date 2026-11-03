@@ -3416,7 +3416,8 @@ class Service:
             "dsml" if pre in ("joyai-llm", "deepseek-v3") else "lfm2" if pre == "lfm2" else "function"
         self.turn_ids = frozenset(t[0] for t in (tokenizer.encode(s, parse_special=True)
                                                  for s in TURN_OPENERS[self.call_format]) if len(t) == 1)
-        self.engine.turn_ids = self.turn_ids            # the GEN line's turn_at (StrataEngine.turn_key)
+        if self.engine is not None:                     # the GEN line's turn_at (StrataEngine.turn_key)
+            self.engine.turn_ids = self.turn_ids
         self.think_open_ids = []
         if self.call_format == "gemma":
             # after its calls Gemma opens the tools' answer, which is the client's to give: the reply ends there.
