@@ -45,6 +45,26 @@ They live in `serve/comfy-workflows/`. The page can import more (an API-format g
 **Save (API Format)**); imports are kept in `local-data/comfy-workflows/` beside the settings file and never overwrite
 a shipped name.
 
+## The page
+
+**Settings > Tools > Images** (and the **Setup** button in the room) is the server card: the address, headers, timeout,
+the launch method with Start/Stop/Restart, the workflow list with the default for text and for edits, Import JSON,
+and **Check against ComfyUI**, which names a missing node class or model file per graph before a run fails. The VRAM
+policy and the gallery limits are there too.
+
+**Images** in the sidebar is the room. It is a conversation, not a form: you say what you want, the model writes the
+image prompt and picks the workflow itself (the tool description lists every graph with its role and size), and asks
+ComfyUI for it. A follow-up ("warmer light", "put a croissant on the saucer") is an edit: the model passes the id of the
+last picture as `reference_id` with an image-to-image graph, so the composition carries over. When the chat has web
+search on, the model may search for a factual reference and turn what it finds into the prompt; web pictures cannot be
+downloaded into ComfyUI, and the room never pretends otherwise.
+
+- **My images** is the server-side gallery: search, favourites, a pager, and a viewer with edit / ask-for-a-change /
+  open in the Workbench / download / favourite / delete.
+- **Templates** are twelve prompts to start from (a studio portrait, a product shot, a poster, a restyle).
+- **Local model** is the older sd-cli image form, shown only when an sd-cli image model is configured.
+- The thread is kept in this browser (like the chats); the pictures are on the server, so they show in every browser.
+
 ## Placeholders
 
 A graph is a plain ComfyUI API graph plus these tokens:

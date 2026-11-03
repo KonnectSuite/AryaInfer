@@ -304,6 +304,22 @@ class ToolCall(unittest.TestCase):
         self.assertEqual(tools[0]["parameters"]["required"], ["prompt"])
         self.assertIn("generate_image", self.hub.routes())
 
+    def test_the_description_lets_the_model_choose(self):
+        # the agent picks the graph, so the tool has to say what there is and what each one makes
+        tool = self.hub.tools()[0]
+        self.assertIn("Qwen_Image_2_1_Turbo_Square_1024", tool["description"])
+        self.assertIn("image to image", tool["description"])
+        self.assertIn("1024x1024", tool["description"])
+        self.assertIn("Qwen_Image_2_1_Turbo_Edit", tool["parameters"]["properties"]["workflow"]["description"])
+        self.assertIn("reference_id", tool["parameters"]["properties"])
+
+    def test_a_reference_id_edits_that_picture(self):
+        record = self.hub.gallery.add(fake.PNG, {"prompt": "source"})
+        result = self.hub.call("generate_image", {"prompt": "paint it blue", "workflow": EDIT,
+                                                   "reference_id": record["id"]})
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(len(self.httpd.uploads), 1)
+
     def test_a_call_answers_with_the_addresses(self):
         result = self.hub.call("generate_image", {"prompt": "a lighthouse", "count": 1})
         self.assertTrue(result["ok"], result)

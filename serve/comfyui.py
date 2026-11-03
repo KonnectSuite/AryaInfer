@@ -312,7 +312,8 @@ def find_workflow(workflows: list[dict], name: str | None, role: str | None = No
                                 + (", ".join(w["name"] for w in workflows) or "none"))
         if role and match["role"] != role:
             alternative = next((w for w in workflows if w["role"] == role), None)
-            raise WorkflowError(f"{match['name']!r} is a {match['role']} workflow; this call needs {role}."
+            raise WorkflowError(f"{match['name']!r} is {'an' if match['role'].startswith('image') else 'a'} "
+                                f"{match['role']} workflow; this call needs {role}."
                                 + (f" Use {alternative['name']!r} instead." if alternative else
                                    " Import one in Settings > Tools > Images."))
         return match
@@ -973,15 +974,22 @@ def _extra_args(text: str) -> list[str]:
 
 
 # ------------------------------------------------------------------------------------------------ the hub
+IMAGE_TOOL_DESCRIPTION = (
+    "Create or edit a picture with ComfyUI, the image engine on this PC. You write the image prompt yourself from what "
+    "the user asks - subject, style, light, composition - in the language that fits the picture, and you pick the "
+    "workflow by the shape and the job it is for. For an edit or a restyle of an existing picture in this room, pass "
+    "its id as reference_id and an image-to-image workflow. An image-to-image workflow only runs together with "
+    "reference_id: a call with one and not the other fails, so pass both or neither.")
 IMAGE_TOOL = {
     "name": "generate_image",
-    "description": "Create one or more images from a text prompt with ComfyUI, the local image engine. Use it when the "
-                   "user asks for a picture, illustration, poster, icon, sketch or photo; describe the subject, the "
-                   "style and the composition in the prompt. It returns the addresses of the images it made.",
+    "description": IMAGE_TOOL_DESCRIPTION,
     "parameters": {"type": "object", "properties": {
-        "prompt": {"type": "string", "description": "What the image shows: subject, style, light, composition."},
-        "count": {"type": "integer", "description": f"How many images, 1 to {MAX_COUNT} (default 1)."},
-        "workflow": {"type": "string", "description": "A configured workflow name; leave it out for the default."},
+        "prompt": {"type": "string", "description": "The final image prompt you wrote: subject, style, light, "
+                                                    "composition, and what to leave out."},
+        "workflow": {"type": "string", "description": "The workflow to run; pick the one whose size and role fit."},
+        "count": {"type": "integer", "description": f"How many variants, 1 to {MAX_COUNT} (default 1)."},
+        "reference_id": {"type": "string", "description": "The id of an image in this room's gallery to edit or "
+                                                          "restyle; needs an image-to-image workflow."},
     }, "required": ["prompt"]},
 }
 
@@ -1255,9 +1263,20 @@ class ComfyHub:
         if not 1 <= count <= MAX_COUNT:
             raise WorkflowError(f"count must be 1 to {MAX_COUNT}")
         references = self._references(spec)
+        named = str(spec.get("workflow") or "").strip()
+        if named and not references:
+            # the model asked for an edit without saying which picture: say both halves of the rule, it retries at once
+            try:
+                bare = find_workflow(self.workflows(), named)
+            except WorkflowError:
+                bare = None
+            if bare and bare["role"] == "image-to-image":
+                raise WorkflowError(f"{bare['name']!r} edits a picture: pass reference_id as well (the id of the "
+                                    "picture to change), or pick a text-to-image workflow to make a new one")
         workflow = self._pick_workflow(spec, bool(references))
         if references and workflow["role"] != "image-to-image":
-            raise WorkflowError(f"{workflow['name']!r} cannot edit an image; pick an edit workflow")
+            raise WorkflowError(f"{workflow['name']!r} does not edit; with reference_id pass an image-to-image "
+                                "workflow")
         graph_text = _read_workflow(Path(workflow["path"]))
         seed = spec.get("seed")
         seed = int(seed) if isinstance(seed, (int, float)) and not isinstance(seed, bool) else secrets.randbelow(1 << 32)
@@ -1315,7 +1334,24 @@ class ComfyHub:
 
     # ------------------------------------------------------------------ the chat tool
     def tools(self) -> list[dict]:
-        return [IMAGE_TOOL] if self.configured() else []
+        """The chat's image tool, with this server's workflows and their sizes written into the description: the model
+        picks the graph, so it has to know what there is to pick."""
+        workflows = self.workflows() if self.configured() else []
+        if not workflows:
+            return []
+        parts = []
+        for w in workflows:
+            if w.get("baked_size"):
+                shape = f"{w['baked_size']['width']}x{w['baked_size']['height']}"
+            else:
+                shape = "the source's size"
+            parts.append(f"{w['name']} ({w['role'].replace('-', ' ')}, {shape})")
+        tool = json.loads(json.dumps(IMAGE_TOOL))
+        tool["description"] = (IMAGE_TOOL_DESCRIPTION + " Workflows here: " + "; ".join(parts) + "."
+                                + f" Pass the workflow name exactly. Leave it out only when the square default is right.")
+        tool["parameters"]["properties"]["workflow"]["description"] = (
+            "One of: " + ", ".join(w["name"] for w in workflows) + ".")
+        return [tool]
 
     def routes(self) -> dict:
         return {t["name"]: (self, t["name"]) for t in self.tools()}
@@ -1340,8 +1376,10 @@ class ComfyHub:
         try:
             if name != IMAGE_TOOL["name"]:
                 raise WorkflowError(f"there is no tool named {name!r}")
+            reference = str(arguments.get("reference_id") or "").strip()
             result = self.generate({"prompt": arguments.get("prompt"), "count": arguments.get("count") or 1,
-                                    "workflow": arguments.get("workflow"), "source": "chat"},
+                                    "workflow": arguments.get("workflow"), "source": "chat",
+                                    "references": [{"id": reference}] if reference else []},
                                    cancel=cancel, take_turn=False)
             lines = [f"Generated {len(result['images'])} image(s) with {result['workflow']} (seed {result['seed']})."]
             for image in result["images"]:

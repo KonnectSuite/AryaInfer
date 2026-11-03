@@ -198,22 +198,83 @@
 
       <!-- ============================ Images ============================ -->
       <section class="view view--images" id="view-images" hidden>
-        <div class="about">
-          <form class="st-card img-form" id="img-form">
-            <span class="card-title" id="img-title">Make an image</span>
-            <textarea class="st-input img-prompt" id="img-prompt" rows="3" placeholder="Describe the image&hellip;" aria-label="Prompt"></textarea>
-            <div class="img-row">
-              <label class="st-field">Size
-                <select class="st-input" id="img-size">
-                  <option>1024x1024</option><option>1536x1024</option><option>1024x1536</option>
-                  <option>768x768</option><option>512x512</option></select></label>
-              <label class="st-field">Seed
-                <input class="st-input" id="img-seed" type="number" min="0" placeholder="random"></label>
-              <button type="submit" class="st-btn st-btn--primary" id="img-go">Generate</button>
+        <div class="room">
+          <header class="room__head">
+            <h2 class="room__title">Images</h2>
+            <span class="st-badge" id="room-provider">ComfyUI</span>
+            <span class="st-header__spacer"></span>
+            <span class="muted small" id="room-status"></span>
+            <button class="st-btn st-btn--secondary" id="room-new" type="button">New</button>
+            <button class="st-btn st-btn--secondary" id="room-settings" type="button">Setup</button>
+          </header>
+          <nav class="room__tabs" id="room-tabs" role="tablist" aria-label="Images">
+            <button class="room__tab" role="tab" data-room-tab="create" aria-selected="true">Create</button>
+            <button class="room__tab" role="tab" data-room-tab="mine" aria-selected="false">My images</button>
+            <button class="room__tab" role="tab" data-room-tab="templates" aria-selected="false">Templates</button>
+            <button class="room__tab" role="tab" data-room-tab="local" id="room-tab-local" aria-selected="false" hidden>Local model</button>
+          </nav>
+          <div class="room__body">
+            <div class="room__pane" data-room-pane="create">
+              <div class="room__chat" id="room-chat"></div>
             </div>
-            <span class="composer-hint" id="img-hint">One image at a time; a chat request waits for it (and the other way round).</span>
+            <div class="room__pane" data-room-pane="mine" hidden>
+              <div class="room__bar">
+                <input class="st-input room__search" id="room-search" placeholder="Search prompts" aria-label="Search images" autocomplete="off">
+                <button class="st-btn st-btn--secondary" id="room-favs" type="button" aria-pressed="false">Favourites</button>
+                <span class="muted small" id="room-count-note"></span>
+              </div>
+              <div class="room__grid" id="room-grid"></div>
+              <div class="room__more"><button class="st-btn st-btn--secondary" id="room-more" type="button" hidden>Load more</button></div>
+            </div>
+            <div class="room__pane" data-room-pane="templates" hidden>
+              <div class="room__templates" id="room-templates"></div>
+            </div>
+            <div class="room__pane" data-room-pane="local" hidden>
+              <div class="about">
+                <form class="st-card img-form" id="img-form">
+                  <span class="card-title" id="img-title">Make an image</span>
+                  <textarea class="st-input img-prompt" id="img-prompt" rows="3" placeholder="Describe the image&hellip;" aria-label="Prompt"></textarea>
+                  <div class="img-row">
+                    <label class="st-field">Size
+                      <select class="st-input" id="img-size">
+                        <option>1024x1024</option><option>1536x1024</option><option>1024x1536</option>
+                        <option>768x768</option><option>512x512</option></select></label>
+                    <label class="st-field">Seed
+                      <input class="st-input" id="img-seed" type="number" min="0" placeholder="random"></label>
+                    <button type="submit" class="st-btn st-btn--primary" id="img-go">Generate</button>
+                  </div>
+                  <span class="composer-hint" id="img-hint">One image at a time; a chat request waits for it (and the other way round).</span>
+                </form>
+                <div class="img-results" id="img-results"></div>
+              </div>
+            </div>
+          </div>
+          <form class="room__composer" id="room-form">
+            <div class="room__refs" id="room-refs" hidden></div>
+            <div class="room__input">
+              <textarea class="st-input room__prompt" id="room-prompt" rows="1"
+                        placeholder="Ask for a picture, or say what to change&hellip;" aria-label="Image request"></textarea>
+              <button class="st-btn st-btn--icon" id="room-ref-btn" type="button" title="Attach a picture to edit">
+                <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-image"/></svg></button>
+              <input type="file" id="room-ref-file" accept="image/png,image/jpeg,image/webp" hidden>
+              <button class="st-btn st-btn--secondary" id="room-cancel" type="button" hidden>Stop</button>
+              <button class="st-btn st-btn--primary" id="room-go" type="submit">Send</button>
+            </div>
+            <p class="muted small room__hint" id="room-hint"></p>
           </form>
-          <div class="img-results" id="img-results"></div>
+        </div>
+        <div class="room__viewer" id="room-viewer" hidden>
+          <div class="room__viewer-bar">
+            <span class="muted small" id="room-viewer-count"></span>
+            <span class="st-header__spacer"></span>
+            <button class="st-btn st-btn--icon" id="room-viewer-prev" type="button" aria-label="Previous">&#8249;</button>
+            <button class="st-btn st-btn--icon" id="room-viewer-next" type="button" aria-label="Next">&#8250;</button>
+            <button class="st-btn st-btn--icon" id="room-viewer-close" type="button" aria-label="Close">
+              <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-x"/></svg></button>
+          </div>
+          <img class="room__viewer-img" id="room-viewer-img" alt="">
+          <div class="room__viewer-meta" id="room-viewer-meta"></div>
+          <div class="room__viewer-actions" id="room-viewer-actions"></div>
         </div>
       </section>
 
@@ -807,5 +868,7 @@
 <div class="st-toasts" id="toasts" aria-live="polite"></div>
 <script src="web/mcp-catalog.js"></script>
 <script src="web/app.js"></script>
+<script src="web/comfy-templates.js"></script>
+<script src="web/room.js"></script>
 </body>
 </html>

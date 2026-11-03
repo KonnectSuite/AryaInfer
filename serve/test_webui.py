@@ -68,6 +68,8 @@ class Contract(unittest.TestCase):
         cls.page = load()
         cls.html = HTML.read_text(encoding="utf-8")
         cls.js = JS.read_text(encoding="utf-8")
+        cls.room = (WEB / "room.js").read_text(encoding="utf-8")
+        cls.templates = (WEB / "comfy-templates.js").read_text(encoding="utf-8")
         cls.sprite = SPRITE.read_text(encoding="utf-8")
 
     def test_every_element_the_script_looks_up_exists(self):
@@ -166,6 +168,27 @@ class Contract(unittest.TestCase):
         self.assertIn('fetch("comfy"', self.js)                       # relative: only this server
         self.assertIn('body.strata_images = true', self.js)           # the chat's opt-in for the image tool
 
+    def test_the_images_room_contract(self):
+        # a conversation, not a form: the agent writes the prompt and picks the workflow
+        for name in ("room-provider", "room-status", "room-settings", "room-new", "room-tabs", "room-tab-local",
+                     "room-chat", "room-search", "room-favs", "room-count-note", "room-grid", "room-more",
+                     "room-templates", "room-form", "room-prompt", "room-refs", "room-ref-btn", "room-ref-file",
+                     "room-cancel", "room-go", "room-hint", "room-viewer", "room-viewer-img", "room-viewer-meta",
+                     "room-viewer-actions", "room-viewer-close", "room-viewer-prev", "room-viewer-next",
+                     "img-form", "img-prompt"):
+            self.assertIn(name, self.page.by_id, name)
+        self.assertIn('src="web/room.js"', self.html)
+        self.assertIn('src="web/comfy-templates.js"', self.html)
+        for call in ('$("room-form").onsubmit', '$("room-new").onclick', '$("room-favs").onclick',
+                     '$("room-more").onclick', '$("room-viewer-close").onclick'):
+            self.assertIn(call, self.room)
+        self.assertIn('fetch("v1/chat/completions"', self.room)   # the same endpoint as the chat
+        self.assertIn("fetch(`comfy?", self.room)                # relative: only this server
+        self.assertIn('strata_images = true', self.room)        # the agent gets the image tool
+        self.assertIn("reference_id", self.room)                # "change that one" names the last picture
+        self.assertNotIn("api_base", self.room)
+        self.assertGreaterEqual(self.templates.count("prompt:"), 8)
+
     def test_the_views_still_carry_what_the_other_suites_pin(self):
         for name in ("cc-card", "cc-slots-text", "cc-mem-text", "cc-facts", "cc-note"):
             self.assertIn(name, self.page.by_id)
@@ -177,7 +200,7 @@ class Contract(unittest.TestCase):
         self.assertIsNone(re.search(r'src="https?://', self.html), "the page must load only this server's files")
         self.assertIsNone(re.search(r'fetch\(\s*[`"]https?://', self.js), "the page must talk only to this server")
         scripts = re.findall(r'<script[^>]*src="([^"]+)"', self.html)
-        self.assertEqual(scripts, ["web/mcp-catalog.js", "web/app.js"])
+        self.assertEqual(scripts, ["web/mcp-catalog.js", "web/app.js", "web/comfy-templates.js", "web/room.js"])
 
     def test_the_icons_the_page_names_are_in_the_sprite(self):
         symbols = set(re.findall(r'<symbol id="([^"]+)"', self.sprite))

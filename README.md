@@ -805,6 +805,10 @@ All twelve models are used the same way: the same app, the same API.
 - **Tools in the chat page:** give the model your own [MCP servers](docs/DETAILS.md#tools-from-mcp-servers) from
   **Settings > Tools > MCP servers** (a catalog of known servers, a pasted Claude Desktop block, or the fields by
   hand) and a [SearXNG web search](docs/SEARCH.md) beside it; both are offered from the next answer on.
+- **Pictures:** a [ComfyUI](docs/COMFYUI.md) on this machine or another one adds **Images** to the sidebar - a room
+  that creates, edits and keeps pictures, the way a picture app does - and a `generate_image` tool to the chat, whose
+  answers show what it made and open it in the Workbench. Set it up in **Settings > Tools > Images**; the same dialog
+  starts, stops and checks the ComfyUI server and imports workflow JSONs.
 - **The Workbench:** the panel on the right renders what an answer produces - an HTML, SVG or Markdown block opens in
   it while the model writes, in a sandboxed frame that cannot reach this page, this server or the network - and lists
   the attached files, a reader for one address, and the tool calls behind the answer.

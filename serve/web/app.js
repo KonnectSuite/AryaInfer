@@ -86,7 +86,10 @@ function showTab(name) {
     b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false");
   for (const v of VIEWS) $(`view-${v}`).hidden = v !== tab;
   $("view-title").textContent = VIEW_TITLES[tab];
-  if (tab === "images") $("img-prompt").focus();
+  if (tab === "images") {
+    if (typeof roomFocus === "function") { roomFocus(); if (typeof roomRender === "function") roomRender(); }
+    else $("img-prompt").focus();
+  }
   if (location.hash.slice(1) !== tab) history.replaceState(null, "", tab === "chat" ? location.pathname : `#${tab}`);
   if (tab === "chat") $("input").focus();
   if (tab === "monitor") loadMcp();
@@ -1388,6 +1391,7 @@ function renderComfy() {
     ? "a generate_image tool in this page's chat" : "set the server up first";
   renderComfyWorkflows();
   renderComfyCheck();
+  if (typeof roomOnComfy === "function") roomOnComfy();      // the Images room shares these settings
 }
 function renderComfyWorkflows() {
   const box = $("image-workflows");
