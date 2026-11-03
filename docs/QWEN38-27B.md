@@ -724,19 +724,21 @@ card (`--report-drafts`, so the rounds are counted):
 | `--window` | decode | tokens a round | ms a pass | marginal ms a row | accepted |
 | --- | --- | --- | --- | --- | --- |
 | 1 (no guesses) | 44.1 | 1.00 | 22.7 | - | - |
-| 2 | 64.6 | 1.83 | 28.3 | 12.8 | 57/66 |
-| 4 | **74.0** | 2.84 | 38.4 | 13.5 | 82/102 |
-| 8 | 70.9 | 3.28 | 46.3 | 14.1 | 89/108 |
+| 2 | 64.6 | 1.83 | 28.3 | 5.6 | 57/66 |
+| 4 | **74.0** | 2.84 | 38.4 | 5.2 | 82/102 |
+| 8 | 70.9 | 3.28 | 46.3 | 3.4 | 89/108 |
 
-A single-row pass is 22.7 ms: the 9.7 GB of weights read at 427 GB/s, about 64% of the card's 672.  Each row added to
-the window costs 13-14 ms more, so it only pays if its acceptance beats 13/22.7 = 57%; the guesses are at 83% and up,
-yet the measured decode peaks at a window of four rather than eight because the last rows add cost faster than they
-add accepted tokens.  The ceiling this implies is arithmetic: seven perfect rows would be 22.7 + 6 x 13 = 100 ms for
-seven tokens, about 70 tok/s - the same place the adaptive policy already is.  capy-flash's 139 tok/s at 8K on an RTX
-5070 Ti therefore does not come from deeper guesses but from a **cheaper row**: their card has 1.33x this one's
-bandwidth, and the rest has to be the per-row compute.  The rows' cost here is the recurrent layers' state updates
-(this model is a GDN hybrid, 65 blocks with full attention every fourth), which the engine's own notes name as the
-remaining work: a batched recurrence for a window's rows over a state table, instead of the per-row copies.
+A single-row pass is 22.7 ms: the 9.7 GB of weights read at 427 GB/s, about 64% of the card's 672.  A row added to the
+window costs 3.4-5.6 ms more (the same order as the 2026-11-02 table's "about 5 ms" a row; an earlier revision of this
+section mispriced it at 13-14 ms by dividing the round's time by accepted tokens rather than by rows).  So a guess pays
+while its acceptance beats 5/22.7 = 22%; at 80-90% a row is a good buy, and seven perfect rows would be 22.7 + 6 x 4 =
+47 ms for seven tokens, about 150 tok/s (with 0.8 a position, 4.2 expected tokens a round, about 90).  The measured
+decode peaks at 71-74 because the **policy offers only 2.6-3.3 guesses a round**: its stop rule compares the sure
+product against the marginal row plus the draft's ask time, and with a full pass priced at 22.7 ms it stops at three.
+That is the gap capy-flash's 139 tok/s at 8K exposes, and it is a window-depth/policy question before it is a card
+question.  The next experiment is to force a deeper window (`--window` does not force it; `Guesses::wants()` decides)
+and measure whether acceptance holds at positions 4-7; only if it does not would the answer be the recurrent layers'
+per-row state updates, which the engine's own notes name as the remaining kernel work.
 
 Negative results, measured the same way:
 
@@ -788,9 +790,10 @@ writing side the engine's own warning stands: some measured long-response runs r
 enabled per model in the arya config (an `env` entry) rather than in the binary, and a session that sees slow answers
 can drop it by removing that entry and restarting.
 
-The per-row cost itself is still what the earlier pass-cost table says: about 13 ms against a 22.7 ms pass, i.e. the
-compute of an extra token on top of a weight read that does not overlap with it.  Closing that needs a small-batch
-quantized matmul that overlaps the two (a kernel project, not a flag), or a two-head draft this file does not have.
+The per-row cost itself is not the wall: a verify row measures 3.4-5.6 ms against a 22.7 ms single-token pass, so the
+window has room (the correction is spelled out in the pass-cost section).  What stops decode at ~75 is the draft
+policy offering only 2.6-3.3 guesses a round; forcing a deeper window and checking acceptance at positions 4-7 is the
+next experiment, and it is cheaper to run than any kernel change.
 ## The 128K configuration needs no smaller twin, and where the tuning landed (2026-11-03)
 
 At a 62,000-token prompt on a free card (aryainfer, GDN MMA on, batch 512, one engine at a time): 128K context with
