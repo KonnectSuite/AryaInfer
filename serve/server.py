@@ -8012,10 +8012,21 @@ def main() -> int:
         settings = model_settings(cfg, overrides)       # #37: the model's own settings, read again at every switch
     except ValueError as e:
         raise SystemExit(f"[strata] config {e}")
+    ninfer = None
     if a.engine == "strata":
         if not cfg:
             ap.error("--engine strata needs --config")
-        engine, vision, sampling_defaults, effort_end, groups = start_model(cfg, tok, a.lazy or cfg.get("lazy_load") is True)
+        if str(cfg.get("backend") or "") == "ninfer":
+            # a server started on the Ninfer model itself: its own server is the engine, as a switch to it does
+            ninfer = NinferBackend(cfg.get("ninfer") or {}, log=str(Path(a.config).with_suffix(".ninfer.log")))
+            try:
+                ninfer.start()
+            except (Exception, SystemExit) as e:
+                raise SystemExit(f"[strata] {Path(a.config).name} did not start ({e})") from None
+            engine, vision = None, None
+            sampling_defaults, effort_end, groups = sampling_defaults_from_config(cfg), False, []
+        else:
+            engine, vision, sampling_defaults, effort_end, groups = start_model(cfg, tok, a.lazy or cfg.get("lazy_load") is True)
     else:
         effort_end = None
         engine, vision, sampling_defaults = MockEngine(tok, a.script or [
@@ -8027,6 +8038,12 @@ def main() -> int:
                   sampling_defaults=sampling_defaults)
     svc.overrides, svc.cfg_overrides = overrides, cfg_overrides
     svc.apply_settings(settings)
+    if ninfer is not None:                              # the Ninfer model started with the server
+        import atexit
+        atexit.register(ninfer.close)
+        svc.ninfer = ninfer
+        svc.ninfer_budgets = dict(cfg.get("reasoning_budget_by_effort") or {})
+        svc.effort_end = False
     if a.engine != "strata":                            # the mock engine: no model card's sampling
         svc.model_arch = None
     if cfg.get("images"):                               # image generation (serve/images.py), set up by setup --images
@@ -8145,13 +8162,15 @@ def main() -> int:
               f"chat: {', '.join(hub.servers)}", flush=True)
         hub.start()
         atexit.register(hub.close)                      # the servers AryaStrata started end with it
-    svc.start_warm()                                    # before serve(): a first request finds its stop event
+    if ninfer is None:
+        svc.start_warm()                                # before serve(): a first request finds its stop event
     httpd = serve(svc, host=a.host, port=a.port)
     svc.start_idle_unload()
     svc.start_vision_idle()
     here = "127.0.0.1" if a.host in ("0.0.0.0", "", "::") else a.host
     print(f"ready: http://{here}:{a.port}/v1  (OpenAI: /v1/chat/completions, Anthropic: /v1/messages, "
-          f"context {engine.max_context} tokens{', images on' if vision else ''}"
+          f"context {engine.max_context if engine is not None else cfg.get('max_context')} tokens"
+          f"{', images on' if vision else ''}"
           f"{', API key required' if svc.api_key else ''})", flush=True)
     if svc.control_token:                                 # the tray icon started it: there is no window to close
         print(f"       open http://{here}:{a.port}/ in a browser to chat; stop it from the tray icon, or send "

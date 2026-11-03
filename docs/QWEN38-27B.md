@@ -511,7 +511,10 @@ entry `strata-qwen3.8-27b-ninfer-gsq3.json` starts `ninfer-serve` in WSL2 with t
 rk4v4-e8 --spec mtp --draft-tokens 3 --lm-head-draft --ngram chain --prefill-chunk 2688 --vision
 --preserve-thinking`, 102,400 tokens of context) and forwards a request for that model whole: OpenAI Chat Completions,
 OpenAI Responses and Anthropic Messages, streaming included.  One model is on the card at a time, so the first request
-after a switch pays the start (about 37 s to this model, about 6 s back to the GGUF).
+after a switch pays the start (about 37 s to this model, about 6 s back to the GGUF).  A server can also be started
+on the Ninfer config itself (`--config strata-qwen3.8-27b-ninfer-gsq3.json`): its backend starts with the server and
+the first request answers without a switch (measured 1.1 s on 2026-11-02); starting on it and switching away works
+too (7.2 s to the GGUF, 37.5 s back).
 
 Reproduced on this host against the recorded head-to-head (the same 20,051-token prompt and 64 greedy tokens):
 
