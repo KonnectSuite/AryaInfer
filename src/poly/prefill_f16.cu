@@ -68,6 +68,45 @@ __device__ __forceinline__ void aq3_8_i8(const uint8_t* blk, int off, int8_t* ou
         out[j] = (int8_t) ((int) (((qs[j] >> sl) & 3) | (((hm[j] >> sh) & 1) << 2)) - 4);
 }
 
+// The AQ3 matrix as plain int8 codes for the product below: n_out rows of n_in codes, then the 128-value group scales
+// as halves.  No per-32 padding, so a tile is a 16-byte aligned copy.
+__global__ void aq3_to_i8_kernel(const uint8_t* __restrict__ w, uint8_t* __restrict__ codes, int n_in, size_t pieces) {
+    const size_t i = (size_t) blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= pieces) return;
+    const int per_row = n_in / 8;
+    const int row = (int) (i / per_row), j = (int) (i - (size_t) row * per_row);
+    const int k = j * 8;
+    aq3_8_i8(w + (size_t) row * ((size_t) (n_in / 256) * kAq3Block) + (size_t) (k >> 8) * kAq3Block, k & 255,
+             (int8_t*) (codes + (size_t) row * n_in + k));
+}
+
+__global__ void aq3_i8_scales_kernel(const uint8_t* __restrict__ w, uint16_t* __restrict__ scales, int n_in,
+                                     int total) {
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= total) return;
+    const int groups = n_in / 128, row = i / groups, g = i - row * groups;
+    const __half* s = (const __half*) (w + (size_t) row * ((size_t) (n_in / 256) * kAq3Block) +
+                                       (size_t) (g / 2) * kAq3Block + (size_t) (g & 1) * 2);
+    scales[i] = __half_as_ushort(*s);
+}
+
+// The activations as int8 codes and per-32 scales: a warp a 32-value block, one value a lane.
+__global__ void aq3_i8_quant_kernel(const float* __restrict__ x, uint8_t* __restrict__ codes,
+                                    uint16_t* __restrict__ scales, int n_in, int total) {
+    const int w = (blockIdx.x * blockDim.x + threadIdx.x) >> 5, lane = threadIdx.x & 31;
+    if (w >= total) return;
+    const int blocks = n_in / 32, tok = w / blocks, b = w - tok * blocks;
+    const float v = x[(size_t) tok * n_in + (size_t) b * 32 + lane];
+    float m = fabsf(v);
+#pragma unroll
+    for (int o = 16; o > 0; o >>= 1) m = fmaxf(m, __shfl_xor_sync(0xffffffffu, m, o));
+    const float d = m > 0.f ? m / 127.f : 0.f;
+    int q = d > 0.f ? (int) lrintf(v / d) : 0;
+    q = q < -127 ? -127 : q > 127 ? 127 : q;
+    codes[(size_t) tok * n_in + (size_t) b * 32 + lane] = (uint8_t) (int8_t) q;
+    if (lane == 0) scales[(size_t) tok * blocks + b] = __half_as_ushort(__float2half(d));
+}
+
 template <bool AQ3>
 __global__ void fused_iq3_gemm(const uint8_t* __restrict__ w, size_t row_bytes, const __half* __restrict__ x,
                                float* __restrict__ y, int n_in, int n_out, int rows) {
@@ -247,43 +286,43 @@ __global__ void __launch_bounds__(512, 2) fused_aq3_i8_kernel(const uint8_t* __r
     const int m0 = blockIdx.x * I8_BM, t0 = blockIdx.y * I8_BN;
     const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31;
     const int rg = warp >> 1, th = warp & 1;         // row band 0..7 (16 rows), token half 0/1 (64 tokens)
-    const int blocks_per_row = n_in / 32;
     float acc[2][4][4];
     for (auto& pass : acc) for (auto& g : pass) for (auto& v : g) v = 0.f;
     for (int kt = 0; kt < n_in / I8_BK; ++kt) {
+        // the int8 codes of the AQ3 matrix (made once a call): a 16-byte copy a unit, four a row
         if ((mode & 1) == 0)   // diagnostic: 1 skips the weight staging, 2 the activation staging, 4 the mma
-        for (int c = tid; c < I8_BM * (I8_BK / 8); c += (int) blockDim.x) {
-            const int m = c / (I8_BK / 8), j = c % (I8_BK / 8), col = m0 + m;
-            int8_t* out = a_s + m * I8_BK + j * 8;
+        for (int c = tid; c < I8_BM * (I8_BK / 16); c += (int) blockDim.x) {
+            const int m = c / (I8_BK / 16), q = c % (I8_BK / 16), col = m0 + m;
+            uint4* dst = (uint4*) (a_s + m * I8_BK + q * 16);
             if (col >= n_out) {
-                for (int i = 0; i < 8; ++i) out[i] = 0;
+                *dst = make_uint4(0, 0, 0, 0);
                 continue;
             }
-            const int k = kt * I8_BK + j * 8;
-            aq3_8_i8(w + (size_t) col * row_bytes + (size_t) (k >> 8) * kAq3Block, k & 255, out);
+            *dst = *(const uint4*) (w + (size_t) col * row_bytes + (size_t) kt * I8_BK + q * 16);
         }
         if (tid < I8_BM) {
             const int col = m0 + tid;
             wsc[tid] = col < n_out
-                ? __half2float(*(const __half*) (w + (size_t) col * row_bytes + (size_t) (kt >> 2) * kAq3Block +
-                                                 ((kt >> 1) & 1) * 2))
+                ? __half2float(((const __half*) (w + (size_t) n_out * row_bytes))[(size_t) col * (n_in / 128) +
+                                                                                (size_t) (kt >> 1)])
                 : 0.f;
         }
-        if ((mode & 2) == 0 && tid < I8_BN * 2) {
-            const int t = tid >> 1, c = tid & 1, tok = t0 + t;
-            int8_t* out = b_s + t * I8_BK + c * 32;
+        if ((mode & 2) == 0)
+        for (int c = tid; c < I8_BN * (I8_BK / 16); c += (int) blockDim.x) {
+            const int t = c / (I8_BK / 16), q = c % (I8_BK / 16), tok = t0 + t;
+            uint4* dst = (uint4*) (b_s + t * I8_BK + q * 16);
             if (tok >= rows) {
-                for (int i = 0; i < 32; ++i) out[i] = 0;
-                bsc[t * 2 + c] = 0.f;
-            } else {
-                // native_quantize_q8_1's block: half2 ds (the scale, then the sum) and 32 int8
-                const uint8_t* blk = xq + ((size_t) tok * blocks_per_row + kt * 2 + c) * 36;
-                const uint32_t* src = (const uint32_t*) (blk + 4);
-                uint32_t* dst = (uint32_t*) out;
-#pragma unroll
-                for (int i = 0; i < 8; ++i) dst[i] = src[i];
-                bsc[t * 2 + c] = __half2float(*(const __half*) blk);
+                *dst = make_uint4(0, 0, 0, 0);
+                continue;
             }
+            *dst = *(const uint4*) (xq + (size_t) tok * row_bytes + (size_t) kt * I8_BK + q * 16);
+        }
+        if (tid < I8_BN * 2) {
+            const int t = tid >> 1, c = tid & 1, tok = t0 + t;
+            bsc[t * 2 + c] = tok < rows
+                ? __half2float(((const __half*) (xq + (size_t) rows * row_bytes))[(size_t) tok * (n_in / 32) +
+                                                                                 (size_t) kt * 2 + c])
+                : 0.f;
         }
         __syncthreads();
         if ((mode & 4) == 0)
@@ -333,6 +372,22 @@ __global__ void __launch_bounds__(512, 2) fused_aq3_i8_kernel(const uint8_t* __r
 }  // namespace
 
 bool f16_type(int ggml_type) { return ggml_type == (int) GGML_TYPE_IQ3_XXS || ggml_type == (int) kTypeAQ3; }
+
+void aq3_to_i8(const void* w, void* out, int n_in, int n_out, void* stream) {
+    const size_t pieces = (size_t) n_out * (size_t) (n_in / 8);
+    aq3_to_i8_kernel<<<(unsigned) ((pieces + 255) / 256), 256, 0, (cudaStream_t) stream>>>(
+        (const uint8_t*) w, (uint8_t*) out, n_in, pieces);
+    const int total = n_out * (n_in / 128);
+    aq3_i8_scales_kernel<<<(unsigned) ((total + 255) / 256), 256, 0, (cudaStream_t) stream>>>(
+        (const uint8_t*) w, (uint16_t*) ((uint8_t*) out + (size_t) n_out * n_in), n_in, total);
+}
+
+void aq3_i8_quantize(const float* x, void* out, int n_in, int rows, void* stream) {
+    const int total = rows * (n_in / 32);
+    if (total <= 0) return;
+    aq3_i8_quant_kernel<<<(unsigned) ((total + 7) / 8), 256, 0, (cudaStream_t) stream>>>(
+        x, (uint8_t*) out, (uint16_t*) ((uint8_t*) out + (size_t) rows * n_in), n_in, total);
+}
 
 bool fused_gemm_i8(const void* w, size_t row_bytes, const void* xq, float* y, int n_in, int n_out, int rows,
                    void* stream, int mode) {
@@ -406,6 +461,8 @@ namespace strata::poly {
 bool f16_type(int) { return false; }
 void cast_f16(const float*, uint16_t*, size_t, void*) {}
 bool fused_gemm_f16(const void*, size_t, int, const uint16_t*, float*, int, int, int, void*) { return false; }
+void aq3_to_i8(const void*, void*, int, int, void*) {}
+void aq3_i8_quantize(const float*, void*, int, int, void*) {}
 bool fused_gemm_i8(const void*, size_t, const void*, float*, int, int, int, void*, int) { return false; }
 size_t aq3_row_bytes(int n_in) { return (size_t) (n_in / 256) * 100; }
 void aq3_to_q8_0(const void*, void*, int, int, void*) {}

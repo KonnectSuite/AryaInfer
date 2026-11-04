@@ -2275,8 +2275,14 @@ void Engine::lin(const Dev& w, const float* x, float* y, int n, const void* xq, 
         // the same layout MMQ writes).  Opt-in until it is measured against the Q8_0 expansion path.
         static const bool aq3_i8 = std::getenv("STRATA_AQ3_I8") != nullptr;
         if (n >= kStageRows && aq3_i8 && mmq_) {
-            kernels::native_quantize_q8_1(x, q8_, w.n_in * n, 1, st_);
-            if (fused_gemm_i8(w.p, aq3_row_bytes(w.n_in), q8_, y, w.n_in, w.n_out, n, st_)) return;
+            const size_t need = (size_t) w.n_out * w.n_in + (size_t) w.n_out * (w.n_in / 128) * 2;
+            if (aq3_q8_n_ < need) {
+                aq3_q8_ = dmalloc(need, "an AQ3 matrix as int8 codes");
+                aq3_q8_n_ = need;
+            }
+            aq3_to_i8(w.p, aq3_q8_, w.n_in, w.n_out, st_);
+            aq3_i8_quantize(x, q8_, w.n_in, n, st_);
+            if (fused_gemm_i8(aq3_q8_, (size_t) w.n_in, q8_, y, w.n_in, w.n_out, n, st_)) return;
         }
         if (n >= kStageRows && mmq_ && Mmq::fits((int) GGML_TYPE_Q8_0, w.n_out, w.n_in)) {
             const size_t need = (size_t) w.n_out * (size_t) (w.n_in / 32) * 34;

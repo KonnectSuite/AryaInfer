@@ -16,7 +16,11 @@ void cast_f16(const float* x, uint16_t* out, size_t n, void* stream);
 /// y is `rows` rows of `n_out` floats.  False when the type has no kernel, and then nothing was written.
 bool fused_gemm_f16(const void* w, size_t row_bytes, int ggml_type, const uint16_t* x, float* y, int n_in, int n_out,
                     int rows, void* stream);
-/// The int8 tensor-core product (STRATA_AQ3_I8): AQ3 weights and q8_0 activations (a half scale and 32 int8 a block).
+/// The AQ3 matrix for the int8 product: n_out rows of n_in signed int8 codes, then a half scale a 128-value group.
+void aq3_to_i8(const void* w, void* out, int n_in, int n_out, void* stream);
+/// The activations for the int8 product: rows of n_in signed int8 codes, then a half scale a 32-value block.
+void aq3_i8_quantize(const float* x, void* out, int n_in, int rows, void* stream);
+/// The int8 tensor-core product (STRATA_AQ3_I8): the buffers aq3_to_i8 and aq3_i8_quantize write.
 bool fused_gemm_i8(const void* w, size_t row_bytes, const void* xq, float* y, int n_in, int n_out, int rows,
                    void* stream, int mode = 0);
 

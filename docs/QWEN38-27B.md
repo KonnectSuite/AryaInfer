@@ -970,3 +970,13 @@ So the mma and epilogue alone are about 1.66 ms - **110 TFLOPS**, above the ~77 
 reaches - and the staging is 1.85 ms, 46% of the call.  Overlapping them (cp.async double buffering on pre-expanded
 int8 weights and q8_1 activations, or four producer warps unpacking the AQ3 tile while twelve consumer warps run the
 mma) is the change that would put this path ahead; more tile tuning cannot.
+### Int8 codes with 16-byte staging (2026-11-03)
+
+The staging now copies plain int8 codes instead of unpacking AQ3 in the tile: `aq3_to_i8` writes the matrix as n_in
+code bytes a row plus a half scale a 128-value group, `aq3_i8_quantize` writes the activations the same way with a
+half a 32-value block, and both tile loads became `uint4` copies (four a row, one a thread).  At 17,408 x 5,120 and
+1,024 tokens the kernel reads **63.1 TFLOPS** (2.891 ms, from 50.4); the shapes a layer has read 65.7-76.2 through
+the engine at 8K, batch 1024: **970.7 tok/s** against 1,554.2 for the expansion path.  The diagnostic mode now splits
+the 2.891 ms into 0.79 of weight staging, 0.37 of activation staging, 0.29 of loop and barriers, and about 1.44 of
+mma and epilogue (~126 TFLOPS).  The next step is `cp.async` double buffering - the codes are 16-byte aligned now, so
+the staging can run on the copy engine under the product.
