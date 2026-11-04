@@ -33,6 +33,11 @@ All of them run on GPU 0 with vision on where the model has a vision encoder, th
 budget, and `fit_max_tokens` for the native Flash-Next models. The `strata.exe` profiles leave the expert cache and
 prefill at the engine's own `auto`.
 
+Every vision profile sets `"min_tokens": 1024` in its `vision` section, which the server passes to the encoder as
+`--min-tokens`. Without it a small picture is encoded into about 320 tokens and the answers drift; the measurements
+and the card that found it are in [the Qwen3.6 results](../QWEN36_HOST_RESULTS.md). The abliterated Qwen3.6 has no
+encoder of its own, so its profile borrows the base Qwen3.6 projector.
+
 ## Put them back into an install
 
 ```powershell

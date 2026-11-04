@@ -62,10 +62,11 @@
   "mmproj": "$DATA\\models\\mmproj-Qwen3.8-Flash-Next-BF16.gguf",
   "model": "$DATA\\models\\IQ3_XXS\\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf",
   "gpu": true,
-  "max_tokens": 1024
+  "max_tokens": 1024,
+  "min_tokens": 1024
  },
  "switch_on_request": true,
- "display_name": "AryaStrata Qwen3.8 Flash Next IQ3_XXS — 256K vision",
+ "display_name": "AryaStrata Qwen3.8 Flash Next IQ3_XXS \u2014 256K vision",
  "reasoning_effort": "medium",
  "reasoning_budget_tokens": 8000,
  "reasoning_loop_recovery": "recover",

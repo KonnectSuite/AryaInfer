@@ -32,7 +32,8 @@
   "mmproj": "$DATA\\models\\ornith-APEX-I-QUALITY\\mmproj.gguf",
   "model": "$DATA\\models\\ornith-APEX-I-QUALITY\\Ornith-1.5-35B-A3B-APEX-MTP-I-Quality.gguf",
   "gpu": true,
-  "max_tokens": 1024
+  "max_tokens": 1024,
+  "min_tokens": 1024
  },
  "sampling": {
   "temperature": 1,

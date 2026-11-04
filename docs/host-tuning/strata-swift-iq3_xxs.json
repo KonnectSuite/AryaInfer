@@ -46,7 +46,7 @@
  "cwd": "$INSTALL",
  "tokenizer": "$DATA\\packs\\swift-iq3_xxs\\tokenizer",
  "model_name": "swift-1.5-iq3_xxs",
- "display_name": "AryaStrata Swift 1.5 IQ3_XXS — 256K vision",
+ "display_name": "AryaStrata Swift 1.5 IQ3_XXS \u2014 256K vision",
  "log": "$INSTALL\\strata-swift-iq3_xxs.log",
  "lib_dirs": [
   "$DATA\\engines\\strata-0.1.56",
@@ -60,7 +60,8 @@
   "mmproj": "$DATA\\models\\mmproj-Swift-Qwen3.8-Flash-Next-BF16.gguf",
   "model": "$DATA\\models\\swift-IQ3_XXS\\Swift-Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf",
   "gpu": true,
-  "max_tokens": 1024
+  "max_tokens": 1024,
+  "min_tokens": 1024
  },
  "fit_max_tokens": true,
  "switch_on_request": true,

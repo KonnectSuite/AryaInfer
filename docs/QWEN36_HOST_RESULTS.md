@@ -170,6 +170,30 @@ profile and `none` for the abliterated one.
 Not measured here: recall at 262K for either file, image accuracy for the APEX profile, the 18-session coding suite,
 and combined long-context coding-and-image sessions. The abliterated profile has no vision.
 
+## Images: every profile reads them, and small ones need the 1,024-token floor
+
+Measured November 3, 2026 on the same host with a 768x384 synthetic card reading `ARYA-5907`, the shape of the image
+fixtures this family is checked with. Every profile accepted the image, but only the Turbo 27B set the encoder's image
+floor (`min_tokens: 1024` in the vision section, which the server passes as `--min-tokens`); without it a small picture
+arrives as about 320 tokens and the answers drift or turn into unrelated text.
+
+| Profile | Image tokens before / after | Answer before the floor | Answer after |
+|---|---|---|---|
+| UD-Q4_K_XL | 340 / 1,110 | "Ask us for more information" | ARYA-5907 |
+| Ornith 1.5 APEX | 340 / 1,110 | "Hi, I'm Xander and I love you." | ARYA-5907 |
+| Swift 1.5 | 314 / 1,084 | ARYA-5967 | ARYA-5907 |
+| Swift 1.5 Abliterated | 314 / 1,084 | ARYA-5907 | ARYA-5907 |
+| Flash Next IQ3_XXS | 314 / 1,084 | ARYA-5917 | ARYA-5907 |
+| Turbo Brilliance 27B | 1,084 (already set) | ARYA-5907 | ARYA-5907 |
+
+The floor only raises small images: a screenshot that already spends 1,024 tokens or more is unchanged, and one that
+spends less is read instead of guessed. All profiles now set it, and all eight read the card exactly with it.
+
+The abliterated Qwen3.6 came without an encoder at all: wangzhang's repository holds the three weight files and no
+mmproj, so the profile reported `images: false`. Abliteration edits text-layer weights, so the vision tower and
+projector are the base model's; the profile now points at `mmproj-F16.gguf` from UD-Q4_K_XL and read the card exactly
+at 1,086 prompt tokens.
+
 ## Reproduce the validation
 
 Select the installed model profile with the PolyStrata executable and its recorded arguments. Keep the server bound to 127.0.0.1 and stop other inference and download jobs during measurements. With the selected model loaded, use:
