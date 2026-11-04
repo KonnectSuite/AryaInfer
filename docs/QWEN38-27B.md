@@ -917,4 +917,11 @@ activations for eight times as many output rows, but both the weight and activat
 with no overlap; the next step is a double-buffered `cp.async` pipeline (what MMQ does) and a wider token tile, not
 another instruction change.  A per-128 activation group (one scale a k tile instead of four) was tried to cut that
 epilogue fourfold and made it **slower**: 562.6 tok/s.  The wider copy a token (128 bytes on 128 threads instead of
-32 bytes on 512) and the four A fragments held in registers cost more than the three scaled adds saved; it is parked.
+32 bytes on 512) and the four A fragments held in registers cost more than the three scaled adds saved; it is parked.A raw benchmark of the kernel alone (AQ3 weights and Q8_1 activations, the shapes a layer has: 5,120-17,408 rows by
+5,120 columns, 1,024 tokens) puts the 128 x 128 product at **39-43 TFLOPS**, below the ~77 TFLOPS the whole
+expansion-path prefill reaches at 8K: the kernel, not the engine integration, is the limit.  Feeding it the Q8_0
+expansion of the weights instead of unpacking the AQ3 codes in the tile (a plain 32-byte copy, no per-block unpack)
+measured **30.9 TFLOPS** - slower: the copy runs on 512 threads in 32-byte pieces and the per-chunk weight scales
+join the epilogue.  Both variants are parked (patches in `build-env/`); the staging is still load-sync-compute, so a
+pipelined loader (`cp.async`/`ldmatrix`, more occupancy) is what the kernel needs before it can pass the expansion
+path.  Until then the expansion path stays the prefill default.
