@@ -1010,3 +1010,14 @@ Two D accumulators alternating per token group with the weight and activation sc
 measured **901 tok/s** through the engine (980 without), against the ~108 TFLOPS the product path alone reaches; the
 extra register pressure cost more than the overlap bought.  Reverted.  With rounds 13-14 (32-value tile, grid order)
 that is three schedule/staging variants in a row that lose, so the int8 path stays at 970-980 tok/s, opt-in.
+### Why the prompt attention is not on the flash kernel (2026-11-03)
+
+`fattn_fits()` takes a GQA group of 8 or 16 heads (`n_head == 8 * kv_heads` or `16 *`), and Qwen3.8 27B is **6**
+(24 query heads over 4 KV).  So `fattn_` is false for this model and a prompt batch's attention runs `attend_batch()`,
+the cuBLAS path, with `chunk_` queries a pass - at 131K context the 64 MB score budget makes that chunk **5** tokens,
+so a 1,024-token batch does about 205 passes over the cache.  The decode side is different: `fdec_fits()` accepts 6
+explicitly (24 over 4 is 6, as 32 over 4 is 8), so decode does use the tensor-core kernel.  Raising the score budget
+fourfold (256 MB, chunk ~40 at 64K) measured 1,028.9 against 1,010.0 at 62K - inside the run band, so it was reverted;
+the fallback's cost is the small-M cuBLAS work, not the pass count alone.  A group-6 flash-attention instantiation (or
+a prefill mode on the project's own decode kernel) is the next real attention step, and it is a kernel project, not a
+budget tweak.
