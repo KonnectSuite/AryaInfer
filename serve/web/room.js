@@ -232,6 +232,10 @@ async function roomSend(event) {
   const m = {role: "assistant", text: "", reasoning: ""};
   room.messages.push(m);
   $("room-prompt").value = "";
+  // the pictures went with the message that is now in the thread: clear the box at once, not when the answer ends,
+  // or the composer still looks full while the model works
+  room.refs = [];
+  roomRenderRefs();
   room.sending = true;
   roomRender();
   const history = room.messages.slice(0, -1).map((x) => ({role: x.role, content: x.text}));
