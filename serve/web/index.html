@@ -149,6 +149,11 @@
           </form>
           <div class="chat-foot" id="chat-foot">
             <div class="chat-foot__chips">
+              <span class="chat-foot__chip chat-foot__tps" id="foot-tps" hidden
+                    title="Tokens per second while the answer is written">
+                <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-bolt"/></svg>
+                <span id="foot-tps-text">0 tok/s</span>
+              </span>
               <button type="button" class="chat-foot__chip" id="foot-turns" aria-haspopup="dialog"
                       aria-expanded="false" title="Session statistics: turns, steps and where the time went">
                 <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-activity"/></svg>

@@ -736,6 +736,10 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
    can override it). Layout stays in the media queries above; this block is the behaviour a finger needs and a pointer
    does not: boxes big enough to hit, and nothing that only appears on hover, which a phone never does. */
 [data-device="mobile"] .chat-foot__chip { min-height: 40px; padding: 0 10px; }
+/* the live speed: the phone hides the header pill's words, so it lives in the footer instead */
+.chat-foot__tps { display: none; }
+[data-device="mobile"] .chat-foot__tps { display: inline-flex; }
+[data-device="mobile"] .chat-foot__tps .st-icon { color: var(--st-accent); }
 [data-device="mobile"] .st-chip-btn { min-height: 40px; }
 [data-device="mobile"] .st-btn--icon { min-width: 40px; min-height: 40px; }
 [data-device="mobile"] .st-composer__bar .st-btn--icon,

@@ -398,6 +398,20 @@ function setPill(state, text) {
   setCompanion(COMPANION_BY_PILL[state] || "idle");
 }
 
+// The phone hides the header pill's words for room, so its speed lives in the footer: one chip, shown while the model
+// is writing, with the same live rate the header reads.
+function renderTps(live) {
+  const chip = $("foot-tps");
+  if (!chip) return;
+  const rate = live.state === "generating" ? live.tok_s : null;
+  if (rate > 0) {
+    $("foot-tps-text").textContent = `${fmt(rate, 1)} tok/s`;
+    chip.hidden = false;
+  } else {
+    chip.hidden = true;
+  }
+}
+
 function render(m) {
   const live = m.live || {}, hw = m.hardware || {}, st = m.hardware_static || {}, eng = m.engine || {}, h = m.history || {};
   const last = (m.requests || [])[0];
@@ -411,6 +425,7 @@ function render(m) {
     setPill("idle", "Idle");
   }
   if (live.queued > 0) setPill("queued", `${live.queued} queued`);
+  renderTps(live);
   if (tab === "monitor") renderMonitor(live, hw, st, eng, h, last, m.requests || [], m.totals, m.requests_kept);
   if (tab === "monitor") renderConvCache(m.conversation_cache);
   if (tab === "about") renderAbout(eng, hw, st);
