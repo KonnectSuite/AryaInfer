@@ -411,6 +411,16 @@
       <span class="muted small">System follows this PC's light or dark setting.</span>
     </section>
     <section class="st-pop__section">
+      <span class="st-label">Touch controls</span>
+      <div class="seg" id="device-seg" role="radiogroup" aria-label="Touch controls">
+        <button type="button" role="radio" data-v="auto" aria-checked="true">Auto</button>
+        <button type="button" role="radio" data-v="desktop" aria-checked="false">Pointer</button>
+        <button type="button" role="radio" data-v="mobile" aria-checked="false">Touch</button>
+      </div>
+      <span class="muted small">Auto: finger-sized controls on a phone or a narrow window. Pointer keeps the compact
+        ones; Touch turns them on anywhere. The layout itself always fits the window.</span>
+    </section>
+    <section class="st-pop__section">
       <label class="st-label" for="api-key">API key <output>only if the server was started with one</output></label>
       <input class="st-input" id="api-key" type="password" autocomplete="off" placeholder="Not needed">
       <span class="muted small">Kept in this browser only, like the chats.</span>

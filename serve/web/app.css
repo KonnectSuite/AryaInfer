@@ -727,3 +727,21 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 .st-tool[data-state="down"] { color: var(--st-ink); }
 @media (max-width: 1100px) { .st-tool__label { display: none; } .st-tool { padding: 0 7px; } }
 @media (max-width: 640px) { #tool-pills { gap: 2px; } .st-tool { padding: 0 6px; gap: 4px; } }
+
+/* ------------------------------------------------ a device, not just a window width
+   `data-device` on <html> is set by app.js (a coarse pointer or a narrow window means mobile, and Settings > Layout
+   can override it). Layout stays in the media queries above; this block is the behaviour a finger needs and a pointer
+   does not: boxes big enough to hit, and nothing that only appears on hover, which a phone never does. */
+[data-device="mobile"] .chat-foot__chip { min-height: 40px; padding: 0 10px; }
+[data-device="mobile"] .st-chip-btn { min-height: 40px; }
+[data-device="mobile"] .st-btn--icon { min-width: 40px; min-height: 40px; }
+[data-device="mobile"] .st-composer__bar .st-btn--icon,
+[data-device="mobile"] .st-btn--send { width: 44px; height: 44px; }
+[data-device="mobile"] .st-chat-item__menu { opacity: 1; width: 34px; height: 34px; }
+[data-device="mobile"] .room-card__prompt { opacity: 1; }          /* a tap never hovers */
+[data-device="mobile"] .st-menu__item { min-height: 44px; }
+[data-device="mobile"] .seg button { min-height: 40px; }
+[data-device="mobile"] .room-ref button { width: 28px; height: 28px; }
+[data-device="mobile"] .st-toggle { min-width: 52px; min-height: 32px; }
+[data-device="mobile"] .table-wrap { -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+[data-device="mobile"] .st-dialog__foot { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }

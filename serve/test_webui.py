@@ -187,6 +187,20 @@ class Contract(unittest.TestCase):
         self.assertIn("touch-action: pan-y", css)
         self.assertIn(".set-dialog__close { margin: 0; display: flex; }", css)
 
+    def test_the_page_knows_which_device_it_is_on(self):
+        # data-device on <html>: a coarse pointer or a narrow window is mobile, and Settings > Touch controls can
+        # override it. The layout stays responsive; the attribute turns on what a finger needs.
+        self.assertIn("device-seg", self.page.by_id)
+        self.assertTrue(inside(self.page, "device-seg", "settings-pop"))
+        for needle in ("function applyDevice(", 'root.dataset.device =', "DEVICE.coarse", "DEVICE.narrow",
+                       'addEventListener("focusin"', 'scrollIntoView({block: "nearest"})'):
+            self.assertIn(needle, self.js, needle)
+        css = (WEB / "app.css").read_text(encoding="utf-8")
+        for rule in ('[data-device="mobile"] .chat-foot__chip', '[data-device="mobile"] .st-chat-item__menu',
+                     '[data-device="mobile"] .room-card__prompt', '[data-device="mobile"] .st-btn--icon',
+                     '[data-device="mobile"] .st-chip-btn'):
+            self.assertIn(rule, css, rule)
+
     def test_the_catalog_is_well_formed(self):
         catalog = (WEB / "mcp-catalog.js").read_text(encoding="utf-8")
         self.assertIn("window.MCP_CATALOG", catalog)

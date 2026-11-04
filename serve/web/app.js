@@ -71,6 +71,38 @@ function setTheme(mode, save) {
 const flipTheme = () => setTheme(resolveTheme(savedTheme()) === "dark" ? "light" : "dark", true);
 $("theme-btn").onclick = flipTheme;
 for (const b of $("theme-seg").children) b.onclick = () => setTheme(b.dataset.v, true);
+
+// ---------------------------------------------------------------- the device this page is on
+// A phone is not a small desktop: taps need bigger boxes, nothing may depend on hover, and the layout has to know
+// which one it is drawing. `data-device` is that fact, on <html>: coarse pointer or a narrow window means mobile, and
+// Settings can override it (a tablet with a keyboard, or a desktop window someone wants compact).
+const DEVICE = {coarse: matchMedia("(pointer: coarse)"), narrow: matchMedia("(max-width: 900px)")};
+function deviceChoice() { try { return localStorage.getItem("strata.device") || "auto"; } catch (e) { return "auto"; } }
+function applyDevice() {
+  const choice = ["auto", "desktop", "mobile"].includes(deviceChoice()) ? deviceChoice() : "auto";
+  const mobile = choice === "auto" ? (DEVICE.coarse.matches || DEVICE.narrow.matches) : choice === "mobile";
+  const root = document.documentElement;
+  root.dataset.device = mobile ? "mobile" : "desktop";
+  root.dataset.pointer = DEVICE.coarse.matches ? "coarse" : "fine";
+  const seg = $("device-seg");
+  if (seg) for (const b of seg.children) b.setAttribute("aria-checked", String(b.dataset.v === choice));
+}
+function setDevice(choice, save) {
+  if (save) try {
+    if (choice === "auto") localStorage.removeItem("strata.device");
+    else localStorage.setItem("strata.device", choice);
+  } catch (e) { /* private mode: this session only */ }
+  applyDevice();
+addEventListener("focusin", (e) => {
+  if (document.documentElement.dataset.device !== "mobile") return;
+  if (!e.target.matches("input, textarea")) return;
+  setTimeout(() => e.target.scrollIntoView({block: "nearest"}), 260);   // after the keyboard has moved
+});
+}
+DEVICE.coarse.addEventListener("change", applyDevice);
+DEVICE.narrow.addEventListener("change", applyDevice);
+for (const b of $("device-seg").children) b.onclick = () => setDevice(b.dataset.v, true);
+applyDevice();
 setTheme(savedTheme() || "system", false);
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
   if (!savedTheme()) setTheme("system", false);
