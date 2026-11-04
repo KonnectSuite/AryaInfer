@@ -925,3 +925,10 @@ measured **30.9 TFLOPS** - slower: the copy runs on 512 threads in 32-byte piece
 join the epilogue.  Both variants are parked (patches in `build-env/`); the staging is still load-sync-compute, so a
 pipelined loader (`cp.async`/`ldmatrix`, more occupancy) is what the kernel needs before it can pass the expansion
 path.  Until then the expansion path stays the prefill default.
+### A 64-value k tile (2026-11-03)
+
+The 128 x 128 block held 33 KB of shared memory, one block a multiprocessor; a 64-value k tile halves that to 19.5 KB and
+fits two blocks.  The kernel alone (new `aq3_i8_bench`, the layer shapes at 1,024 tokens) reads **49.8-50.9 TFLOPS**,
+against 42.6-43.4 with the 128-value tile; through the engine at 8K and batch 1024 it is **851.4 tok/s**, against 682.6,
+with 1,555.6 for the Q8_0 expansion path in the same run.  A 32-value tile was worse (45.0-46.5 TFLOPS), and forcing two
+blocks with `__launch_bounds__(512, 2)` changed nothing measurable - the staging, not occupancy, is still the limit.

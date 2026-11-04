@@ -2095,6 +2095,10 @@ if(STRATA_NATIVE_EXPERTS AND (STRATA_ENABLE_CUDA OR STRATA_ENABLE_HIP) AND NOT S
     target_link_libraries(aq3_i8_test PRIVATE strata_poly_mmq ${_strata_gpu_blas_target} ${_strata_gpu_runtime_target})
     add_test(NAME aq3_i8_test COMMAND aq3_i8_test)
     set_tests_properties(aq3_i8_test PROPERTIES SKIP_RETURN_CODE 77)
+    # Kernel-alone throughput for the AQ3 int8 product: python-free, no model file.
+    add_executable(aq3_i8_bench src/poly/aq3_i8_bench.cu)
+    target_include_directories(aq3_i8_bench PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_link_libraries(aq3_i8_bench PRIVATE strata_poly_mmq ${_strata_gpu_blas_target} ${_strata_gpu_runtime_target})
     # Optional model/state check; run by hand with an MTP GGUF and frozen prompt IDs.
     add_executable(poly_gdn_mma_state_test src/poly/gdn_mma_state_test.cpp src/poly/engine.cpp src/poly/glm5next.cpp
                    src/poly/qwen35.cpp src/poly/gemma4.cpp src/poly/deepseek4.cpp src/poly/lfm2moe.cpp

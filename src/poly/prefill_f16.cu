@@ -233,17 +233,17 @@ __global__ void cast_f16_kernel(const float* __restrict__ x, __half* __restrict_
 // token halves; a warp does its eight token groups in two passes of four, so the weight fragment loads once a chunk
 // and the accumulators stay in registers.  The tile keeps its activations for eight times as many output rows as the
 // first version, which is where its time went.
-constexpr int I8_BM = 128, I8_BN = 128, I8_BK = 128;
-constexpr size_t kI8Smem = (size_t) (I8_BM * I8_BK + I8_BN * I8_BK) + (I8_BM + 4 * I8_BN) * sizeof(float);
+constexpr int I8_BM = 128, I8_BN = 128, I8_BK = 64;
+constexpr size_t kI8Smem = (size_t) (I8_BM * I8_BK + I8_BN * I8_BK) + (I8_BM + 2 * I8_BN) * sizeof(float);
 
-__global__ void fused_aq3_i8_kernel(const uint8_t* __restrict__ w, size_t row_bytes,
+__global__ void __launch_bounds__(512, 2) fused_aq3_i8_kernel(const uint8_t* __restrict__ w, size_t row_bytes,
                                     const uint8_t* __restrict__ xq, float* __restrict__ y,
                                     int n_in, int n_out, int rows) {
     extern __shared__ char smem_i8[];
     int8_t* a_s = (int8_t*) smem_i8;                 // BM x BK weight codes
     int8_t* b_s = a_s + I8_BM * I8_BK;               // BN x BK activation codes
     float* wsc = (float*) (b_s + I8_BN * I8_BK);     // a weight group scale a row
-    float* bsc = wsc + I8_BM;                        // four activation block scales a token
+    float* bsc = wsc + I8_BM;                        // two activation block scales a token
     const int m0 = blockIdx.x * I8_BM, t0 = blockIdx.y * I8_BN;
     const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31;
     const int rg = warp >> 1, th = warp & 1;         // row band 0..7 (16 rows), token half 0/1 (64 tokens)
@@ -264,28 +264,28 @@ __global__ void fused_aq3_i8_kernel(const uint8_t* __restrict__ w, size_t row_by
         if (tid < I8_BM) {
             const int col = m0 + tid;
             wsc[tid] = col < n_out
-                ? __half2float(*(const __half*) (w + (size_t) col * row_bytes + (size_t) (kt >> 1) * kAq3Block +
-                                                 (kt & 1) * 2))
+                ? __half2float(*(const __half*) (w + (size_t) col * row_bytes + (size_t) (kt >> 2) * kAq3Block +
+                                                 ((kt >> 1) & 1) * 2))
                 : 0.f;
         }
-        if (tid < I8_BN * 4) {
-            const int t = tid >> 2, c = tid & 3, tok = t0 + t;
+        if (tid < I8_BN * 2) {
+            const int t = tid >> 1, c = tid & 1, tok = t0 + t;
             int8_t* out = b_s + t * I8_BK + c * 32;
             if (tok >= rows) {
                 for (int i = 0; i < 32; ++i) out[i] = 0;
-                bsc[t * 4 + c] = 0.f;
+                bsc[t * 2 + c] = 0.f;
             } else {
                 // native_quantize_q8_1's block: half2 ds (the scale, then the sum) and 32 int8
-                const uint8_t* blk = xq + ((size_t) tok * blocks_per_row + kt * 4 + c) * 36;
+                const uint8_t* blk = xq + ((size_t) tok * blocks_per_row + kt * 2 + c) * 36;
                 const uint32_t* src = (const uint32_t*) (blk + 4);
                 uint32_t* dst = (uint32_t*) out;
 #pragma unroll
                 for (int i = 0; i < 8; ++i) dst[i] = src[i];
-                bsc[t * 4 + c] = __half2float(*(const __half*) blk);
+                bsc[t * 2 + c] = __half2float(*(const __half*) blk);
             }
         }
         __syncthreads();
-        for (int c = 0; c < 4; ++c) {
+        for (int c = 0; c < 2; ++c) {
             ggml_cuda_mma::tile<16, 8, int> A;
 #pragma unroll
             for (int l = 0; l < 4; ++l) {
@@ -308,7 +308,7 @@ __global__ void fused_aq3_i8_kernel(const uint8_t* __restrict__ w, size_t row_by
 #pragma unroll
                     for (int l = 0; l < 4; ++l) {
                         const int r = ((l >> 1) * 8) + (lane >> 2), tk = ((lane & 3) * 2) + (l & 1);
-                        acc[pass][g][l] += wsc[rg * 16 + r] * bsc[(tg * 8 + tk) * 4 + c] * (float) D.x[l];
+                        acc[pass][g][l] += wsc[rg * 16 + r] * bsc[(tg * 8 + tk) * 2 + c] * (float) D.x[l];
                     }
                 }
             }
