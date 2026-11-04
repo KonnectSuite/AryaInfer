@@ -22,12 +22,17 @@ runs with one), and no model file or log is copied.
 | `strata-qwen36s-opus-reasoning.json` | `strata-poly.exe` | 262,144 | q8_0 | - | 512 MiB | - |
 | `strata-qwen36s-abliterated.json` | `strata-poly.exe` | 262,144 | q8_0 | - | 512 MiB | - |
 | `strata-qwen36s-q8_0.json` | `strata-poly.exe` | 262,144 | q8_0 | - | 512 MiB | - |
-| `strata-qwen3.8-27b-aq3.json` | `aryainfer.exe` | 131,072 | q4_0 | engine default | 512 MiB | - |
-| `strata-qwen3.8-27b-turbo-iq3xxs.json` | `aryainfer.exe` | 131,072 | q4_0 | engine default | 512 MiB | - |
+| `strata-qwen3.8-27b-aq3.json` | `aryainfer.exe` | 131,072 | q4_0 | engine default | 1024 MiB | - |
+| `strata-qwen3.8-27b-turbo-iq3xxs.json` | `aryainfer.exe` | 131,072 | q4_0 | engine default | 1024 MiB | - |
 
 `strata-qwen36s-q8_0.json` is kept as the record of a measured profile: its 35.2 GB file was uninstalled on
 November 3, 2026 after the four-file comparison in [the Qwen3.6 results](../QWEN36_HOST_RESULTS.md). The two Qwen3.8
 27B profiles run on the Arya engine (`aryainfer.exe`) with a prompt batch of 1,024; the Poly profiles use 2,048.
+
+The two 27B profiles keep **1024 MiB** free rather than 512. After an hour of use the engine's footprint had reached
+the old reserve and its throughput fell 5-6x - from 59.9 to 10.8 tok/s, and 9.5 tok/s on a 13-token prompt - until the
+engine was restarted. On a 49,519-token request the 1 GiB reserve measured 1,009 tok/s prefill and 53.6 tok/s decode
+against 1,018 and 55.6 with 512 MiB, so the extra headroom costs nothing measurable.
 
 All of them run on GPU 0 with vision on where the model has a vision encoder, thinking level medium with an 8,000-token
 budget, and `fit_max_tokens` for the native Flash-Next models. The `strata.exe` profiles leave the expert cache and
