@@ -932,3 +932,22 @@ fits two blocks.  The kernel alone (new `aq3_i8_bench`, the layer shapes at 1,02
 against 42.6-43.4 with the 128-value tile; through the engine at 8K and batch 1024 it is **851.4 tok/s**, against 682.6,
 with 1,555.6 for the Q8_0 expansion path in the same run.  A 32-value tile was worse (45.0-46.5 TFLOPS), and forcing two
 blocks with `__launch_bounds__(512, 2)` changed nothing measurable - the staging, not occupancy, is still the limit.
+### Where prefill stands, measured again (2026-11-03)
+
+The 64-value-tile int8 product prefetching all eight token groups' B fragments into registers changed nothing
+(49.9-50.7 TFLOPS) and was reverted.  At long context it is still behind: 62K prompt, batch 1024, 64 tokens - **686.2**
+tok/s against **1,070.5** for the expansion path; it is matmul-limited either way.
+
+The default path, same build:
+
+| prompt | batch | prefill |
+|---|---:|---:|
+| 8K | 1024 | 1,555.6 tok/s |
+| 8K | 2048 | **1,633.4** |
+| 62K | 1024 | 1,070.5 |
+| 62K | 2048 | **1,102.0** |
+
+Batch 2048 is 3-5% ahead at both sizes (and was the ceiling recorded for 64K context in the round-2 note); the
+AQ3 server entry keeps 1,024 because it runs at 131K context, where 2,048 was measured to spill.  Run-to-run spread on
+this card is about 8% (the same expansion path read 1,418-1,556 at 8K across sessions), so these tables compare within
+a run, not across days.
