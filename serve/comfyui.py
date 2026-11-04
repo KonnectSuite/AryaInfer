@@ -989,10 +989,12 @@ IMAGE_TOOL_DESCRIPTION = (
     "pick the workflow by the shape and the job it is for. This tool makes bitmaps only: when the user asks for an "
     "SVG, HTML, CSS, a diagram, a chart, an icon system, a UI mockup or a logo built from shapes - anything they want "
     "as code - write the code in a fenced block instead (```svg or ```html); the page renders it and offers to open it "
-    "in the panel. For an edit or a restyle of an existing picture, pass its id as reference_id and an image-to-image "
-    "workflow; naming an image-to-image workflow without reference_id edits the newest picture in the gallery, and a "
-    "picture the user attached to this request is edited even when you leave reference_id out. A reference_id with a "
-    "text-to-image workflow fails, so pass both or neither.")
+    "in the panel. Never call it for yourself: not to fetch a colour reference, a palette, a mood board or an example "
+    "for code you are writing, and not as a step inside an answer that is code. Pick the colours and the composition "
+    "yourself; the tool is only for a picture the user asked to see. For an edit or a restyle of an existing picture, "
+    "pass its id as reference_id and an image-to-image workflow; naming an image-to-image workflow without "
+    "reference_id edits the newest picture in the gallery, and a picture the user attached to this request is edited "
+    "even when you leave reference_id out. A reference_id with a text-to-image workflow fails, so pass both or neither.")
 IMAGE_TOOL = {
     "name": "generate_image",
     "description": IMAGE_TOOL_DESCRIPTION,

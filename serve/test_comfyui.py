@@ -18,7 +18,7 @@ from serve import comfy_fake_server as fake  # noqa: E402
 from serve import comfyui as C  # noqa: E402
 from serve.frontend import ChatTemplate  # noqa: E402
 from serve.gallery import Gallery  # noqa: E402
-from serve.server import ByteTokenizer, MockEngine, Service, serve  # noqa: E402
+from serve.server import ByteTokenizer, MockEngine, Service, asks_for_code, serve  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 SHIPPED = ROOT / "serve" / "comfy-workflows"
@@ -563,6 +563,34 @@ class Http(unittest.TestCase):
     def test_an_unknown_action_is_a_400(self):
         code, out, _ = self.call("/comfy", {"nonsense": True})
         self.assertEqual(code, 400, out)
+
+
+class WhenToOffer(unittest.TestCase):
+    """The image tool is withheld from a request that asks for code or markup, and kept for one that asks for a picture.
+
+    Asked for "an animated HTML of turtles in a pond", a model offered the tool reached for a reference palette picture
+    first: a failed ComfyUI call and a wait the user never asked for.
+    """
+
+    def test_a_code_request_withholds_the_tool(self):
+        self.assertTrue(asks_for_code([{"role": "user", "content": "Generate me an animated HTML of turtles"}]))
+        self.assertTrue(asks_for_code([{"role": "user", "content": "make an SVG of a bicycle"}]))
+        self.assertTrue(asks_for_code([{"role": "user", "content": "write the CSS for a button"}]))
+        self.assertTrue(asks_for_code([{"role": "user",
+                                        "content": [{"type": "text", "text": "a mermaid diagram of the flow"}]}]))
+
+    def test_a_picture_request_keeps_the_tool(self):
+        self.assertFalse(asks_for_code([{"role": "user", "content": "draw a picture of a cat"}]))
+        self.assertFalse(asks_for_code([{"role": "user", "content": "an image for my HTML page"}]))
+        self.assertFalse(asks_for_code([{"role": "user", "content": "make a photo of a bicycle at dusk"}]))
+        self.assertFalse(asks_for_code([{"role": "user", "content": "hello"}]))
+        self.assertFalse(asks_for_code([]))
+
+    def test_only_the_last_user_turn_counts(self):
+        messages = [{"role": "user", "content": "earlier: make an SVG"},
+                    {"role": "assistant", "content": "here it is"},
+                    {"role": "user", "content": "now draw a photo of it"}]
+        self.assertFalse(asks_for_code(messages))
 
 
 if __name__ == "__main__":

@@ -5491,6 +5491,33 @@ def prompt_progress(svc: Service):
 
 _SPLIT_CACHE: "collections.OrderedDict[tuple[str, str], dict]" = collections.OrderedDict()
 
+# A request that names one of these asks for something written, not for a picture (see asks_for_code).
+CODE_FORMAT = re.compile(r"\b(svg|html?|css|jsx|tsx|javascript|typescript|markdown|md|mermaid|graphviz|plantuml|"
+                         r"latex|tikz|latex)\b", re.IGNORECASE)
+PICTURE_NOUN = re.compile(r"\b(image|picture|photo|photograph|illustration|painting|artwork|wallpaper|poster|"
+                          r"avatar|portrait|headshot|thumbnail|sticker|sprite)\b", re.IGNORECASE)
+
+
+def asks_for_code(messages) -> bool:
+    """True when the last user turn asks for code or markup the page will render, and not for a bitmap.
+
+    The image tool is withheld then. Asked for an animated HTML page, a model offered ComfyUI reached for a "reference
+    palette" picture first: a failed call and a wait the user never asked for, and the same model writing an SVG or a
+    chart has the same temptation. The cues are the format names themselves, so a request that also names a picture
+    ("an image for my HTML page") keeps the tool, and the model can still write code without it.
+    """
+    text = ""
+    for message in reversed(messages or []):
+        if not isinstance(message, dict) or message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if isinstance(content, str):
+            text = content
+        elif isinstance(content, list):
+            text = " ".join(part.get("text") or "" for part in content if isinstance(part, dict))
+        break
+    return bool(CODE_FORMAT.search(text)) and not PICTURE_NOUN.search(text)
+
 
 def prompt_parts(svc: Service, messages, tools) -> dict:
     """Where the prompt's tokens go, for a page's context meter: the system turns and the tool definitions.
@@ -7109,7 +7136,8 @@ def make_handler(svc: Service):
                     raise ValueError('"strata_images.references" must be a list of gallery image ids')
                 image_refs = [r.strip() for r in refs if r and r.strip()][:4]
                 want_images = True
-            use_images = bool(want_images is True and svc.comfy is not None and svc.comfy.configured())
+            use_images = bool(want_images is True and svc.comfy is not None and svc.comfy.configured()
+                              and not asks_for_code(messages))
             own = {t.get("name") for t in tools or [] if isinstance(t, dict)}   # #592: a second line of defence
             images_provider = comfyui.ComfyForRequest(svc.comfy, image_refs) if use_images else None
             providers = [p for p in (svc.mcp if use_mcp else None, svc.search if use_search else None,
