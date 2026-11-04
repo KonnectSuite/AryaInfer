@@ -1064,4 +1064,7 @@ at 150 s - the standalone process was short of VRAM, so every number from that r
 `nvidia-smi` empty first, and the app's server is stopped now for that reason.  With an empty GPU the round-21 numbers
 reproduce: 62K prefill 1,170-1,182 tok/s, attention 18.8 s of 52.8 s.The accumulator rescale, moved from its own kernel into the softmax block that computes the factor, was tried the same day
 and measured **1,177.8-1,179.8** at 62K - also inside the band, so it was reverted too; the rescale kernel's launches
-were not what the 18.8 s consists of.
+were not what the 18.8 s consists of.`CUBLAS_COMPUTE_32F_FAST_16F` for the score product was tried too, with the attend test passing unchanged and 62K prefill at
+**1,172.7-1,176.5** - again inside the band, so it was reverted.  Four micro-optimizations in a row are neutral; the
+fallback's cost is the shape of its products and the softmax's own work.  A structural change is the only way left: a
+fused score product with the softmax in its epilogue (no score round-trip), built on the decode kernel's S computation.
