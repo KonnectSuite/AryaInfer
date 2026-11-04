@@ -1021,3 +1021,12 @@ fourfold (256 MB, chunk ~40 at 64K) measured 1,028.9 against 1,010.0 at 62K - in
 the fallback's cost is the small-M cuBLAS work, not the pass count alone.  A group-6 flash-attention instantiation (or
 a prefill mode on the project's own decode kernel) is the next real attention step, and it is a kernel project, not a
 budget tweak.
+### The flash kernel cannot take a 6-head group (2026-11-03)
+
+A compile probe of `flash_attn_ext_f16<256, 256, 8, 6, false, false, false>` (8 queries by 6 heads, 48 columns) fails
+inside `fattn_mma.cuh`: `static_assert "bad nwarps"` and the tile math divides by zero for 48 columns.  So the limit is
+the vendored kernel's geometry, not just the `fattn_fits()` check - it wants a power-of-two column count.  At runtime
+no `STRATA_FATTN:` line prints either (it prints only when the kernel fits, or with `STRATA_FATTN=1`), which confirms a
+prompt batch takes `attend_batch()`/cuBLAS.  Enabling flash for this model means changing that kernel's tile geometry
+(kept as a patch against upstream by `tools/test_fattn_sync.py`), a project of its own; a **prefill mode on the
+project's own group-6 decode kernel** (`fdec`, which does accept 24 query heads over 4 KV) is the cheaper route.
