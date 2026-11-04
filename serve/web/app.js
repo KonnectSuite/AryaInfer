@@ -1370,9 +1370,12 @@ function renderComfy() {
     : "set up, not reachable";
   $("images-row").hidden = !comfyInfo.configured;
   const status = $("image-status");
+  // a phone has no room for the version beside the title: the pill says connected and the title attribute keeps it
+  const phone = matchMedia("(max-width: 560px)").matches;
   status.textContent = !comfyInfo.configured ? "not set up"
-    : comfyInfo.reachable ? `connected${comfyInfo.version ? ` · ComfyUI ${comfyInfo.version}` : ""}`
+    : comfyInfo.reachable ? (phone ? "connected" : `connected${comfyInfo.version ? ` · ComfyUI ${comfyInfo.version}` : ""}`)
     : "not reachable";
+  status.title = comfyInfo.reachable && comfyInfo.version ? `ComfyUI ${comfyInfo.version}` : "";
   status.dataset.state = !comfyInfo.configured ? "off" : comfyInfo.reachable ? "on" : "down";
   $("image-url").value = s.base_url || "";
   $("image-headers").value = Object.entries(s.headers || {}).map(([k, v]) => `${k}: ${v}`).join("\n");
@@ -1582,6 +1585,14 @@ function openImagesDialog() {
 }
 $("images-open").onclick = () => openImagesDialog();
 $("image-close").onclick = () => $("image-dialog").close();
+// A footer Close on every settings dialog: on a phone the dialog is full screen, Save keeps it open, and a tap that
+// misses the header's X would leave nothing to do.
+document.addEventListener("click", (e) => {
+  const button = e.target.closest("[data-dialog-close]");
+  if (!button) return;
+  const dialog = $(button.dataset.dialogClose);
+  if (dialog && dialog.open) dialog.close();
+});
 $("image-dialog").addEventListener("click", (e) => { if (e.target === $("image-dialog")) $("image-dialog").close(); });
 $("image-save").onclick = () => saveComfy(false);
 $("image-start").onclick = () => comfyServerAction("start");

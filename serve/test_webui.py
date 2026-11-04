@@ -170,6 +170,18 @@ class Contract(unittest.TestCase):
         self.assertNotIn("<output>", dialog)
         self.assertIn('searchStatus.dataset.state', self.js)      # the pill follows the configured state
 
+    def test_a_settings_dialog_can_always_be_closed_on_a_phone(self):
+        # full screen with Save keeping the dialog open: the footer needs its own exit, and the pill drops the
+        # version so the title is not squeezed to "Image gener..."
+        for dialog in ("image-dialog", "search-dialog"):
+            self.assertIn(f'data-dialog-close="{dialog}"', self.html)
+        self.assertIn('e.target.closest("[data-dialog-close]")', self.js)
+        self.assertIn('matchMedia("(max-width: 560px)")', self.js)
+        css = (WEB / "app.css").read_text(encoding="utf-8")
+        self.assertIn(".st-dialog__head .st-btn--icon { width: 44px; height: 44px; }", css)
+        self.assertIn("-webkit-overflow-scrolling: touch", css)
+        self.assertIn("touch-action: pan-y", css)
+
     def test_the_catalog_is_well_formed(self):
         catalog = (WEB / "mcp-catalog.js").read_text(encoding="utf-8")
         self.assertIn("window.MCP_CATALOG", catalog)

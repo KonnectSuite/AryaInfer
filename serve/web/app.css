@@ -438,7 +438,8 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 .set-dialog__titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 /* `.st-dialog--wide .st-dialog__body` sets overflow: hidden for the shell views, and it outranks a single class: this
    needs both classes to keep the body the one that scrolls. */
-.set-dialog .set-dialog__body { flex: 1; min-height: 0; padding: 18px 22px 6px; overflow: auto; max-height: none; }
+.set-dialog .set-dialog__body { flex: 1; min-height: 0; padding: 18px 22px 6px; overflow: auto; max-height: none;
+                                -webkit-overflow-scrolling: touch; overscroll-behavior: contain; touch-action: pan-y; }
 .set-dialog__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); gap: 16px; align-items: start; }
 .set-dialog__form { margin: 0; }
 .set-dialog__col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
@@ -638,6 +639,9 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
   .st-dialog[open] { display: flex; flex-direction: column; }
   .st-dialog .st-dialog__body { flex: 1; min-height: 0; }
   .st-dialog--wide .st-dialog__body { overflow: auto; }
+  /* a thumb, not a pointer: the close X and the footer's buttons get a full touch target */
+  .st-dialog__head .st-btn--icon { width: 44px; height: 44px; }
+  .set-dialog__foot .st-btn { min-height: 40px; padding: 0 16px; }
   .st-label { flex-wrap: wrap; row-gap: 2px; }
   .st-label output { white-space: normal; }
   /* the MCP dialog's two panes become one column: a 300px list beside a form needs 700px it does not have */
