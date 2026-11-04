@@ -436,11 +436,16 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 .img-dialog__badge { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px;
                      background: var(--st-accent-tint); color: var(--st-accent-text); }
 .img-dialog__titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.img-dialog__body { flex: 1; min-height: 0; padding: 18px 22px 6px; overflow: auto; max-height: none; }
+/* `.st-dialog--wide .st-dialog__body` sets overflow: hidden for the shell views, and it outranks a single class: this
+   needs both classes to keep the body the one that scrolls. */
+.img-dialog .img-dialog__body { flex: 1; min-height: 0; padding: 18px 22px 6px; overflow: auto; max-height: none; }
 .img-dialog__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); gap: 16px; align-items: start; }
 .img-dialog__col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.img-dialog__foot { display: flex; align-items: center; gap: 12px; padding: 12px 22px;
+.img-dialog__foot { position: relative; display: flex; align-items: center; gap: 12px; padding: 12px 22px;
                     border-top: 1px solid var(--st-line); background: var(--st-surface); }
+/* the cards scroll under the footer: a short fade says "there is more" instead of a row sliced by the border */
+.img-dialog__foot::before { content: ""; position: absolute; left: 0; right: 0; top: -17px; height: 17px;
+                            background: linear-gradient(transparent, var(--st-surface)); pointer-events: none; }
 .set-card { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 18px;
             border: 1px solid var(--st-line); border-radius: 14px; background: var(--st-surface); }
 .set-card__title { display: flex; align-items: center; gap: 8px; margin: 0;

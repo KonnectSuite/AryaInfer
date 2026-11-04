@@ -215,6 +215,11 @@ class Contract(unittest.TestCase):
         for rule in (".img-dialog__cols", ".set-card {", ".set-hint {", ".image-wf__pick {",
                      '.st-status[data-state="on"]', ".set-adv {"):
             self.assertIn(rule, css, rule)
+        # the body is what scrolls: `.st-dialog--wide .st-dialog__body` sets overflow: hidden, so this rule needs both
+        # classes or the cards below the fold are unreachable (they were, until it did)
+        self.assertIn(".img-dialog .img-dialog__body { flex: 1; min-height: 0; padding: 18px 22px 6px; overflow: auto;",
+                      css)
+        self.assertIn(".img-dialog__foot::before", css)   # the fade that says the cards scroll under the footer
 
     def test_the_images_room_contract(self):
         # a conversation, not a form: the agent writes the prompt and picks the workflow
