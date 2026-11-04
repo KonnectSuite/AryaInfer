@@ -1367,9 +1367,11 @@ function renderComfy() {
     : comfyInfo.reachable ? `ComfyUI ${comfyInfo.version || ""} · ${workflows.length} workflows`.trim()
     : "set up, not reachable";
   $("images-row").hidden = !comfyInfo.configured;
-  $("image-status").textContent = !comfyInfo.configured ? "not set up"
+  const status = $("image-status");
+  status.textContent = !comfyInfo.configured ? "not set up"
     : comfyInfo.reachable ? `connected${comfyInfo.version ? ` · ComfyUI ${comfyInfo.version}` : ""}`
     : "not reachable";
+  status.dataset.state = !comfyInfo.configured ? "off" : comfyInfo.reachable ? "on" : "down";
   $("image-url").value = s.base_url || "";
   $("image-headers").value = Object.entries(s.headers || {}).map(([k, v]) => `${k}: ${v}`).join("\n");
   $("image-timeout").value = s.timeout_s || "";

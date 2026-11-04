@@ -202,6 +202,20 @@ class Contract(unittest.TestCase):
         self.assertIn('fetch("comfy"', self.js)                       # relative: only this server
         self.assertIn('body.strata_images = true', self.js)           # the chat's opt-in for the image tool
 
+    def test_the_images_dialog_is_cards_with_the_save_button_in_reach(self):
+        # the setup dialog: sections as cards, each hint under the field it explains, and a footer that never scrolls
+        start = self.html.index('id="image-dialog"')
+        dialog = self.html[start:self.html.index("</dialog>", start)]
+        self.assertIn('class="st-dialog__foot img-dialog__foot"', dialog)
+        self.assertIn('id="image-msg"', dialog)
+        self.assertEqual(dialog.count('class="set-card"'), 4)
+        self.assertNotIn("<output>", dialog)          # no hint floating to the right of its label
+        self.assertIn('id="image-status" data-state="off"', dialog)   # the state shows as a tinted pill
+        css = (WEB / "app.css").read_text(encoding="utf-8")
+        for rule in (".img-dialog__cols", ".set-card {", ".set-hint {", ".image-wf__pick {",
+                     '.st-status[data-state="on"]', ".set-adv {"):
+            self.assertIn(rule, css, rule)
+
     def test_the_images_room_contract(self):
         # a conversation, not a form: the agent writes the prompt and picks the workflow
         for name in ("room-provider", "room-status", "room-settings", "room-new", "room-tabs", "room-tab-local",
