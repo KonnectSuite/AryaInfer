@@ -1802,7 +1802,8 @@ function chatTitle(text) {
   return line ? (line.length > 60 ? `${line.slice(0, 57).trimEnd()}…` : line) : "New chat";
 }
 function blankChat() {
-  return {id: newChatId(), title: "New chat", createdAt: Date.now(), updatedAt: Date.now(), messages: []};
+  return {id: newChatId(), title: "New chat", createdAt: Date.now(), updatedAt: Date.now(), messages: [],
+          stats: blankStats()};
 }
 function savedMessages(list) {
   return list.map((m) => ({...m, images: (m.images || []).map((i) => ({name: i.name})),
@@ -1831,8 +1832,10 @@ function loadChats() {
 function ensureChat() {
   if (!chats.length) chats.push(blankChat());
   if (!chats.some((c) => c.id === activeChat)) activeChat = chats[0].id;
-  messages = chats.find((c) => c.id === activeChat).messages;
-  return chats.find((c) => c.id === activeChat);
+  const chat = chats.find((c) => c.id === activeChat);
+  messages = chat.messages;
+  footStats = chat.stats || (chat.stats = blankStats());   // this chat's own totals: they come back with it
+  return chat;
 }
 function activeChatItem() { return chats.find((c) => c.id === activeChat) || null; }
 function saveChat() {
@@ -1961,6 +1964,8 @@ function openChat(id) {
   renderAttachments();
   activeChat = chat.id;
   messages = chat.messages;
+  footStats = chat.stats || (chat.stats = blankStats());
+  renderFoot();
   store.set(CHAT_STORE, {version: 1, active: activeChat, items: chats});
   lastChatStamp = null;
   renderChats();
@@ -1978,6 +1983,8 @@ function newChat() {
   chats.unshift(chat);
   activeChat = chat.id;
   messages = chat.messages;
+  footStats = chat.stats || (chat.stats = blankStats());
+  renderFoot();
   attachments = [];
   renderAttachments();
   saveChat();
@@ -2133,7 +2140,8 @@ async function streamInto(m, el, signal) {
   if (settings.search !== false && searchInfo.configured) body.strata_search = true;
   if (settings.images !== false && comfyInfo.configured) body.strata_images = true;
 
-  let firstAt = null, thinkStart = null, usage = null, frame = 0;
+  let firstAt = null, thinkStart = null, usage = null, frame = 0, ctxParts = null;
+  const t0 = performance.now();
   const paint = () => { frame = 0; updateAssistant(el, m, true); scrollDown(); };
   try {
     const r = await fetch("v1/chat/completions", {method: "POST", headers: headers(true),
@@ -2161,6 +2169,7 @@ async function streamInto(m, el, signal) {
         try { j = JSON.parse(data); } catch (e) { continue; }
         if (j.error) throw new Error(j.error.message || "the engine reported an error");
         if (j.usage) usage = j.usage;
+        if (j.strata_context) ctxParts = j.strata_context;   // the server's split of the prompt it just read
         if (j.strata_mcp) onTool(m, j.strata_mcp);
         const d = (j.choices && j.choices[0] && j.choices[0].delta) || {};
         const lastTool = m.tools && m.tools.length ? m.tools[m.tools.length - 1] : null;   // a new round after a tool
@@ -2191,6 +2200,25 @@ async function streamInto(m, el, signal) {
   }
   if (thinkStart && m.thinkSecs == null) m.thinkSecs = (performance.now() - thinkStart) / 1000;
   if (frame) cancelAnimationFrame(frame);
+  // this chat's footer totals: the time this answer took, when its first token landed, and what the server counted
+  footStats.llm_ms += performance.now() - t0;
+  if (firstAt) {
+    footStats.ttft_ms += firstAt - t0;
+    footStats.ttft_n += 1;
+    footStats.gen_ms += Math.max(0, performance.now() - firstAt);
+  }
+  if (usage) {
+    footStats.in_tokens += usage.prompt_tokens || 0;
+    footStats.cached_tokens += (usage.prompt_tokens_details && usage.prompt_tokens_details.cached_tokens) || 0;
+    footStats.out_tokens += usage.completion_tokens || 0;
+    footStats.ctx.prompt = usage.prompt_tokens || 0;
+    footStats.ctx.out = usage.completion_tokens || 0;
+    footStats.ctx.max = health.max_context || footStats.ctx.max;
+  }
+  if (ctxParts) {                 // system turns and tool definitions: the conversation is the rest of the prompt
+    footStats.ctx.system = ctxParts.system || 0;
+    footStats.ctx.tools = ctxParts.tools || 0;
+  }
   const n = usage ? usage.completion_tokens : null;
   if (n && firstAt) {
     const secs = (performance.now() - firstAt) / 1000;
@@ -2202,6 +2230,9 @@ async function streamInto(m, el, signal) {
   for (const t of m.tools || []) if (t.state === "writing" || t.state === "running") { t.state = "skipped"; t.ms = null; }
   const ran = (m.tools || []).filter((t) => t.state === "done" || t.state === "error").length;
   if (ran) m.meta = `${m.meta ? `${m.meta} · ` : ""}${ran} tool call${ran > 1 ? "s" : ""}`;
+  footStats.steps += 1 + ran;                     // one model round, plus one more for each tool it ran
+  footStats.tool_ms += (m.tools || []).reduce((a, t) => a + (Number(t.ms) || 0), 0);
+  renderFoot();
   if (m.limit) m.meta = `${m.meta || ""} · stopped at the limit of ${m.limit} tool rounds (mcp.max_rounds)`;
   updateAssistant(el, m, false);
   if (!m.stopped && !m.error) flashCompanionSuccess();
@@ -2520,6 +2551,7 @@ async function send() {
   if ((!text && !attachments.length) || busy) return;
   messages.push({role: "user", text, images: attachments.filter((a) => a.kind !== "file"),
                  files: attachments.filter((a) => a.kind === "file"), time: Date.now()});
+  footStats.turns += 1;
   attachments = [];
   renderAttachments();
   $("input").value = "";
@@ -2915,15 +2947,111 @@ document.addEventListener("click", (e) => {
   if (code && box.dataset.kind) downloadArtifact(box.dataset.kind, code.textContent);
 });
 
+// ------------------------------------------------------------------ session footer
+// This chat's own accounting: turns and model steps, how long the model and its tools took, the tokens the server
+// counted (and the share the conversation cache already held), and how full the window is. The prompt's split is the
+// server's: `strata_context` on the last chunk says how many of its tokens were the system turns and the tool
+// definitions, so the conversation is the rest. The totals are kept with the chat and come back with it.
+function blankStats() {
+  return {turns: 0, steps: 0, llm_ms: 0, gen_ms: 0, tool_ms: 0, ttft_ms: 0, ttft_n: 0,
+          in_tokens: 0, cached_tokens: 0, out_tokens: 0,
+          ctx: {prompt: 0, system: 0, tools: 0, out: 0, max: 0}};
+}
+let footStats = blankStats();
+
+const footDur = (ms) => {
+  if (!ms) return "–";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m${String(s % 60).padStart(2, "0")}s`;
+  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
+};
+const footTok = (n) => (n == null ? "–" : n >= 1e9 ? `${fmt(n / 1e9, 2)}B`
+  : n >= 1e6 ? `${fmt(n / 1e6, 1)}M` : n >= 1e4 ? `${fmt(n / 1e3)}K` : fmt(n));
+const footPct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
+const FOOT_POPS = [["foot-turns", "foot-turns-pop"], ["foot-tokens", "foot-tokens-pop"],
+                   ["foot-context", "foot-context-pop"]];
+
+function renderFoot() {
+  const s = footStats;
+  const max = s.ctx.max || health.max_context || 0;
+  const total = s.in_tokens + s.out_tokens;
+  const used = s.ctx.prompt + (s.ctx.out || 0);
+  const hit = footPct(s.cached_tokens, s.in_tokens);
+  $("foot-turns-text").textContent = s.turns
+    ? `${fmt(s.turns)} turn${s.turns === 1 ? "" : "s"} · ${fmt(s.steps)} step${s.steps === 1 ? "" : "s"}` : "No turns yet";
+  $("foot-tokens-text").textContent = total ? `${footTok(total)} tok · cache ${hit}%` : "0 tokens";
+  $("foot-context-text").textContent = max ? `${footPct(used, max)}%` : "–";
+
+  const tps = s.gen_ms > 0 ? Math.round(s.out_tokens / (s.gen_ms / 1000)) : null;
+  $("foot-turns-pop").innerHTML =
+    `<div class="foot-pop__head"><span class="foot-pop__title">${icon("activity", "st-icon st-icon--sm")}` +
+    `Session statistics</span><span class="foot-pop__value">${fmt(s.turns)} turns ${fmt(s.steps)} steps</span></div>` +
+    `<div class="foot-pop__row"><span>LLM time</span><b>${footDur(s.llm_ms)}</b></div>` +
+    `<div class="foot-pop__row"><span>Tool time</span><b>${footDur(s.tool_ms)}</b></div>` +
+    `<div class="foot-pop__row"><span>Avg time to first token (TTFT)</span>` +
+    `<b>${s.ttft_n ? `${(s.ttft_ms / s.ttft_n / 1000).toFixed(1)}s` : "–"}</b></div>` +
+    `<div class="foot-pop__row"><span>Tokens per second (TPS)</span><b>${tps ? `${fmt(tps)} tok/s` : "–"}</b></div>`;
+  $("foot-tokens-pop").innerHTML =
+    `<div class="foot-pop__head"><span class="foot-pop__title">${icon("layers", "st-icon st-icon--sm")}` +
+    `Token usage</span><span class="foot-pop__value">${fmt(total)} tok</span></div>` +
+    `<div class="foot-pop__row"><span>Cache hit</span><b>${s.in_tokens ? `${hit}%` : "–"}</b></div>` +
+    `<div class="foot-pop__row"><span>Uncached input</span><b>${fmt(s.in_tokens - s.cached_tokens)} tok</b></div>` +
+    `<div class="foot-pop__row"><span>Cached input</span><b>${fmt(s.cached_tokens)} tok</b></div>` +
+    `<div class="foot-pop__row"><span>Output</span><b>${fmt(s.out_tokens)} tok</b></div>`;
+  const parts = [["system", "System prompt", s.ctx.system], ["tools", "Tool definitions", s.ctx.tools],
+                 ["messages", "Messages", Math.max(0, s.ctx.prompt - s.ctx.system - s.ctx.tools)]];
+  const share = (n) => (used > 0 ? Math.max(0, (n / used) * 100) : 0);
+  $("foot-context-pop").innerHTML =
+    `<div class="foot-pop__head"><span class="foot-pop__title">${icon("gauge", "st-icon st-icon--sm")}` +
+    `${max ? `${footPct(used, max)}%` : "–"} of context used</span>` +
+    `<span class="foot-pop__value">~${footTok(used)} / ${footTok(max)}</span></div>` +
+    `<div class="foot-pop__bar">${parts.map(([key, , n]) =>
+      `<span class="foot-pop__seg foot-pop__seg--${key}" style="width:${share(n)}%"></span>`).join("")}</div>` +
+    parts.map(([key, label, n]) =>
+      `<div class="foot-pop__row"><span><i class="foot-pop__key foot-pop__key--${key}"></i>${label}</span>` +
+      `<b>~${footTok(n)}</b></div>`).join("");
+}
+
+function closeFootPops() {
+  for (const [chip, pop] of FOOT_POPS) {
+    $(pop).hidden = true;
+    $(chip).setAttribute("aria-expanded", "false");
+  }
+}
+function openFootPop(chipId, popId) {
+  const wasOpen = !$(popId).hidden;
+  closeFootPops();
+  if (wasOpen) return;
+  const anchor = $(chipId), el = $(popId);
+  el.hidden = false;
+  anchor.setAttribute("aria-expanded", "true");
+  // above the whole footer strip and right-aligned to the chip that opened it: on a phone the chips wrap to two rows,
+  // and a popover placed over the pressed chip alone would cover the other two
+  const r = anchor.getBoundingClientRect();
+  const foot = $("chat-foot").getBoundingClientRect();
+  el.style.left = `${Math.max(12, Math.min(r.right - el.offsetWidth, innerWidth - el.offsetWidth - 12))}px`;
+  el.style.bottom = `${Math.max(12, innerHeight - foot.top + 6)}px`;
+}
+for (const [chip, pop] of FOOT_POPS) $(chip).onclick = () => openFootPop(chip, pop);
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#chat-foot")) closeFootPops();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && FOOT_POPS.some(([, pop]) => !$(pop).hidden)) closeFootPops();
+});
+
 // ------------------------------------------------------------------ start
 setBusy(false);
 loadChats();
 renderChats();
 renderChat();
+renderFoot();
 const startQuestion = new URLSearchParams(location.search).get("q");   // /?q=... starts a chat (a shortcut)
 if (startQuestion) history.replaceState(null, "", location.pathname + location.hash);
 loadModels();
-loadHealth().then(loadMcp).then(loadSearch).then(loadComfy).then(() => { if (startQuestion) { $("input").value = startQuestion; send(); } });
+loadHealth().then(() => renderFoot()).then(loadMcp).then(loadSearch).then(loadComfy).then(() => { if (startQuestion) { $("input").value = startQuestion; send(); } });
 showTab(location.hash.slice(1) || "chat");
 poll();
 

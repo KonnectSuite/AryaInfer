@@ -147,6 +147,46 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
                  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachments { display: flex; flex-wrap: wrap; gap: var(--st-s-2); padding: 2px 4px 0; }
 .st-composer.dragging { outline: 2px dashed var(--st-accent); outline-offset: 3px; }
+
+/* The footer under the composer: this chat's turns and steps, the tokens the server counted, and how much of the
+   window the next request fills. Each chip opens the detail behind its number. */
+.chat-foot { display: flex; align-items: center; justify-content: flex-end; gap: 2px;
+             max-width: var(--st-col); margin: 4px auto 0; padding: 0 2px; min-height: 22px; }
+.chat-foot__chips { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
+.chat-foot__chip { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 3px 8px;
+                   border: 0; border-radius: 999px; background: transparent; color: var(--st-ink-muted);
+                   font: 500 var(--st-fs-xs)/1.4 var(--st-font); cursor: pointer; white-space: nowrap;
+                   overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.chat-foot__chip:hover, .chat-foot__chip[aria-expanded="true"] { background: var(--st-surface-2); color: var(--st-ink); }
+.chat-foot__chip .st-icon { color: var(--st-ink-muted); flex: none; }
+.chat-foot__chip:hover .st-icon, .chat-foot__chip[aria-expanded="true"] .st-icon { color: var(--st-accent); }
+/* the popovers: the menus' surface, sized for two columns of figures */
+.foot-pop { width: min(320px, calc(100vw - 24px)); padding: 4px; }
+.foot-pop__head { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+                  padding: 8px 8px 7px; border-bottom: 1px solid var(--st-line-soft); margin-bottom: 2px; }
+.foot-pop__title { display: flex; align-items: center; gap: 7px; color: var(--st-ink);
+                   font: 650 var(--st-fs-sm)/1.3 var(--st-font); }
+.foot-pop__title .st-icon { color: var(--st-accent); }
+.foot-pop__value { color: var(--st-ink); font: 650 var(--st-fs-xs)/1.3 var(--st-font);
+                   font-variant-numeric: tabular-nums; text-align: right; }
+.foot-pop__row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 4px 8px;
+                 color: var(--st-ink-muted); font: 500 var(--st-fs-xs)/1.5 var(--st-font); }
+.foot-pop__row b { color: var(--st-ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.foot-pop__bar { display: flex; gap: 1px; height: 6px; margin: 6px 8px 8px; border-radius: 999px; overflow: hidden;
+                 background: var(--st-surface-2); }
+.foot-pop__seg { height: 100%; }
+.foot-pop__seg--system { background: var(--st-secondary); }
+.foot-pop__seg--tools { background: var(--st-accent); }
+.foot-pop__seg--messages { background: var(--st-accent-hover); }
+.foot-pop__key { display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 2px; }
+.foot-pop__key--system { background: var(--st-secondary); }
+.foot-pop__key--tools { background: var(--st-accent); }
+.foot-pop__key--messages { background: var(--st-accent-hover); }
+@media (max-width: 560px) {
+  /* three chips cannot share a phone's width: wrap them instead of clipping the first two away */
+  .chat-foot { justify-content: center; }
+  .chat-foot__chips { flex-wrap: wrap; justify-content: center; overflow: visible; row-gap: 2px; }
+}
 .chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 6px 0 10px; border-radius: var(--st-r-pill);
         background: var(--st-surface-2); border: 1px solid var(--st-line); font-size: var(--st-fs-xs); color: var(--st-ink-soft); }
 .chip .st-btn--icon { width: 22px; height: 22px; border-radius: 50%; }

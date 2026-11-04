@@ -5489,9 +5489,51 @@ def prompt_progress(svc: Service):
             "time_ms": int(getattr(engine, "progress_ms", 0) or 0)}
 
 
-def openai_chunks(svc: Service, req: dict, ids, thinking, tools, max_new, cancel, run=None, force=None):
+_SPLIT_CACHE: "collections.OrderedDict[tuple[str, str], dict]" = collections.OrderedDict()
+
+
+def prompt_parts(svc: Service, messages, tools) -> dict:
+    """Where the prompt's tokens go, for a page's context meter: the system turns and the tool definitions.
+
+    The exact total is the engine's own prompt_tokens, sent as usage; this only splits it, so the page subtracts the two
+    numbers here to get the conversation's share and needs no tokenizer of its own.  The split is counted with the
+    model's tokenizer where it can encode, and falls back to four characters a token (tests' byte tokenizer).
+    """
+    def text_of(m) -> str:
+        c = m.get("content")
+        if isinstance(c, str):
+            return c
+        if isinstance(c, list):
+            return "".join(p.get("text") or "" for p in c if isinstance(p, dict))
+        return ""
+
+    system = "\n".join(text_of(m) for m in messages if m.get("role") == "system")
+    tool_text = json.dumps(tools, ensure_ascii=False, sort_keys=True) if tools else ""
+    key = (system, tool_text)
+    hit = _SPLIT_CACHE.get(key)
+    if hit is not None:
+        _SPLIT_CACHE.move_to_end(key)
+        return hit
+
+    def count(text: str) -> int:
+        if not text:
+            return 0
+        try:
+            return len(svc.tok.encode(text, parse_special=True))
+        except Exception:                    # a byte tokenizer in tests, or a pack that cannot encode this text
+            return max(1, int(len(text) / 3.6))
+
+    parts = {"system": count(system), "tools": count(tool_text)}
+    _SPLIT_CACHE[key] = parts
+    while len(_SPLIT_CACHE) > 8:             # a handful of system texts and tool sets per session, not a leak
+        _SPLIT_CACHE.popitem(last=False)
+    return parts
+
+
+def openai_chunks(svc: Service, req: dict, ids, thinking, tools, max_new, cancel, run=None, force=None, parts=None):
     """`run`: the events to send instead of Service.run's (run_with_mcp); its ("mcp", {...}) items become chunks with
-    an empty delta and a `strata_mcp` field, which only the web app reads.  `force`: see Service.run."""
+    an empty delta and a `strata_mcp` field, which only the web app reads.  `force`: see Service.run.  `parts`: what
+    prompt_parts measured, sent once on the last chunk as `strata_context`."""
     cid, created = "chatcmpl-" + uuid.uuid4().hex[:24], int(time.time())
     model = svc.model_for(req)
     # llama.cpp's flag, and its default: a client that wants prompt progress asks for it, and nothing changes for one
@@ -5548,6 +5590,8 @@ def openai_chunks(svc: Service, req: dict, ids, thinking, tools, max_new, cancel
                              "prompt_tokens_details": {"cached_tokens": x.get("reused") or 0}}
             if x.get("timings"):
                 last["timings"] = x["timings"]          # llama.cpp's field: the speed its clients show
+            if parts:                                   # a context meter's split of the prompt above
+                last["strata_context"] = parts
             yield last
 
 
@@ -5592,6 +5636,8 @@ def openai_collect(chunks) -> dict:
            "usage": last["usage"]}
     if last.get("timings"):
         out["timings"] = last["timings"]
+    if last.get("strata_context"):
+        out["strata_context"] = last["strata_context"]
     return out
 
 
@@ -7090,7 +7136,8 @@ def make_handler(svc: Service):
             _debug_req("openai", req, messages, tools, max_new, thinking, len(ids))
             run = run_with_mcp(svc, hub, messages, tools, kw, ids, thinking, max_new, max_req, req, cancel,
                                {t["name"] for t in extra}) if hub is not None else None
-            chunks = openai_chunks(svc, req, ids, thinking, tools, max_new, cancel, run=run, force=force)
+            chunks = openai_chunks(svc, req, ids, thinking, tools, max_new, cancel, run=run, force=force,
+                                   parts=prompt_parts(svc, messages, tools))
             if validator is not None:
                 chunks = structured_chunks(chunks, validator)
             chunks = self._capture(chunks, "openai")

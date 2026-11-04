@@ -101,6 +101,31 @@ class Contract(unittest.TestCase):
         self.assertTrue(inside(self.page, "model-btn", "composer"))
         self.assertIn('$("models-nav").onclick', self.js)      # the sidebar row opens the same menu
 
+    def test_the_footer_reports_this_chats_usage(self):
+        # three chips under the composer, each with the popover behind its number
+        for name in ("chat-foot", "foot-turns", "foot-turns-text", "foot-tokens", "foot-tokens-text",
+                     "foot-context", "foot-context-text", "foot-turns-pop", "foot-tokens-pop", "foot-context-pop"):
+            self.assertIn(name, self.page.by_id)
+        for name in ("foot-turns", "foot-tokens", "foot-context"):
+            self.assertTrue(inside(self.page, name, "chat-foot"), name)
+        for pop in ("foot-turns-pop", "foot-tokens-pop", "foot-context-pop"):
+            self.assertIn("st-menu", self.page.by_id[pop][1], pop)      # the menus' surface, opened by its chip
+            self.assertTrue(inside(self.page, pop, "chat-foot"), pop)
+        for needle in ("function blankStats(", "function renderFoot(", "j.strata_context",
+                       "chat.stats || (chat.stats = blankStats())",
+                       "Session statistics", "Token usage", "of context used",
+                       "LLM time", "Tool time", "Avg time to first token (TTFT)", "Tokens per second (TPS)",
+                       "Cache hit", "Uncached input", "Cached input", "System prompt", "Tool definitions",
+                       "footStats.turns += 1", "footStats.steps += 1 + ran", "openFootPop("):
+            self.assertIn(needle, self.js, needle)
+        # the figures are the request's own: the server's usage, and its split of the prompt
+        self.assertIn("usage.prompt_tokens_details", self.js)
+        self.assertIn("usage.completion_tokens", self.js)
+        css = (WEB / "app.css").read_text(encoding="utf-8")
+        for rule in (".chat-foot", ".chat-foot__chip", ".foot-pop__bar", ".foot-pop__seg--system",
+                     ".foot-pop__seg--tools", ".foot-pop__seg--messages"):
+            self.assertIn(rule, css, rule)
+
     def test_the_recent_chats_contract(self):
         for name in ("conversations", "chat-search", "chat-list", "chat-menu"):
             self.assertIn(name, self.page.by_id)

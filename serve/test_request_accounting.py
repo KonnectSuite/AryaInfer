@@ -179,6 +179,33 @@ class RequestAccounting(unittest.TestCase):
         self.assertEqual((row["prompt_ms"], row["decode_ms"]), (40.0, 200.0))
         self.assertEqual((metrics["totals"]["drafts_offered"], metrics["totals"]["drafts_accepted"]), (18, 8))
 
+    # A context meter's split: the page draws system prompt / tool definitions / conversation from these two numbers
+    # and the usage's prompt_tokens, so it never has to tokenize anything itself.
+    def parts_of(self, chunks):
+        return [chunk["strata_context"] for chunk in chunks if chunk.get("strata_context")]
+
+    def test_the_prompt_split_rides_the_last_streamed_chunk(self):
+        tools = [{"type": "function", "function": {"name": "read_page", "description": "read a web page",
+                                                   "parameters": {"type": "object", "properties": {}}}}]
+        code, raw = self.request("/v1/chat/completions",
+                                 {"model": "m", "stream": True, "max_tokens": 16,
+                                  "messages": [{"role": "system", "content": "You are a careful assistant."},
+                                               {"role": "user", "content": "2+2?"}],
+                                  "tools": tools})
+        self.assertEqual(code, 200, raw)
+        chunks = [json.loads(line[6:]) for line in raw.splitlines() if line.startswith("data: {")]
+        parts = self.parts_of(chunks)
+        self.assertEqual(len(parts), 1, "one split per request, on the chunk that carries the usage")
+        prompt = [chunk["usage"]["prompt_tokens"] for chunk in chunks if chunk.get("usage")][-1]
+        self.assertGreater(parts[0]["system"], 0)
+        self.assertGreater(parts[0]["tools"], 0)
+        self.assertLessEqual(parts[0]["system"] + parts[0]["tools"], prompt,
+                            "the conversation is the rest of the prompt, never a negative share")
+
+    def test_the_prompt_split_is_in_the_nonstream_body(self):
+        response = self.chat()                         # no tools, no system turn: both shares are zero
+        self.assertEqual(response["strata_context"], {"system": 0, "tools": 0})
+
 
 class SlotLegAccounting(unittest.TestCase):
     """#1869: a request that decoded in a batch slot and finished on the solo path keeps the slot leg's decode time and

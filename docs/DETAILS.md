@@ -1595,7 +1595,10 @@ unchanged keeps the stored value. The rest of this section applies to both.
   (default 20,000 characters) are cut, with a note, before the model reads them. Stop stops a running tool too.
 - Only the chat page uses them. API clients (omp, Claude Code, OpenAI and Anthropic SDKs) see the API exactly as
   before and keep their own tools; a request to `/v1/chat/completions` opts in with `"strata_mcp": true` (it then
-  gets `strata_mcp` tool events in the stream).
+  gets `strata_mcp` tool events in the stream). The same request's last chunk carries `strata_context`: how many of
+  the prompt's tokens were the system turns and how many were the tool definitions, counted with the model's
+  tokenizer. The page subtracts both from `usage.prompt_tokens` to draw its context meter; a client that ignores the
+  field sees the API it always saw.
 
 **Security.** MCP tools run on your PC with your user's rights, and **the model decides when to call them** - also
 because of what it reads (a web page or a file can contain instructions). Give a filesystem server only the folders
@@ -2373,6 +2376,16 @@ new chat is saved. An install that keeps a single chat (anything older than this
 on its first run and leaves the old entry in place, so going back to an older build still finds it. Search the list
 with the box above it, or press Ctrl/Cmd+K. The model is selected in the message box, and **Ctrl/Cmd+Shift+N** starts a
 chat.
+
+**The footer under the message box** is this chat's own accounting, one chip per number, each opening the detail
+behind it. *Turns and steps* counts your messages and the model's rounds - a tool call is one more step - with the LLM
+time, the tool time, the average time to the first token and the writing rate. *Tokens* is the server's count for the
+conversation: the total, the share the conversation cache already held, the uncached input, the cached input and the
+output. *Context* shows how much of the model's window the next request fills and splits the last prompt into the
+system turns, the tool definitions and the conversation. The times are the page's own measurements (request start,
+first token, each tool's `ms`), the tokens are the server's `usage`, and the split is the `strata_context` the server
+sends with each response, so the page needs no tokenizer of its own. The totals are kept with the chat and come back
+when it is reopened; a new chat starts them at zero.
 
 **Tools** live behind Settings > Tools, one dialog each. **MCP servers** lists what is configured, what is connected
 and which tools each server offers, with a switch per server and Restart, Edit, Copy JSON and Remove; *Add server*

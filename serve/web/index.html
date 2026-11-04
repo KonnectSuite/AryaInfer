@@ -147,6 +147,28 @@
                 <svg class="st-icon"><use href="web/sprite.svg#i-send"/></svg></button>
             </div>
           </form>
+          <div class="chat-foot" id="chat-foot">
+            <div class="chat-foot__chips">
+              <button type="button" class="chat-foot__chip" id="foot-turns" aria-haspopup="dialog"
+                      aria-expanded="false" title="Session statistics: turns, steps and where the time went">
+                <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-activity"/></svg>
+                <span id="foot-turns-text">No turns yet</span>
+              </button>
+              <button type="button" class="chat-foot__chip" id="foot-tokens" aria-haspopup="dialog"
+                      aria-expanded="false" title="Token usage: the server's count, and how much the cache held">
+                <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-layers"/></svg>
+                <span id="foot-tokens-text">0 tokens</span>
+              </button>
+              <button type="button" class="chat-foot__chip" id="foot-context" aria-haspopup="dialog"
+                      aria-expanded="false" title="Context used: how much of the window the next request fills">
+                <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-gauge"/></svg>
+                <span id="foot-context-text">0%</span>
+              </button>
+            </div>
+            <div class="st-menu foot-pop" id="foot-turns-pop" hidden></div>
+            <div class="st-menu foot-pop" id="foot-tokens-pop" hidden></div>
+            <div class="st-menu foot-pop" id="foot-context-pop" hidden></div>
+          </div>
         </div>
         </div>
       </section>
