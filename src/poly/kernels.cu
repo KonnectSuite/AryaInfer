@@ -3970,9 +3970,9 @@ void attend_batch(void* blas, const float* q, const uint16_t* kcache, const uint
     // The products take halves and sum floats, on the tensor cores: the cache's rows as they lie there, the
     // queries and the softmax's weights rounded.  Two thirds of the scratch are for a block's scores, the rest
     // for their weights.
-    const size_t cells = score_floats / 3 * 2;
     // the block's scores as halves: half the softmax's traffic for a small rounding of a logit (the products still
-    // sum in floats); the weight matrix follows them in the same buffer
+    // sum in floats); the weight matrix follows them in the same buffer, so the halves fill all of it
+    const size_t cells = score_floats;
     half* sc = (half*) score;
     half* weight = sc + cells;
     for (int first = 0, c = 0; first < rows; first += c) {

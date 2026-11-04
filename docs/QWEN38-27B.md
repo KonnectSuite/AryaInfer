@@ -1047,3 +1047,11 @@ still sum in floats) takes the measured attention from 24,364 ms to **19,734 ms*
 **1,068.2 tok/s** (+7.9%); the attend test's batch cases differ from the fp32-score path by ~1e-3 on outputs up to
 3.35, and the 24-token greeting is unchanged.  A fused flash-style kernel removes the score traffic entirely; at
 60-70 TFLOPS it would be 11-13 s, taking 62K prefill to ~1,200-1,250 tok/s.
+### Bigger key blocks in the fallback (2026-11-03)
+
+The half scores only filled two thirds of the score buffer.  Using all of it (`cells = score_floats`, the weight
+matrix following the scores in the same buffer) raises a key block from about 208 to about 320 rows and cuts the number
+of passes.  At 62K, batch 2,048: attention **19,734 -> 18,770 ms** and prefill **1,068.2 -> 1,153.9 / 1,175.0 /
+1,172.4 tok/s** in three runs - +9% over the fp16 scores and **+19% over the 990** of two rounds ago.  `poly_attend_test`
+passes (batch cases ~1e-3 from the fp32-score path, decode identical) and the 24-token greeting is unchanged; 8K stays
+1,444-1,497 (attention is only 8% there).
