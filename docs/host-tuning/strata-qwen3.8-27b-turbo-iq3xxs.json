@@ -4,7 +4,7 @@
   "--model",
   "$DATA\\models\\qwen38-27b-turbo-iq3xxs\\Qwen3.8-27B-Turbo-Brilliance-50X-RI-GSQ-RCO-IQ3_XXS-mtp.gguf",
   "--max-context",
-  "102400",
+  "131072",
   "--kv",
   "q4_0",
   "--vram-reserve-mib",
