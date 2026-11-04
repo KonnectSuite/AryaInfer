@@ -15,14 +15,14 @@
  "cwd": "C:\\Users\\KNPhu\\AryaCode\\KonnectSuite\\AryaInfer",
  "tokenizer": "$DATA\\models\\qwen38-27b\\tokenizer",
  "model_name": "qwen3.8-27b-turbo-iq3xxs",
- "display_name": "AryaInfer Qwen3.8 27B Turbo Brilliance IQ3_XXS (MTP) - 100K vision",
+ "display_name": "AryaStrata Qwen3.8 27B Turbo Brilliance IQ3_XXS (MTP) \u2014 128K vision",
  "log": "$INSTALL\\strata-qwen3.8-27b-turbo-iq3xxs.log",
  "lib_dirs": [
   "$DATA\\cuda\\13.1.2\\bin\\x64",
   "$DATA\\cuda\\13.1.2\\bin",
   "$DATA\\engines\\strata-0.1.54"
  ],
- "port": 8083,
+ "port": 8080,
  "gpu": 0,
  "vision": {
   "exe": "$DATA\\engines\\strata-0.1.54\\strata-vision.exe",

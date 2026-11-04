@@ -162,8 +162,10 @@ three times as many tokens for the same results and scored worse with thinking o
 it with thinking off. The APEX file answers briefly, and its low and high settings passed all six probes.
 
 Both are listed in the app catalog as `qwen3.6-35b-a3b-opus-reasoning` (vision) and `qwen3.6-35b-a3b-abliterated`
-(text), with their profiles beside the other `strata-*.json` files. Each loaded and answered through the server on
-this host, and the vision profile reported `images: true` from its own mmproj.
+(text), with their profiles beside the other `strata-*.json` files, all on port 8080. Each loaded and answered through
+the server on this host, and the vision profile reported `images: true` from its own mmproj. They ship at the settings
+that were measured: temperature 0.6, top_p 0.95, top_k 20, presence 0.0, with reasoning effort `low` for the APEX
+profile and `none` for the abliterated one.
 
 Not measured here: recall at 262K for either file, image accuracy for the APEX profile, the 18-session coding suite,
 and combined long-context coding-and-image sessions. The abliterated profile has no vision.
