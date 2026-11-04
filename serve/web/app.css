@@ -432,6 +432,9 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
    Cards, hints under the field they explain, and Save in a footer that never scrolls away. The old two columns put
    floating hints on the right and squeezed the workflow list until its buttons wrapped. */
 .set-dialog { display: flex; flex-direction: column; max-height: min(88vh, 920px); }
+/* the browser hides a closed <dialog>, but an author display: flex outranks that rule: without this a dialog
+   that was closed stayed on screen, which reads as Close doing nothing */
+.set-dialog:not([open]) { display: none; }
 .set-dialog__head { gap: 12px; padding: 16px 16px 16px 22px; }
 .set-dialog__badge { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px;
                      background: var(--st-accent-tint); color: var(--st-accent-text); }
