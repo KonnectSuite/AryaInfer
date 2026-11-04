@@ -611,6 +611,15 @@ void Qwen35::attn(Block& B, int64_t pos, int n) {
     const Kvq4 kq4{(const uint8_t*) B.k_codes, B.k_scales}, vq4{(const uint8_t*) B.v_codes, B.v_scales};
     // a prompt batch through cuBLAS; a few tokens with the kernels that give a token the same bits in any company
     if (n >= kStageRows) {
+        // diagnostic, STRATA_PROFILE_ATTN=<file>: how long this layer's prompt attention takes (it synchronizes, so
+        // the number is the kernel's, not a queue's); the file is appended to
+        static const char* prof_attn = std::getenv("STRATA_PROFILE_ATTN");
+        cudaEvent_t attn_a{}, attn_b{};
+        if (prof_attn) {
+            cudaEventCreate(&attn_a);
+            cudaEventCreate(&attn_b);
+            cudaEventRecord(attn_a, (cudaStream_t) st_);
+        }
         // a prompt batch: the fp16 path passes the caches where they lie (null caches and no workspace under q8 or
         // q4); under those each block of K and V the products read is dequantized into q8w_ (kwork then vwork)
         const uint16_t* kc = (q8 || q4) ? nullptr : B.keys;
@@ -629,6 +638,18 @@ void Qwen35::attn(Block& B, int64_t pos, int n) {
                          st_, 0, 0, false, (q8 || q4) ? Kvq8{B.k_codes, B.k_scales} : Kvq8{},
                          (q8 || q4) ? Kvq8{B.v_codes, B.v_scales} : Kvq8{}, kw, vw, (q8 || q4) ? work_halves_ : 0,
                          nullptr, q4 ? 2 : 1);
+        if (prof_attn) {
+            cudaEventRecord(attn_b, (cudaStream_t) st_);
+            cudaEventSynchronize(attn_b);
+            float ms = 0.f;
+            cudaEventElapsedTime(&ms, attn_a, attn_b);
+            if (FILE* pf = std::fopen(prof_attn, "a")) {
+                std::fprintf(pf, "attn_ms %.3f\n", ms);
+                std::fclose(pf);
+            }
+            cudaEventDestroy(attn_a);
+            cudaEventDestroy(attn_b);
+        }
     } else if (draft_w > 0) {
         attend(q_, (q8 || q4) ? nullptr : B.keys, (q8 || q4) ? nullptr : B.vals, pos, n, score_, chunk_, att_, head_dim_,
                n_head_, n_kv_, scale, st_, draft_w, 0, false, at, at ? room(n) : 0, /*score_floats*/ 0,

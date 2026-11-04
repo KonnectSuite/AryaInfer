@@ -1030,3 +1030,18 @@ no `STRATA_FATTN:` line prints either (it prints only when the kernel fits, or w
 prompt batch takes `attend_batch()`/cuBLAS.  Enabling flash for this model means changing that kernel's tile geometry
 (kept as a patch against upstream by `tools/test_fattn_sync.py`), a project of its own; a **prefill mode on the
 project's own group-6 decode kernel** (`fdec`, which does accept 24 query heads over 4 KV) is the cheaper route.
+### How much of prefill is attention, measured (2026-11-03)
+
+`STRATA_PROFILE_ATTN=<file>` times each prompt-batch attention call (it synchronizes, so the numbers are the kernels',
+not a queue's) and appends them to the file.  On this host, same build:
+
+| prompt | prefill | attention | share |
+|---|---:|---:|---:|
+| 8K, batch 2,048 | 5,488 ms | 447 ms | 8% |
+| 62K, batch 2,048 | 62,613 ms | **24,364 ms** | **39%** |
+
+The fallback (`attend_batch`) materializes each layer's full fp32 score matrix: 24 heads x 62K x 62K / 2 is about 46G
+scores a layer, 740G over the 16 full layers, each written and read twice - near 18 TB of traffic at 672 GB/s, which is
+the 24 s.  That also explains why the fourfold score budget bought nothing: it is traffic over the materialized matrix,
+not the pass count.  A flash-style kernel for a 6-head group would skip that matrix entirely; at the matmul's ~77
+TFLOPS the attention would be about 10-11 s, taking 62K prefill from ~990 to ~1,250 tok/s (+26%).
