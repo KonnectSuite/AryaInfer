@@ -134,3 +134,10 @@ the staging.
 
 Default path, same build, this session: 8K 1,428-1,633 tok/s (batch 1,024-2,048), 62K 1,010-1,102 (64K context).
 Run-to-run spread on this card is about 10%, so those are the bands, not single numbers.
+### Round 20-21 in the shipped notes (2026-11-03)
+
+The model entry's notes now carry the final numbers: 1,444-1,633 tok/s at 8K (batch 2,048) and 1,153.9-1,175.0 on a 62K
+prompt (batch 2,048, 64K context), with 990 before the attention work; writing 88-104.  The prompt attention's fp16
+scores and bigger key blocks took its share of 62K prefill from 39% (24.4 s) to 35% (18.8 s).  The next structural step
+is still a fused softmax-into-values pass or a flash kernel for a 6-head group, which would remove the score/weight
+round-trip that is left.
