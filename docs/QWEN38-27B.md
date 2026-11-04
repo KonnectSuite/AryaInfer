@@ -950,4 +950,6 @@ The default path, same build:
 Batch 2048 is 3-5% ahead at both sizes (and was the ceiling recorded for 64K context in the round-2 note); the
 AQ3 server entry keeps 1,024 because it runs at 131K context, where 2,048 was measured to spill.  Run-to-run spread on
 this card is about 8% (the same expansion path read 1,418-1,556 at 8K across sessions), so these tables compare within
-a run, not across days.
+a run, not across days.Prefetching all eight B groups (no change) and reading the B fragments straight from the global q8_1 blocks instead of
+a shared tile (44.6-45.4 TFLOPS, worse than 49.8-50.9) were both tried and reverted.  The kernel is at a plateau for
+this structure: the next step is a pipelined loader (`cp.async`/`ldmatrix`), not another staging tweak.

@@ -101,3 +101,24 @@ n-gram off 150 / 142 / 130. This host (4070 Ti SUPER, 66 SMs, 672 GB/s) reads 1,
 
 Copy `build-poly\aryainfer.exe` to `C:\AI\Strata-data\engines\arya-infer\aryainfer.exe` after a release-worthy build
 (not done this session; the installed copy predates `STRATA_FORCE_GUESSES`, which is harmless since it is unset).
+
+## UPDATE (prefill rounds, same day, evening)
+
+The default AQ3 path is still the Q8_0 expansion + MMQ Q8_0. An int8 tensor-core product exists but is opt-in and
+slower; it is not wired into the default.
+
+- **Expansion fix** (`c9effdd5`): `aq3_q8_0_kernel` wrote each thread's 34-byte block at a 34-byte stride, 32 sectors a
+  warp store; it now stages 256 blocks in shared and writes 8,704 bytes contiguous. Prefill 711 -> 1,266 (batch 512),
+  990 -> 1,416 (1024), 1,175 -> 1,495 (2048) at 8K; 968.7 on a 62K prompt through the server then.
+- **Batch ceiling** (`9b6b1c48`): 3,072 spills at 8K; 1,024 at 131K context, 2,048 at 64K.
+- **Current default, same build:** 1,555.6 (8K, 1,024) / 1,633.4 (8K, 2,048) / 1,070.5 (62K, 1,024) /
+  1,102.0 (62K, 2,048). Run-to-run spread on this card is ~8%.
+- **int8 tensor cores** (`fused_aq3_i8`, `STRATA_AQ3_I8`, commits `a3db7d69`, `019a29cf`, `a7fefe09`): correct
+  (`aq3_i8_test` against a double CPU reference, worst 4.8e-7; the 24-token greeting matches the expansion path).
+  Kernel alone, `aq3_i8_bench`: 50 TFLOPS with a 64-value k tile (42.6 at 128, 45.7 at 32); through the engine 851.4
+  tok/s at 8K and 686 at 62K, behind the expansion path's ~77 TFLOPS whole-prefill.
+- **Negatives, parked** (`build-env/*.patch` and git stashes `aq3-i8-per128`, `aq3-i8-q8w`): per-128 single activation
+  scale 562.6 tok/s; Q8_0-weight staging 30.9 TFLOPS; B fragments straight from global 44.6 TFLOPS; prefetching the
+  eight B groups no change.
+- **Next for prefill:** the int8 kernel needs a pipelined loader (`cp.async`/`ldmatrix`, MMQ-style) to pass 77 TFLOPS;
+  alternatively Stage 2 attention - at 62K about 18 s of 56 s is attention at ~42 TFLOPS effective.
