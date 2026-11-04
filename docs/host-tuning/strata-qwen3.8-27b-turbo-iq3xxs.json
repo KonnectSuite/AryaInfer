@@ -8,7 +8,7 @@
   "--kv",
   "q4_0",
   "--vram-reserve-mib",
-  "512",
+  "1024",
   "--prompt-batch",
   "1024"
  ],
