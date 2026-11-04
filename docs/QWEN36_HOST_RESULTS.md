@@ -1,5 +1,12 @@
 # Qwen3.6 Q4 versus Q8: AryaInfer host results
 
+**Q8_0 was uninstalled on November 3, 2026.** The four-file comparison at the end of this
+document measured it reading an 8K prompt at half the rate of the other three Qwen3.6 files,
+and the October suite had found no quality difference between the two installed quants. Its
+measurements stay here as the record of that comparison; the profile and its 35.2 GB file are
+no longer on this host. Two newer files took its place: the APEX I-Quality reasoning distill
+and an abliterated Q4_K_M.
+
 Both installed templates support thinking Off/On. Historical `low` requests
 enable native thinking; Low/Medium/High are aliases in AryaAI, not three
 distinct strengths. See the [connection audit](ARYAAI_CONNECTION_AUDIT.md).
@@ -48,7 +55,11 @@ the app's model list if the updated entries are not visible.
 | Choice | Exact model ID | Weight quantization | When to use it on this host |
 |---|---|---|---|
 | Q4 | `qwen3.6-35b-a3b-ud-q4_k_xl` | UD-Q4_K_XL | Recommended daily coding-agent profile; more measured RAM headroom |
-| Q8 | `qwen3.6-35b-a3b-q8_0` | Q8_0 | Higher-precision weight comparison; very little RAM headroom in these trials |
+| APEX I-Quality | `qwen3.6-35b-a3b-opus-reasoning` | APEX I-Quality | Reasoning distill with vision; shortest answers of the four files measured |
+| Abliterated | `qwen3.6-35b-a3b-abliterated` | Q4_K_M | Uncensored, text only; run it with thinking off |
+
+Q8_0 (`qwen3.6-35b-a3b-q8_0`) is listed above only as a measured comparison; it was uninstalled
+on November 3, 2026.
 
 Both profiles support text and image input, advertise 262,144 context tokens
 and 8,192 output tokens to the development adapter, and use the same compressed

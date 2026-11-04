@@ -17,13 +17,21 @@ runs with one), and no model file or log is copied.
 | `strata-swift-iq3_xxs.json` | `strata.exe` 0.1.56 | 262,144 | int8 | as above | 1000 MiB | 0.20 |
 | `strata-swift-abliterated-iq3_xxs.json` | `strata.exe` 0.1.56 | 262,144 | int8 | as above | 1000 MiB | 0.00 |
 | `strata-ornith-apex-i-quality.json` | `strata-poly.exe` | 262,144 | q8_0 | - | the engine's default | - |
-| `strata-qwen36s-q8_0.json` | `strata-poly.exe` | 262,144 | q8_0 | - | 512 MiB | - |
 | `strata-qwen36s-ud-q4_k_xl.json` | `strata-poly.exe` | 262,144 | q8_0 | - | 512 MiB | - |
-| `strata-qwen3.8-27b-iq2_s.json` | `strata-poly.exe`, the qwen38 build | 204,800 | q4_0 | - | 512 MiB | - |
-| `strata-qwen3.8-27b-iq3_xxs.json` | `strata-poly.exe`, the qwen38 build | 131,072 | q4_0 | - | 512 MiB | - |
+| `strata-qwen36s-mtp-ud-q4_k_xl.json` | `strata-poly.exe` | 262,144 | q8_0 | - | 512 MiB | - |
+| `strata-qwen36s-opus-reasoning.json` | `strata-poly.exe` | 262,144 | q8_0 | - | 512 MiB | - |
+| `strata-qwen36s-abliterated.json` | `strata-poly.exe` | 262,144 | q8_0 | - | 512 MiB | - |
+| `strata-qwen36s-q8_0.json` | `strata-poly.exe` | 262,144 | q8_0 | - | 512 MiB | - |
+| `strata-qwen3.8-27b-aq3.json` | `aryainfer.exe` | 131,072 | q4_0 | engine default | 512 MiB | - |
+| `strata-qwen3.8-27b-turbo-iq3xxs.json` | `aryainfer.exe` | 131,072 | q4_0 | engine default | 512 MiB | - |
 
-All eight run on GPU 0 with vision on, thinking level medium with an 8,000-token budget, and `fit_max_tokens` for the
-native Flash-Next models. The first three leave the expert cache and prefill at the engine's own `auto`.
+`strata-qwen36s-q8_0.json` is kept as the record of a measured profile: its 35.2 GB file was uninstalled on
+November 3, 2026 after the four-file comparison in [the Qwen3.6 results](../QWEN36_HOST_RESULTS.md). The two Qwen3.8
+27B profiles run on the Arya engine (`aryainfer.exe`) with a prompt batch of 1,024; the Poly profiles use 2,048.
+
+All of them run on GPU 0 with vision on where the model has a vision encoder, thinking level medium with an 8,000-token
+budget, and `fit_max_tokens` for the native Flash-Next models. The `strata.exe` profiles leave the expert cache and
+prefill at the engine's own `auto`.
 
 ## Put them back into an install
 
