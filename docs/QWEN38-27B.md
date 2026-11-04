@@ -997,3 +997,10 @@ tiles and the smaller copies cost more than the occupancy returns.  Reverted (pa
 The diagnostic also explains the weight staging: at 8 token blocks of 128 (a 1,024-token batch) the 89 MB matrix is
 read eight times, 713 MB, which at 672 GB/s is the 0.8-1.0 ms the mode-1 run removes.  Anything that keeps the weights
 in L2 between token blocks, or a token tile of 256, would cut that; both fight the 48 KB shared budget with two sets.
+### Grid order and the product path (2026-11-03)
+
+Swapping the grid so the blocks that share a weight tile run consecutively (x = token block, for L2 reuse) cut the
+isolated staging from 2.6 to 1.14 ms in mode 4, but the full kernel stayed at ~64 TFLOPS and the engine fell to **928
+tok/s** (980 without the swap); reverted.  That says the staging is no longer what is left: with the copies out of the
+way the product path is ~1.69 ms of the 2.83, i.e. ~108 TFLOPS, and the gap is the mma schedule and occupancy rather
+than the loader.
