@@ -108,6 +108,55 @@ and text/image input for both models.
 
 The long coding harness supplies approximately 229K tokens of repeated source excerpts plus an image before the task; its subsequent tool turns reuse that prefix. Its first turn is cold relative to that prefix. It does not prove coding quality across an entire real repository. Image-ID reporting is independent of code-test success.
 
+## Two more Qwen3.6 files: the reasoning distill and the abliterated quant
+
+Measured November 3, 2026 on the same host, to put the two installed profiles beside two newer files: mudler's
+`Qwen3.6-35B-A3B-Claude-4.7-Opus-Reasoning-Distilled-APEX-I-Quality` (22.8 GB plus an mmproj, vision) and
+wangzhang's `Qwen3.6-35B-A3B-abliterated-Q4_K_M` (19.7 GB, text only). All four ran on `engine-poly\strata-poly.exe`
+with the installed settings: 131,072 context, Q8_0 KV, prompt batch 2,048, 15 threads, window 8, no tail skipping.
+Each run sent a short answer first, so the expert cache and the file cache were warm, then read a filler prompt at
+temperature 0 and wrote 64 tokens. These are single runs of one protocol, not the medians above, so a difference
+under about 5% is not a result.
+
+| Weights | 8K prompt read, tok/s | 8K write, tok/s | 128K prompt read, tok/s | 128K write, tok/s | Draft guesses accepted at 128K |
+|---|---:|---:|---:|---:|---|
+| UD-Q4_K_XL (installed) | 2,228.2 | 85.0 | 1,945.5 | 41.7 | 36 of 47 |
+| Q8_0 (installed) | 1,097.5 | 56.6 | 1,893.7 | 37.7 | 35 of 40 |
+| APEX I-Quality | 2,053.7 | 67.3 | 1,936.5 | 32.4 | 1 of 9 |
+| abliterated Q4_K_M | 2,215.1 | 80.0 | 2,022.0 | 43.3 | no draft block |
+
+The prompt was 7,926 tokens read at 32,768 context and 127,926 at 131,072; the first 71 came from the warm-up
+answer in each case.
+
+Q8_0 is the file this protocol separates: half the 8K read rate of the other three, a third less writing, and
+13.9 GiB more file for what the October suite found to be the same quality (both passed 18/18 coding sessions,
+12/12 image checks and 6/6 recall). At 128K its read rate is within 3% of the others, so the gap is a short-prompt
+cost, which is where expert dispatch from a cold cache is paid.
+
+The two newer files are not slower at long input. Both read a 128K prompt within 5% of UD-Q4_K_XL, and the
+abliterated file was the quickest of the four at 128K and within 1% of the quickest at 8K, even though it carries no
+MTP draft block. The APEX file writes slowest at 128K because 1 of 9 of its guesses were accepted, against 36 of 47
+for UD-Q4_K_XL.
+
+Quality on the bounded coding suite used for the Qwen3.8 calibration: 10 requests, temperature 0.6, top_p 0.95,
+top_k 20, 400-token cap.
+
+| Model | Code fixtures | Adherence | Mean 4-gram diversity | Answer length | Thinking probes off / low / medium / high |
+|---|---|---|---|---:|---|
+| APEX I-Quality | 7/7 | 3/3 | 1.00 | 40-189 tokens | 5/6, 6/6, 5/6, 6/6 |
+| abliterated Q4_K_M | 7/7 | 3/3 | 0.99 | 200-374 tokens | 5/6, 4/6, 4/6, 4/6 |
+
+Neither looped and both completed every fixture. They differ in how they answer: the abliterated file wrote two to
+three times as many tokens for the same results and scored worse with thinking on than off (4/6 against 5/6), so run
+it with thinking off. The APEX file answers briefly, and its low and high settings passed all six probes.
+
+Both are listed in the app catalog as `qwen3.6-35b-a3b-opus-reasoning` (vision) and `qwen3.6-35b-a3b-abliterated`
+(text), with their profiles beside the other `strata-*.json` files. Each loaded and answered through the server on
+this host, and the vision profile reported `images: true` from its own mmproj.
+
+Not measured here: recall at 262K for either file, image accuracy for the APEX profile, the 18-session coding suite,
+and combined long-context coding-and-image sessions. The abliterated profile has no vision.
+
 ## Reproduce the validation
 
 Select the installed model profile with the PolyStrata executable and its recorded arguments. Keep the server bound to 127.0.0.1 and stop other inference and download jobs during measurements. With the selected model loaded, use:
@@ -119,6 +168,20 @@ Select the installed model profile with the PolyStrata executable and its record
 .\.venv\Scripts\python.exe tools/arya_vision_bench.py --model <model-id> --runs 3 --out vision
 .\.venv\Scripts\python.exe tools/arya_long_agent_bench.py --model <model-id> --tokenizer <tokenizer-directory> --tokens 229376 --runs 1 --out long-agent
 ```
+
+The four-file comparison above drives the engine directly and reproduces with:
+
+```powershell
+.\.venv\Scripts\python.exe tools/qwen38_spec_bench.py --exe engine-poly\strata-poly.exe --model <gguf> `
+    --contexts 32768 --tokens 8000 --max-new 64 --kv q8_0 --prompt-batch 2048 --warmup 8 `
+    --extra "--threads 15 --window 8 --tail-skip 0" --timeout 150 --out warm.json
+.\.venv\Scripts\python.exe tools/qwen38_calibrate.py --base-url http://127.0.0.1:8080 --model <model-id> --sets coding --max-tokens 400 --out calib.json
+.\.venv\Scripts\python.exe tools/qwen38_thinking.py --base-url http://127.0.0.1:8080 --model <model-id> --levels off,low,medium,high --max-tokens 400 --out think.json
+```
+
+`--warmup 8` sends the short answer first. The bench reads the engine's `DONE` line as well as its stderr summary,
+because the two are written by different threads and the run ends with the `DONE` line; it also reports the exit
+code and the last stderr lines when an engine produces no numbers at all.
 
 A power interruption occurred after Q4 calibration, coding and image checks, three 128K recall trials, and the first near-256K recall trial. Completed records were preserved. Both model SHA-256 hashes were rechecked after restart; the interrupted uncompleted trial was resumed. Telemetry retains both sessions.
 
