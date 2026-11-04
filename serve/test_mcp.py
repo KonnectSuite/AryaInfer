@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from serve import mcp_fake_server as fake  # noqa: E402
 from serve.frontend import ChatTemplate  # noqa: E402
 from serve.mcp import (SECRET_MASK, McpCancelled, McpHub, hub_from_config, merge_config,  # noqa: E402
-                       public_config)
+                       public_config, uv_env)
 from serve.server import ByteTokenizer, MockEngine, Service, serve  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -203,6 +203,24 @@ class HttpClient(unittest.TestCase):
 
 
 class Config(unittest.TestCase):
+    def test_a_uv_runner_gets_its_own_cache_and_temp(self):
+        # a locked or sandboxed user cache stopped the fetch server before it started ("Access is denied" on
+        # ...\uv\cache\sdists-v9\.git), so uvx runs under this install instead
+        env = {"PATH": "x"}
+        uv_env(env, "uvx")
+        for key in ("UV_CACHE_DIR", "UV_TOOL_DIR", "UV_PYTHON_INSTALL_DIR", "TMP", "TEMP"):
+            self.assertIn(key, env, key)
+            self.assertIn(os.path.join("local-data", "mcp", "uv"), env[key], key)
+        self.assertEqual(env["PATH"], "x")
+
+    def test_an_explicit_uv_cache_wins_and_other_commands_are_left_alone(self):
+        env = {"UV_CACHE_DIR": r"D:\mine"}
+        uv_env(env, "uvx")
+        self.assertEqual(env["UV_CACHE_DIR"], r"D:\mine")
+        plain = {"PATH": "x"}
+        uv_env(plain, "npx")
+        self.assertEqual(plain, {"PATH": "x"})
+
     def test_both_spellings_and_the_file(self):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "claude_desktop_config.json")

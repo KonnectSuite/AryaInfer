@@ -32,11 +32,38 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 from serve.winjob import contain
 
 PROTOCOL = "2025-06-18"               # the MCP revision AryaStrata asks for; the server's answer is used as given
 DEFAULTS = {"timeout_s": 60.0, "max_result_chars": 20000, "max_rounds": 8, "start_timeout_s": 120.0}
+
+UV_RUNNERS = ("uvx", "uvx.exe", "uv", "uv.exe")   # `uvx <server>` is how most catalog servers run
+
+
+def uv_env(env: dict, command: str) -> None:
+    """Give a uv tool runner a cache, its tools and a temp directory under this install.
+
+    Left to its defaults uv uses the user's cache and temp, and one that is locked, sandboxed or owned by another
+    account stops the server before it starts: the fetch server failed with "failed to open file
+    ...\\uv\\cache\\sdists-v9\\.git: Access is denied (os error 5)". The install's own directory is always writable by
+    the process that runs the server, and it keeps two AryaInfer servers from fighting over the same cache. An explicit
+    UV_CACHE_DIR/UV_TOOL_DIR/UV_PYTHON_INSTALL_DIR in the server's own settings still wins.
+    """
+    if os.path.basename(str(command)).lower() not in UV_RUNNERS:
+        return
+    base = Path(__file__).resolve().parent.parent / "local-data" / "mcp" / "uv"
+    for key, part in (("UV_CACHE_DIR", "cache"), ("UV_TOOL_DIR", "tools"), ("UV_PYTHON_INSTALL_DIR", "python"),
+                      ("TMP", "tmp"), ("TEMP", "tmp")):
+        if key in ("UV_CACHE_DIR", "UV_TOOL_DIR", "UV_PYTHON_INSTALL_DIR") and env.get(key):
+            continue
+        try:
+            (base / part).mkdir(parents=True, exist_ok=True)
+        except OSError:
+            continue                                   # read-only install: leave uv to its own defaults
+        env[key] = str(base / part)
+
 
 
 class McpError(RuntimeError):
@@ -96,6 +123,7 @@ class StdioTransport:
         env = dict(os.environ)
         env.update({str(k): str(v) for k, v in (self.cfg.get("env") or {}).items()})
         command = str(self.cfg["command"])
+        uv_env(env, command)                             # a uv runner's own cache and temp, under this install
         # On Windows `npx`, `uvx` and friends are .cmd files that CreateProcess finds only with their extension
         exe = shutil.which(command, path=env.get("PATH")) or command
         extra = {}

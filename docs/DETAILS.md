@@ -1599,6 +1599,11 @@ unchanged keeps the stored value. The rest of this section applies to both.
   the prompt's tokens were the system turns and how many were the tool definitions, counted with the model's
   tokenizer. The page subtracts both from `usage.prompt_tokens` to draw its context meter; a client that ignores the
   field sees the API it always saw.
+- A server run through `uvx` (fetch, git, playwright and most of the catalog) is started with its own uv cache, tools
+  and temp directory under `local-data/mcp/uv/`. Left to its defaults uv uses the user's cache and temp, and one that
+  is locked, sandboxed or owned by another account stops the server before it starts - the fetch server failed with
+  `failed to open file ...\uv\cache\sdists-v9\.git: Access is denied (os error 5)`. A server whose own settings set
+  `UV_CACHE_DIR`, `UV_TOOL_DIR` or `UV_PYTHON_INSTALL_DIR` keeps them.
 
 **Security.** MCP tools run on your PC with your user's rights, and **the model decides when to call them** - also
 because of what it reads (a web page or a file can contain instructions). Give a filesystem server only the folders
