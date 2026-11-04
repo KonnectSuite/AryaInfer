@@ -1040,9 +1040,10 @@ not a queue's) and appends them to the file.  On this host, same build:
 | 8K, batch 2,048 | 5,488 ms | 447 ms | 8% |
 | 62K, batch 2,048 | 62,613 ms | **24,364 ms** | **39%** |
 
-The fallback (`attend_batch`) is not score-traffic bound, as a first reading of these numbers suggested: at 62K the
-whole attention's fp32 scores come to about 96 GB over the 16 full layers, about 0.15 s at 672 GB/s.  The 24 s is the
-auxiliary passes around the cuBLAS products - a softmax kernel with an exp per score, the dequantization of every key
-block into the workspace, and the scale/merge passes - which leave the products themselves at about 31 TFLOPS
-effective, less than half the matmul's 77.  A fused flash-style kernel removes those passes and the global scores; at
-60-70 TFLOPS it would be 11-13 s, taking 62K prefill from ~990 to ~1,200-1,250 tok/s (+21-26%).
+The fallback (`attend_batch`) writes every score of the prefill: 16 layers x 24 heads x 62K^2 / 2 is 737G scores,
+2.95 TB as floats written and 2.95 TB read back by the softmax, plus 1.47 TB of half weights each way - 8.8 TB, about
+13 s at 672 GB/s, which with the products' ~12 s makes the 24 s.  Holding those scores as **halves** (the products
+still sum in floats) takes the measured attention from 24,364 ms to **19,734 ms** and 62K prefill from 990.2 to
+**1,068.2 tok/s** (+7.9%); the attend test's batch cases differ from the fp32-score path by ~1e-3 on outputs up to
+3.35, and the 24-token greeting is unchanged.  A fused flash-style kernel removes the score traffic entirely; at
+60-70 TFLOPS it would be 11-13 s, taking 62K prefill to ~1,200-1,250 tok/s.

@@ -1774,7 +1774,7 @@ __global__ void attn_ungroup_kernel(const float* __restrict__ src, float* __rest
 // is its exp against the largest its token and head have had (top), zero for a row the token does not attend, as
 // the half the values' product takes.  sum is the sum of the weights against that top, and shrink what the
 // weights of the blocks before are worth against it.  With `fresh` there was no block before.
-__global__ void attn_softmax_block_kernel(const float* __restrict__ score, half* __restrict__ weight, int n_keys,
+__global__ void attn_softmax_block_kernel(const half* __restrict__ score, half* __restrict__ weight, int n_keys,
                                           long long row0, long long pos, int first, int window, int tokens, int per,
                                           long long last, float* top, float* sum, float* shrink, bool fresh) {
     __shared__ float part[8];
@@ -1783,15 +1783,15 @@ __global__ void attn_softmax_block_kernel(const float* __restrict__ score, half*
     const int n = attn_rows(pos + tok, window, last, &lo);
     const long long end = lo + n;   // the token attends the sequence's rows from lo to before end
     const int j0 = lo > row0 ? int(lo - row0) : 0, j1 = end - row0 < n_keys ? int(end - row0) : n_keys;
-    const float* row = score + size_t(blockIdx.x) * n_keys;
+    const half* row = score + size_t(blockIdx.x) * n_keys;
     half* w = weight + size_t(blockIdx.x) * n_keys;
     float mx = -INFINITY;
-    for (int j = j0 + threadIdx.x; j < j1; j += blockDim.x) mx = fmaxf(mx, row[j]);
+    for (int j = j0 + threadIdx.x; j < j1; j += blockDim.x) mx = fmaxf(mx, __half2float(row[j]));
     mx = block_max(mx, part);
     const float before = fresh ? -INFINITY : top[blockIdx.x], now = fmaxf(before, mx);
     float s = 0.0f;
     for (int j = threadIdx.x; j < n_keys; j += blockDim.x) {
-        w[j] = __float2half(j >= j0 && j < j1 ? expf(row[j] - now) : 0.0f);
+        w[j] = __float2half(j >= j0 && j < j1 ? expf(__half2float(row[j]) - now) : 0.0f);
         s += __half2float(w[j]);   // the sum is of the weights as the values get them
     }
     s = block_sum(s, part);
@@ -3971,7 +3971,10 @@ void attend_batch(void* blas, const float* q, const uint16_t* kcache, const uint
     // queries and the softmax's weights rounded.  Two thirds of the scratch are for a block's scores, the rest
     // for their weights.
     const size_t cells = score_floats / 3 * 2;
-    half* weight = (half*) (score + cells);
+    // the block's scores as halves: half the softmax's traffic for a small rounding of a logit (the products still
+    // sum in floats); the weight matrix follows them in the same buffer
+    half* sc = (half*) score;
+    half* weight = sc + cells;
     for (int first = 0, c = 0; first < rows; first += c) {
         // every token left, unless a grid's 65535 rows or the scratch for one row's scores is less, or the results
         // would outgrow kAttendResults: every block of rows reads and writes them all again (og)
@@ -4023,10 +4026,10 @@ void attend_batch(void* blas, const float* q, const uint16_t* kcache, const uint
             // reads the cache's rows as the transpose, and the groups' keys lie `dim` apart in a row.
             blas_ck(cublasGemmStridedBatchedEx(h, CUBLAS_OP_T, CUBLAS_OP_N, m, (int) cols, dim, &scale,
                                                krow, CUDA_R_16F, width, dim, qg,
-                                               CUDA_R_16F, dim, cols * dim, &zero, score, CUDA_R_32F, m, cols * m,
+                                               CUDA_R_16F, dim, cols * dim, &zero, sc, CUDA_R_16F, m, cols * m,
                                                kv_heads, CUBLAS_COMPUTE_32F, CUBLAS_GEMM_DEFAULT),
                     "attention scores");
-            attn_softmax_block_kernel<<<c * n_head, 128, 0, cs(stream)>>>(score, weight, m, lo0 + k0, (long long) pos,
+            attn_softmax_block_kernel<<<c * n_head, 128, 0, cs(stream)>>>(sc, weight, m, lo0 + k0, (long long) pos,
                                                                          first, window, c, per, last, top, sum,
                                                                          shrink, k0 == 0);
             if (k0 > 0)
