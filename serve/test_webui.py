@@ -159,6 +159,17 @@ class Contract(unittest.TestCase):
         self.assertIn('$("search-form").onsubmit', self.js)
         self.assertNotIn("prompt(", self.js)                      # the test query is a field, not a prompt box
 
+    def test_the_web_search_dialog_is_the_card_layout_too(self):
+        # the same shell as the image settings: cards, hints under fields, a footer, and the state as a pill
+        start = self.html.index('<dialog class="st-dialog st-dialog--wide set-dialog" id="search-dialog"')
+        dialog = self.html[start:self.html.index("</dialog>", start)]
+        self.assertIn('class="st-dialog st-dialog--wide set-dialog"', dialog)
+        self.assertIn('class="st-dialog__foot set-dialog__foot"', dialog)
+        self.assertIn('id="search-state" data-state="off"', dialog)
+        self.assertEqual(dialog.count('class="set-card"'), 4)
+        self.assertNotIn("<output>", dialog)
+        self.assertIn('searchStatus.dataset.state', self.js)      # the pill follows the configured state
+
     def test_the_catalog_is_well_formed(self):
         catalog = (WEB / "mcp-catalog.js").read_text(encoding="utf-8")
         self.assertIn("window.MCP_CATALOG", catalog)
@@ -206,20 +217,20 @@ class Contract(unittest.TestCase):
         # the setup dialog: sections as cards, each hint under the field it explains, and a footer that never scrolls
         start = self.html.index('id="image-dialog"')
         dialog = self.html[start:self.html.index("</dialog>", start)]
-        self.assertIn('class="st-dialog__foot img-dialog__foot"', dialog)
+        self.assertIn('class="st-dialog__foot set-dialog__foot"', dialog)
         self.assertIn('id="image-msg"', dialog)
         self.assertEqual(dialog.count('class="set-card"'), 4)
         self.assertNotIn("<output>", dialog)          # no hint floating to the right of its label
         self.assertIn('id="image-status" data-state="off"', dialog)   # the state shows as a tinted pill
         css = (WEB / "app.css").read_text(encoding="utf-8")
-        for rule in (".img-dialog__cols", ".set-card {", ".set-hint {", ".image-wf__pick {",
+        for rule in (".set-dialog__cols", ".set-card {", ".set-hint {", ".image-wf__pick {",
                      '.st-status[data-state="on"]', ".set-adv {"):
             self.assertIn(rule, css, rule)
         # the body is what scrolls: `.st-dialog--wide .st-dialog__body` sets overflow: hidden, so this rule needs both
         # classes or the cards below the fold are unreachable (they were, until it did)
-        self.assertIn(".img-dialog .img-dialog__body { flex: 1; min-height: 0; padding: 18px 22px 6px; overflow: auto;",
+        self.assertIn(".set-dialog .set-dialog__body { flex: 1; min-height: 0; padding: 18px 22px 6px; overflow: auto;",
                       css)
-        self.assertIn(".img-dialog__foot::before", css)   # the fade that says the cards scroll under the footer
+        self.assertIn(".set-dialog__foot::before", css)   # the fade that says the cards scroll under the footer
 
     def test_the_images_room_contract(self):
         # a conversation, not a form: the agent writes the prompt and picks the workflow

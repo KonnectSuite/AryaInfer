@@ -565,123 +565,169 @@
 </dialog>
 
 <!-- ============================ Web search ============================ -->
-<dialog class="st-dialog" id="search-dialog" aria-labelledby="search-title">
-  <div class="st-dialog__head">
-    <span class="card-title" id="search-title">Web search</span>
-    <span class="muted small" id="search-state"></span>
+<dialog class="st-dialog st-dialog--wide set-dialog" id="search-dialog" aria-labelledby="search-title">
+  <header class="st-dialog__head set-dialog__head">
+    <span class="set-dialog__badge"><svg class="st-icon"><use href="web/sprite.svg#i-globe"/></svg></span>
+    <span class="set-dialog__titles">
+      <span class="card-title" id="search-title">Web search</span>
+      <span class="set-hint">Your own SearXNG instance, on this PC or a machine you point it at.</span>
+    </span>
+    <span class="st-status" id="search-state" data-state="off">not set up</span>
     <span class="st-dialog__spacer"></span>
     <button class="st-btn st-btn--icon" id="search-close" type="button" aria-label="Close">
       <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-x"/></svg></button>
-  </div>
-  <div class="st-dialog__body">
-    <p class="muted small">Your own <a href="https://docs.searxng.org" target="_blank" rel="noopener noreferrer">SearXNG</a>
-      instance, on this PC or a remote one. With it set up and on, the model gets <code>web_search</code> (a query, then
-      titles, addresses and snippets) and <code>read_page</code> (the text of one address from those results). The
-      instance must answer JSON: <code>search.formats</code> in its <code>settings.yml</code> needs <code>json</code>
-      next to <code>html</code>.</p>
-    <form class="mcp-form" id="search-form">
-      <div class="toggle-row"><span>Use web search<br><span class="muted small">offered in this page's chat</span></span>
-        <button class="st-toggle" id="search-enabled" type="button" role="switch" aria-checked="false" aria-label="Use web search"></button></div>
-      <div class="st-field">
-        <label class="st-label" for="search-url">Instance URL</label>
-        <input class="st-input" id="search-url" placeholder="http://127.0.0.1:8080" autocomplete="off" spellcheck="false">
-        <span class="muted small" id="search-url-note"></span>
-      </div>
-      <div class="st-field">
-        <label class="st-label" for="search-auth">Authentication</label>
-        <select class="st-input" id="search-auth">
-          <option value="none">None (a LAN or Tailnet instance)</option>
-          <option value="bearer">Bearer token</option>
-          <option value="basic">User name and password</option>
-          <option value="header">Custom headers</option>
-        </select>
-      </div>
-      <div id="search-bearer" hidden>
-        <div class="st-field">
-          <label class="st-label" for="search-token">Token</label>
-          <input class="st-input" id="search-token" type="password" autocomplete="off" placeholder="********">
-          <span class="muted small">A value shown as ******** stays as it is</span>
+  </header>
+
+  <div class="st-dialog__body set-dialog__body">
+    <form class="set-dialog__form" id="search-form">
+      <div class="set-dialog__cols">
+        <div class="set-dialog__col">
+          <section class="set-card">
+            <h3 class="set-card__title"><svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-server"/></svg>
+              Instance</h3>
+            <p class="set-hint">With it set up and on, the model gets <code>web_search</code> (a query, then titles,
+              addresses and snippets) and <code>read_page</code> (the text of one address from those results). The
+              instance must answer JSON: <code>search.formats</code> in its <code>settings.yml</code> needs
+              <code>json</code> next to <code>html</code>.
+              <a href="https://docs.searxng.org" target="_blank" rel="noopener noreferrer">SearXNG's docs</a>.</p>
+            <div class="toggle-row"><span>Use web search<br><span class="set-hint">offered in this page's
+              chat</span></span>
+              <button class="st-toggle" id="search-enabled" type="button" role="switch" aria-checked="false"
+                      aria-label="Use web search"></button></div>
+            <div class="st-field">
+              <label class="st-label" for="search-url">Instance URL</label>
+              <input class="st-input" id="search-url" placeholder="http://127.0.0.1:8080" autocomplete="off" spellcheck="false">
+              <span class="set-hint" id="search-url-note"></span>
+            </div>
+            <div class="st-field">
+              <label class="st-label" for="search-auth">Authentication</label>
+              <select class="st-input" id="search-auth">
+                <option value="none">None (a LAN or Tailnet instance)</option>
+                <option value="bearer">Bearer token</option>
+                <option value="basic">User name and password</option>
+                <option value="header">Custom headers</option>
+              </select>
+            </div>
+            <div id="search-bearer" hidden>
+              <div class="st-field">
+                <label class="st-label" for="search-token">Token</label>
+                <input class="st-input" id="search-token" type="password" autocomplete="off" placeholder="********">
+                <span class="set-hint">A value shown as ******** stays as it is.</span>
+              </div>
+            </div>
+            <div id="search-basic" hidden>
+              <div class="st-field">
+                <label class="st-label" for="search-user">User name</label>
+                <input class="st-input" id="search-user" autocomplete="off">
+              </div>
+              <div class="st-field">
+                <label class="st-label" for="search-pass">Password</label>
+                <input class="st-input" id="search-pass" type="password" autocomplete="off" placeholder="********">
+              </div>
+            </div>
+            <div id="search-headers" hidden>
+              <div class="st-field">
+                <label class="st-label" for="search-headers-text">Headers</label>
+                <textarea class="st-input" id="search-headers-text" rows="3" spellcheck="false"
+                          placeholder="Authorization: Bearer &hellip;"></textarea>
+                <span class="set-hint">Name: value, one per line.</span>
+              </div>
+            </div>
+          </section>
+          <section class="set-card">
+            <h3 class="set-card__title"><svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-play"/></svg>
+              Try one search</h3>
+            <p class="set-hint">Runs a real query with the fields as they stand, before you save them.</p>
+            <div class="set-suffix">
+              <input class="st-input" id="search-test-query" placeholder="AryaInfer web search" autocomplete="off">
+              <button class="st-btn st-btn--secondary" id="search-test" type="button">Run</button>
+            </div>
+            <p class="set-hint" id="search-test-result" role="status"></p>
+          </section>
+        </div>
+
+        <div class="set-dialog__col">
+          <section class="set-card">
+            <h3 class="set-card__title"><svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-search"/></svg>
+              Search options</h3>
+            <p class="set-hint">What each query asks the instance for. Empty fields use the instance's own setting.</p>
+            <div class="set-row2">
+              <div class="st-field">
+                <label class="st-label" for="search-language">Language</label>
+                <input class="st-input" id="search-language" placeholder="en" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="st-field">
+                <label class="st-label" for="search-safe">Safe search</label>
+                <select class="st-input" id="search-safe">
+                  <option value="">The instance's default</option>
+                  <option value="0">Off</option>
+                  <option value="1">Moderate</option>
+                  <option value="2">Strict</option>
+                </select>
+              </div>
+            </div>
+            <div class="st-field">
+              <label class="st-label" for="search-categories">Categories</label>
+              <input class="st-input" id="search-categories" placeholder="general, news" autocomplete="off">
+              <span class="set-hint">Comma separated; empty means general.</span>
+            </div>
+            <div class="set-row2">
+              <div class="st-field">
+                <label class="st-label" for="search-time">Time range</label>
+                <select class="st-input" id="search-time">
+                  <option value="">Any time</option>
+                  <option value="day">Past day</option>
+                  <option value="week">Past week</option>
+                  <option value="month">Past month</option>
+                  <option value="year">Past year</option>
+                </select>
+              </div>
+              <div class="st-field">
+                <label class="st-label" for="search-timeout">Timeout</label>
+                <div class="set-suffix">
+                  <input class="st-input" id="search-timeout" type="number" min="2" max="60" step="1" placeholder="20">
+                  <span>seconds</span>
+                </div>
+              </div>
+            </div>
+            <div class="st-field">
+              <label class="st-label" for="search-max">Results per search</label>
+              <div class="set-suffix">
+                <input class="st-input" id="search-max" type="number" min="1" max="20" step="1" placeholder="8">
+                <span>1 to 20</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="set-card">
+            <h3 class="set-card__title"><svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-book"/></svg>
+              Page reader</h3>
+            <div class="toggle-row"><span>Offer the page reader<br><span class="set-hint"><code>read_page</code>: one
+              address from a search result, as readable text</span></span>
+              <button class="st-toggle" id="search-readpage" type="button" role="switch" aria-checked="true"
+                      aria-label="Offer the page reader"></button></div>
+            <div class="toggle-row"><span>Read pages on this PC and the LAN<br><span class="set-hint">otherwise only
+              public addresses are read (safer)</span></span>
+              <button class="st-toggle" id="search-local" type="button" role="switch" aria-checked="false"
+                      aria-label="Read pages on this PC and the LAN"></button></div>
+          </section>
         </div>
       </div>
-      <div id="search-basic" hidden>
-        <div class="st-field">
-          <label class="st-label" for="search-user">User name</label>
-          <input class="st-input" id="search-user" autocomplete="off">
-        </div>
-        <div class="st-field">
-          <label class="st-label" for="search-pass">Password</label>
-          <input class="st-input" id="search-pass" type="password" autocomplete="off" placeholder="********">
-        </div>
-      </div>
-      <div id="search-headers" hidden>
-        <div class="st-field">
-          <label class="st-label" for="search-headers-text">Headers <output>Name: value, one per line</output></label>
-          <textarea class="st-input" id="search-headers-text" rows="3" spellcheck="false"
-                    placeholder="Authorization: Bearer ..."></textarea>
-        </div>
-      </div>
-      <div class="st-field">
-        <label class="st-label" for="search-language">Language <output>empty = the instance's</output></label>
-        <input class="st-input" id="search-language" placeholder="en" autocomplete="off" spellcheck="false">
-      </div>
-      <div class="st-field">
-        <label class="st-label" for="search-safe">Safe search</label>
-        <select class="st-input" id="search-safe">
-          <option value="">The instance’s default</option>
-          <option value="0">Off</option>
-          <option value="1">Moderate</option>
-          <option value="2">Strict</option>
-        </select>
-      </div>
-      <div class="st-field">
-        <label class="st-label" for="search-categories">Categories <output>empty = general</output></label>
-        <input class="st-input" id="search-categories" placeholder="general, news" autocomplete="off">
-      </div>
-      <div class="st-field">
-        <label class="st-label" for="search-time">Time range</label>
-        <select class="st-input" id="search-time">
-          <option value="">Any time</option>
-          <option value="day">Past day</option>
-          <option value="week">Past week</option>
-          <option value="month">Past month</option>
-          <option value="year">Past year</option>
-        </select>
-      </div>
-      <div class="st-field">
-        <label class="st-label" for="search-timeout">Timeout <output>seconds</output></label>
-        <input class="st-input" id="search-timeout" type="number" min="2" max="60" step="1" placeholder="20">
-      </div>
-      <div class="st-field">
-        <label class="st-label" for="search-max">Results per search <output>1-20</output></label>
-        <input class="st-input" id="search-max" type="number" min="1" max="20" step="1" placeholder="8">
-      </div>
-      <div class="toggle-row"><span>Offer the page reader<br><span class="muted small"><code>read_page</code>: one
-        address from a search result, as readable text</span></span>
-        <button class="st-toggle" id="search-readpage" type="button" role="switch" aria-checked="true" aria-label="Offer the page reader"></button></div>
-      <div class="toggle-row"><span>Read pages on this PC and the LAN<br><span class="muted small">otherwise only
-        public addresses are read (safer)</span></span>
-        <button class="st-toggle" id="search-local" type="button" role="switch" aria-checked="false" aria-label="Read pages on this PC and the LAN"></button></div>
     </form>
-    <div class="test-box">
-      <label class="st-label" for="search-test-query">Try one search</label>
-      <div class="test-box__row">
-        <input class="st-input" id="search-test-query" placeholder="AryaInfer web search" autocomplete="off">
-        <button class="st-btn st-btn--secondary" id="search-test" type="button">Run</button>
-      </div>
-      <div class="muted small" id="search-test-result" role="status"></div>
-    </div>
-    <div class="cfg-actions">
-      <button class="st-btn st-btn--primary" id="search-save" type="button">Save</button>
-      <span class="muted small" id="search-msg" role="status"></span>
-    </div>
   </div>
+
+  <footer class="st-dialog__foot set-dialog__foot">
+    <span class="set-hint" id="search-msg" role="status"></span>
+    <span class="st-dialog__spacer"></span>
+    <button class="st-btn st-btn--primary" id="search-save" type="button">Save</button>
+  </footer>
 </dialog>
 
 <!-- ============================ Images (ComfyUI) ============================ -->
-<dialog class="st-dialog st-dialog--wide img-dialog" id="image-dialog" aria-labelledby="image-title">
-  <header class="st-dialog__head img-dialog__head">
-    <span class="img-dialog__badge"><svg class="st-icon"><use href="web/sprite.svg#i-image"/></svg></span>
-    <span class="img-dialog__titles">
+<dialog class="st-dialog st-dialog--wide set-dialog" id="image-dialog" aria-labelledby="image-title">
+  <header class="st-dialog__head set-dialog__head">
+    <span class="set-dialog__badge"><svg class="st-icon"><use href="web/sprite.svg#i-image"/></svg></span>
+    <span class="set-dialog__titles">
       <span class="card-title" id="image-title">Image generation</span>
       <span class="set-hint">ComfyUI, on this PC or on a machine you point it at.</span>
     </span>
@@ -691,9 +737,9 @@
       <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-x"/></svg></button>
   </header>
 
-  <div class="st-dialog__body img-dialog__body">
-    <div class="img-dialog__cols">
-      <div class="img-dialog__col">
+  <div class="st-dialog__body set-dialog__body">
+    <div class="set-dialog__cols">
+      <div class="set-dialog__col">
         <section class="set-card">
           <h3 class="set-card__title"><svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-server"/></svg>
             Server</h3>
@@ -771,7 +817,7 @@
         </section>
       </div>
 
-      <div class="img-dialog__col">
+      <div class="set-dialog__col">
         <section class="set-card">
           <h3 class="set-card__title"><svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-layers"/></svg>
             Workflows</h3>
@@ -829,7 +875,7 @@
     </div>
   </div>
 
-  <footer class="st-dialog__foot img-dialog__foot">
+  <footer class="st-dialog__foot set-dialog__foot">
     <span class="set-hint" id="image-msg" role="status"></span>
     <span class="st-dialog__spacer"></span>
     <button class="st-btn st-btn--primary" id="image-save" type="button">Save</button>

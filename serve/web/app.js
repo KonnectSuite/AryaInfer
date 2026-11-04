@@ -1235,7 +1235,9 @@ function renderSearch() {
   searchNote();
   $("search-sum").textContent = searchInfo.configured
     ? `${(searchInfo.tools || []).join(", ")} · ${s.base_url}` : "not set up";
-  $("search-state").textContent = searchInfo.configured ? "in use" : "not set up";
+  const searchStatus = $("search-state");
+  searchStatus.textContent = searchInfo.configured ? "in use" : "not set up";
+  searchStatus.dataset.state = searchInfo.configured ? "on" : "off";
   $("search-row").hidden = !searchInfo.configured;
   $("search-row-sub").textContent = searchInfo.configured
     ? `${(searchInfo.tools || []).join(", ")} from ${s.base_url}` : "SearXNG";

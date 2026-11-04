@@ -431,20 +431,21 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 /* ---------------- the Images settings dialog ----------------
    Cards, hints under the field they explain, and Save in a footer that never scrolls away. The old two columns put
    floating hints on the right and squeezed the workflow list until its buttons wrapped. */
-.img-dialog { display: flex; flex-direction: column; max-height: min(88vh, 920px); }
-.img-dialog__head { gap: 12px; padding: 16px 16px 16px 22px; }
-.img-dialog__badge { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px;
+.set-dialog { display: flex; flex-direction: column; max-height: min(88vh, 920px); }
+.set-dialog__head { gap: 12px; padding: 16px 16px 16px 22px; }
+.set-dialog__badge { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 10px;
                      background: var(--st-accent-tint); color: var(--st-accent-text); }
-.img-dialog__titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.set-dialog__titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 /* `.st-dialog--wide .st-dialog__body` sets overflow: hidden for the shell views, and it outranks a single class: this
    needs both classes to keep the body the one that scrolls. */
-.img-dialog .img-dialog__body { flex: 1; min-height: 0; padding: 18px 22px 6px; overflow: auto; max-height: none; }
-.img-dialog__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); gap: 16px; align-items: start; }
-.img-dialog__col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.img-dialog__foot { position: relative; display: flex; align-items: center; gap: 12px; padding: 12px 22px;
+.set-dialog .set-dialog__body { flex: 1; min-height: 0; padding: 18px 22px 6px; overflow: auto; max-height: none; }
+.set-dialog__cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr); gap: 16px; align-items: start; }
+.set-dialog__form { margin: 0; }
+.set-dialog__col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.set-dialog__foot { position: relative; display: flex; align-items: center; gap: 12px; padding: 12px 22px;
                     border-top: 1px solid var(--st-line); background: var(--st-surface); }
 /* the cards scroll under the footer: a short fade says "there is more" instead of a row sliced by the border */
-.img-dialog__foot::before { content: ""; position: absolute; left: 0; right: 0; top: -17px; height: 17px;
+.set-dialog__foot::before { content: ""; position: absolute; left: 0; right: 0; top: -17px; height: 17px;
                             background: linear-gradient(transparent, var(--st-surface)); pointer-events: none; }
 .set-card { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 18px;
             border: 1px solid var(--st-line); border-radius: 14px; background: var(--st-surface); }
@@ -490,17 +491,17 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
                                               box-shadow: 0 1px 2px rgba(8, 12, 18, .12); }
 .image-wf__pick button:disabled { opacity: .38; cursor: not-allowed; }
 .image-wf__remove { grid-area: remove; width: 26px; height: 26px; }
-@media (max-width: 900px) { .img-dialog__cols { grid-template-columns: 1fr; } .set-row2 { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .set-dialog__cols { grid-template-columns: 1fr; } .set-row2 { grid-template-columns: 1fr; } }
 @media (max-width: 560px) {
   /* a phone: near the full width, one line of title, and the status pill beside it */
-  .img-dialog { width: calc(100vw - 12px); }
-  .img-dialog__head { padding: 12px 12px 12px 14px; gap: 8px; }
-  .img-dialog__titles { flex: 1; }
-  .img-dialog__head .st-dialog__spacer { display: none; }   /* the titles take the room; the pill sits beside them */
-  .img-dialog__titles .set-hint { display: none; }
-  .img-dialog__titles .card-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .img-dialog__body { padding: 12px 12px 4px; }
-  .img-dialog__foot { padding: 10px 14px; }
+  .set-dialog { width: calc(100vw - 12px); }
+  .set-dialog__head { padding: 12px 12px 12px 14px; gap: 8px; }
+  .set-dialog__titles { flex: 1; }
+  .set-dialog__head .st-dialog__spacer { display: none; }   /* the titles take the room; the pill sits beside them */
+  .set-dialog__titles .set-hint { display: none; }
+  .set-dialog__titles .card-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .set-dialog__body { padding: 12px 12px 4px; }
+  .set-dialog__foot { padding: 10px 14px; }
   .set-card { padding: 14px 12px 16px; }
 }
 /* pictures the answers made: thumbnails under a tool call and in the panel's stage */
