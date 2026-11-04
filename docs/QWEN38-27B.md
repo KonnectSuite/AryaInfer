@@ -1055,3 +1055,11 @@ of passes.  At 62K, batch 2,048: attention **19,734 -> 18,770 ms** and prefill *
 1,172.4 tok/s** in three runs - +9% over the fp16 scores and **+19% over the 990** of two rounds ago.  `poly_attend_test`
 passes (batch cases ~1e-3 from the fp32-score path, decode identical) and the 24-token greeting is unchanged; 8K stays
 1,444-1,497 (attention is only 8% there).
+### Neutral attention micro-optimizations, and a measurement lesson (2026-11-03)
+
+Two attempts on the fallback after the round-21 win measured inside the noise and were reverted: `__expf` instead of
+`expf` in the softmax (1,171.7-1,182.2 tok/s at 62K against 1,153.9-1,175.0) and doubling the score budget (1,174.9-
+1,178.5).  The lesson: an earlier run with the app's engine still loaded read a 6 s attention total and then timed out
+at 150 s - the standalone process was short of VRAM, so every number from that run was invalid.  Benchmarks here need
+`nvidia-smi` empty first, and the app's server is stopped now for that reason.  With an empty GPU the round-21 numbers
+reproduce: 62K prefill 1,170-1,182 tok/s, attention 18.8 s of 52.8 s.
