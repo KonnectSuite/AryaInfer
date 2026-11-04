@@ -122,3 +122,15 @@ slower; it is not wired into the default.
   eight B groups no change.
 - **Next for prefill:** the int8 kernel needs a pipelined loader (`cp.async`/`ldmatrix`, MMQ-style) to pass 77 TFLOPS;
   alternatively Stage 2 attention - at 62K about 18 s of 56 s is attention at ~42 TFLOPS effective.
+### The int8 kernel\x27s plateau (rounds 12-15)
+
+The codes layout took the kernel from 50.4 to 63-65 TFLOPS and the engine from 851 to 970-980 tok/s.  After that
+every variant was negative or neutral: a 32-value tile with two sets (32.1 TFLOPS), swapping the grid for L2 reuse of
+the weight tiles (engine 928), dual D accumulators with hoisted scales (engine 901), feeding it the Q8_0 expansion
+(30.9), and a single per-128 activation scale (562.6).  The diagnostic says why: the product path alone is ~108
+TFLOPS and about 1.7 of the 2.8 ms a call, so the loader is no longer the limit - what is left is the mma schedule
+(more independent accumulators a warp, more blocks a multiprocessor, or ldmatrix loads), a different piece of work from
+the staging.
+
+Default path, same build, this session: 8K 1,428-1,633 tok/s (batch 1,024-2,048), 62K 1,010-1,102 (64K context).
+Run-to-run spread on this card is about 10%, so those are the bands, not single numbers.

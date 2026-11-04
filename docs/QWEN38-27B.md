@@ -1004,3 +1004,9 @@ isolated staging from 2.6 to 1.14 ms in mode 4, but the full kernel stayed at ~6
 tok/s** (980 without the swap); reverted.  That says the staging is no longer what is left: with the copies out of the
 way the product path is ~1.69 ms of the 2.83, i.e. ~108 TFLOPS, and the gap is the mma schedule and occupancy rather
 than the loader.
+### The int8 schedule is a dead end for now (2026-11-03)
+
+Two D accumulators alternating per token group with the weight and activation scales hoisted out of the epilogue
+measured **901 tok/s** through the engine (980 without), against the ~108 TFLOPS the product path alone reaches; the
+extra register pressure cost more than the overlap bought.  Reverted.  With rounds 13-14 (32-value tile, grid order)
+that is three schedule/staging variants in a row that lose, so the int8 path stays at 970-980 tok/s, opt-in.
