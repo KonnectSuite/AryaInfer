@@ -1,25 +1,4 @@
 {
- "qwen3.8-27b-iq3_xxs": {
-  "display_name": "AryaStrata Qwen3.8 27B IQ3_XXS - 128K vision",
-  "aliases": [
-   "qwen38-27b-iq3_xxs"
-  ],
-  "notes": "Dense Qwen3.8 27B (llama.cpp arch qwen35) from ISTA-DASLab's IQ3_XXS file, read in place by strata-poly (or aryainfer) with its draft block and 1,024-token vision.  128K context on a 4-bit cache with a 512-row prompt batch: measured on this host 2026-11-03, a 61,787-token prompt read at 826.0 tok/s and wrote at ~70 tok/s with the vision encoder on the CPU and 14.7 GiB of VRAM; the same prompt read at 722.2 tok/s with the encoder on the card, and the old 2,048-row batch decoded at 32.0 at 64K.  Calibrated for coding on this host: temperature 0.6, top_p 0.95, top_k 20, thinking budget 1536, loop recovery on; 7 of 7 code probes and 3 of 3 answer-only probes passed."
- },
- "qwen3.8-27b-iq2_s": {
-  "display_name": "AryaStrata Qwen3.8 27B IQ2_S - 200K vision",
-  "aliases": [
-   "qwen38-27b-iq2_s"
-  ],
-  "notes": "The same model from the smaller IQ2_S file, for the long prompts: 200,069-token context on a 4-bit cache, measured here with the needle found at 417.3 tok/s reading and 14.6 tok/s writing. Calibrated for coding on this host (2026-11-02): temperature 0.6, top_p 0.95, top_k 20, thinking budget 1536, loop recovery on; 7 of 7 code probes and 3 of 3 answer-only probes passed, and the repetition bait stopped on its own. Thinking modes off, low, medium and high are supported (default medium, thinking cap 4096); measured on this host 2026-11-02: every graded level passed all six probes on both files, off passed four of six and five of six, and the deep levels think most."
- },
- "qwen3.8-27b-arya": {
-  "display_name": "AryaInfer Qwen3.8 27B IQ3_XXS - 128K vision (Arya engine)",
-  "aliases": [
-   "qwen38-27b-arya"
-  ],
-  "notes": "The same IQ3_XXS file on AryaInfer's own engine binary (aryainfer.exe), which is built from this repo so the fork's changes have a home while strata-poly stays exactly as PolyStrata ships it. Same protocol, flags, READY line and auto-switching as the poly engine; 128K with a 4-bit cache and a 512-row prompt batch (722.2 tok/s reading and 70.3 writing on a 61,833-token prompt with GPU vision; 826.0 reading with the encoder on the CPU). The fork's build compiles the chunked GDN MMA kernel that upstream's installed 0.1.45 lacks; the model config enables it with STRATA_GDN_MMA=1, measured on this host 2026-11-03 at +8-9% reading (1,190.0 -> 1,287.8 at 8K, 1,021.4 -> 1,114.5 at 32K, 854.9 -> 917.8 at 62K) with decode unchanged by the kernel."
- },
  "qwen3.8-27b-aq3": {
   "display_name": "AryaInfer Qwen3.8 27B GSQ3 AQ3 - 128K vision (Arya engine, faster writing)",
   "aliases": [

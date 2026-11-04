@@ -1,5 +1,10 @@
 # Qwen3.8 27B (ISTA-DASLab GSQ-RCO) on strata-poly
 
+> **Uninstalled 2026-11-03.** The IQ2_S and IQ3_XXS 27B files, their model entries and host-tuning configs, and the
+> `strata-poly-qwen38` install that served them were removed from this host; the 27B path now on this machine is the
+> AQ3 entry on the Arya engine (`qwen3.8-27b-aq3`, `aryainfer.exe`).  The comparisons below were measured on the files
+> that were removed and cannot be reproduced here as they stand.
+
 A dense Qwen3.8 model for AryaInfer's second engine.  It is Qwen35's model with one dense FFN where the routed
 experts are (llama.cpp calls the architecture `qwen35`), so the engine runs it through the same layers, the same
 gated delta net, the same 3-axis vision rope and the same block that guesses ahead - with no router anywhere.
