@@ -1,0 +1,59 @@
+{
+ "exe": "$INSTALL\\engine-poly\\strata-poly.exe",
+ "args": [
+  "--model",
+  "$DATA\\models\\qwen36s-apex-iquality\\Qwen3.6-35B-A3B-Claude-4.7-Opus-Reasoning-Distilled-APEX-I-Quality.gguf",
+  "--max-context",
+  "262144",
+  "--kv",
+  "q8_0",
+  "--threads",
+  "15",
+  "--prompt-batch",
+  "2048",
+  "--vram-reserve-mib",
+  "512",
+  "--tail-skip",
+  "0",
+  "--window",
+  "8"
+ ],
+ "cwd": "$INSTALL",
+ "tokenizer": "$DATA\\packs\\qwen36s-ud-q4_k_xl\\tokenizer",
+ "model_name": "qwen3.6-35b-a3b-opus-reasoning",
+ "log": "$INSTALL\\local-data\\final-roster-service\\selected-engine.log",
+ "lib_dirs": [
+  "$INSTALL\\.venv\\Lib\\site-packages\\nvidia\\cu13\\bin\\x86_64"
+ ],
+ "port": 8080,
+ "gpu": 0,
+ "gpus_asked": true,
+ "open_browser": false,
+ "vision": {
+  "exe": "$INSTALL\\engine-poly\\strata-vision.exe",
+  "mmproj": "$DATA\\models\\qwen36s-apex-iquality\\mmproj.gguf",
+  "model": "$DATA\\models\\qwen36s-apex-iquality\\Qwen3.6-35B-A3B-Claude-4.7-Opus-Reasoning-Distilled-APEX-I-Quality.gguf",
+  "gpu": true,
+  "max_tokens": 1024
+ },
+ "parallel": 1,
+ "host": "127.0.0.1",
+ "fit_max_tokens": true,
+ "switch_on_request": true,
+ "sampling": {
+  "temperature": 1.0,
+  "top_p": 0.95,
+  "top_k": 20,
+  "presence_penalty": 0.5
+ },
+ "reasoning_loop_recovery": "recover",
+ "display_name": "AryaStrata Qwen3.6 35B-A3B Claude Opus 4.7 Reasoning (APEX I-Quality) \u2014 256K vision",
+ "reasoning_effort": "medium",
+ "reasoning_budget_tokens": 8000,
+ "reasoning_budget_by_effort": {
+  "off": 0,
+  "low": 4000,
+  "medium": 8000,
+  "high": 16000
+ }
+}

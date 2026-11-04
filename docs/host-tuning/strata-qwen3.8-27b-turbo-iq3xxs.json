@@ -1,0 +1,55 @@
+{
+ "exe": "$DATA\\engines\\arya-infer\\aryainfer.exe",
+ "args": [
+  "--model",
+  "$DATA\\models\\qwen38-27b-turbo-iq3xxs\\Qwen3.8-27B-Turbo-Brilliance-50X-RI-GSQ-RCO-IQ3_XXS-mtp.gguf",
+  "--max-context",
+  "102400",
+  "--kv",
+  "q4_0",
+  "--vram-reserve-mib",
+  "512",
+  "--prompt-batch",
+  "1024"
+ ],
+ "cwd": "C:\\Users\\KNPhu\\AryaCode\\KonnectSuite\\AryaInfer",
+ "tokenizer": "$DATA\\models\\qwen38-27b\\tokenizer",
+ "model_name": "qwen3.8-27b-turbo-iq3xxs",
+ "display_name": "AryaInfer Qwen3.8 27B Turbo Brilliance IQ3_XXS (MTP) - 100K vision",
+ "log": "$INSTALL\\strata-qwen3.8-27b-turbo-iq3xxs.log",
+ "lib_dirs": [
+  "$DATA\\cuda\\13.1.2\\bin\\x64",
+  "$DATA\\cuda\\13.1.2\\bin",
+  "$DATA\\engines\\strata-0.1.54"
+ ],
+ "port": 8083,
+ "gpu": 0,
+ "vision": {
+  "exe": "$DATA\\engines\\strata-0.1.54\\strata-vision.exe",
+  "mmproj": "$DATA\\models\\qwen38-27b-turbo-iq3xxs\\mmproj-F16.gguf",
+  "model": "$DATA\\models\\qwen38-27b-turbo-iq3xxs\\Qwen3.8-27B-Turbo-Brilliance-50X-RI-GSQ-RCO-IQ3_XXS-mtp.gguf",
+  "gpu": false,
+  "max_tokens": 1024,
+  "min_tokens": 1024
+ },
+ "switch_on_request": true,
+ "env": {
+  "STRATA_GDN_MMA": "1"
+ },
+ "aliases": [
+  "qwen38-27b-turbo-iq3xxs"
+ ],
+ "sampling": {
+  "temperature": 0.7,
+  "top_p": 0.95,
+  "top_k": 64
+ },
+ "reasoning_effort": "medium",
+ "reasoning_budget_tokens": 8000,
+ "reasoning_budget_by_effort": {
+  "off": 0,
+  "low": 4000,
+  "medium": 8000,
+  "high": 12000
+ }
+}

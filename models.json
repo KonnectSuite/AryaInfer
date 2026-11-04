@@ -5,5 +5,12 @@
    "qwen38-27b-aq3"
   ],
   "notes": "ISTA-DASLab's 3-bit GSQ checkpoint repacked as AQ3 (tools/aryainfer_gsq3_convert.py), uniform 3-bit with a scale per 128, read only by aryainfer.exe. Measured on this host 2026-11-03, final build: reading 1,444-1,633 tok/s at 8K (batch 2,048; 1,266 at batch 512, 711 before the Q8_0 expansion was made coalesced) and 1,153.9-1,175.0 on a 62K prompt (batch 2,048, 64K context; 990 before the attention work); 968.7 on a 61,787-token prompt through the server at 131K context (15.2 GiB, before that work); writing 88-104 tok/s at 8K. The prompt attention keeps its scores as halves and uses bigger key blocks, taking its share of 62K prefill from 39% (24.4 s) to 35% (18.8 s). Entry paths repaired 2026-11-03 (they held UNC paths that do not resolve) and the vision encoder points at the AQ3 file; an image turn was checked. Batch 1024 is its setting: 2048 at 131K would add ~1.4 GiB on a card that measured 15.2 GiB."
+ },
+ "qwen3.8-27b-turbo-iq3xxs": {
+  "display_name": "AryaInfer Qwen3.8 27B Turbo Brilliance IQ3_XXS (MTP) - 100K vision",
+  "aliases": [
+   "qwen38-27b-turbo-iq3xxs"
+  ],
+  "notes": "DavidAU's Qwen3.8 27B Turbo Brilliance 50X Reasoning-Instruct (GSQ-RCO IQ3_XXS, MTP) on the Arya engine (aryainfer.exe): a 27B dense fine-tune of Qwen3.8-27B with 27 reasoning + 27 instruct + 9 xhigh modes driven by {REASON:...} tags, 3.05 bpw mixed GSQ-RCO quants, 10.4 GB, 100K context. Measured on this host 2026-11-03: reading 1,241.9 tok/s at 8K prompt/32K context and 805.4 on a 99K prompt at 100K context (batch 1,024); writing 57.3 and 52.5 tok/s with the MTP draft (20/28 and 8/11 accepted). Thinking modes: off 4/6 probes, low/medium/high 6/6 each; sampling calibration (0.6/0.95/20): 10 requests, no loops, 6/7 code probes (one hit the 300-token cap), 3/3 adherence, mean 4-gram diversity 0.89. Kept as the daily driver after a first-try animated-HTML task."
  }
 }
