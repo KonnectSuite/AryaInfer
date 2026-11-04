@@ -1062,4 +1062,6 @@ Two attempts on the fallback after the round-21 win measured inside the noise an
 1,178.5).  The lesson: an earlier run with the app's engine still loaded read a 6 s attention total and then timed out
 at 150 s - the standalone process was short of VRAM, so every number from that run was invalid.  Benchmarks here need
 `nvidia-smi` empty first, and the app's server is stopped now for that reason.  With an empty GPU the round-21 numbers
-reproduce: 62K prefill 1,170-1,182 tok/s, attention 18.8 s of 52.8 s.
+reproduce: 62K prefill 1,170-1,182 tok/s, attention 18.8 s of 52.8 s.The accumulator rescale, moved from its own kernel into the softmax block that computes the factor, was tried the same day
+and measured **1,177.8-1,179.8** at 62K - also inside the band, so it was reverted too; the rescale kernel's launches
+were not what the 18.8 s consists of.
