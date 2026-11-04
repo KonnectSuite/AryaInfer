@@ -227,6 +227,16 @@ class Contract(unittest.TestCase):
         self.assertNotIn("api_base", self.room)
         self.assertGreaterEqual(self.templates.count("prompt:"), 8)
 
+    def test_the_room_uses_the_chat_composer_and_a_full_width_gallery(self):
+        # one message box for both views, so the two cannot drift apart
+        self.assertIn('class="st-composer room__form"', self.html)
+        self.assertIn('$("room-form").hidden = tab !== "create"', self.room)   # it belongs to the conversation
+        css = (WEB / "app.css").read_text(encoding="utf-8")
+        self.assertIn(".room__form { flex: none; margin-top: 8px; width: 100%; }", css)
+        self.assertIn("minmax(220px, 1fr)", css)                                # the gallery fills the width
+        self.assertIn(".room-card__prompt { position: absolute", css)           # the prompt rides over the picture
+        self.assertIn("minmax(150px, 1fr)", css)                                # two a row on a phone
+
     def test_the_tools_show_their_state_in_the_header(self):
         for name in ("tool-pills", "pill-search", "pill-images"):
             self.assertIn(name, self.page.by_id, name)

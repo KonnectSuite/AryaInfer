@@ -59,14 +59,24 @@ last picture as `reference_id` with an image-to-image graph, so the composition 
 browser, so when a phone has thrown it away the room reads the newest pictures from the gallery instead, and an
 image-to-image call with no `reference_id` edits the newest picture - "change the last one" survives a reload.
 
+The room is laid out like the chat: the message box under it **is** the chat's composer, same component and width
+(860 px, centred), with the attach-picture button, dictation and the send button where the chat has them; it is shown
+on **Create** and hidden on the gallery tabs. The conversation is the chat's column too, while **My images** and
+**Templates** use the full width: square tiles in a grid that fits as many columns as the window has room for (two a
+row on a phone), the prompt over the picture on hover, and the favourite star where it always was.
+
 A picture attached with the paperclip goes with the **request**, not just the instructions: the page sends
 `strata_images: {"references": ["<id>"]}`, the server gives that request its own tool, and the picture is edited even
 when the model leaves `reference_id` out - and a text-to-image graph it names by mistake is replaced by the default
 image-to-image graph, because attaching a picture is the instruction to edit it. A bad list (or an id that is gone)
 answers with a sentence, not a crash.
 
-The tool is **raster only**. When the user asks for an SVG, HTML, a diagram, a chart, an icon set or a UI mockup, the
-model writes the code in a fenced block instead; the answer renders it in a sandboxed frame in the chat itself (no
+The tool is **raster only**, and the server enforces it: when the last message names a format to be written - SVG,
+HTML, CSS, Markdown, Mermaid, Graphviz, PlantUML, LaTeX - and does not name a picture, the request is not offered
+`generate_image` at all, so the model writes the code in a fenced block. Asked for "an animated HTML of turtles in a
+pond", one model offered the tool reached for a "reference palette" picture first: a failed ComfyUI call and a wait
+nobody asked for. A request that also says picture, photo, image, illustration, wallpaper or poster keeps the tool;
+"an image for my HTML page" is a picture request. The answer renders code in a sandboxed frame in the chat itself (no
 network, opaque origin, inline style and script only), with a **Download** button that saves the block as a file. The
 code stays readable under the preview, and a block that is still streaming, or one larger than 200 KB, stays code.
 When the chat has web search on, the model may search for a factual reference and turn what it finds into the prompt;

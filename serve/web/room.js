@@ -19,6 +19,7 @@ function roomTab(tab) {
   room.tab = tab;
   for (const b of $("room-tabs").children) b.setAttribute("aria-selected", String(b.dataset.roomTab === tab));
   for (const pane of document.querySelectorAll("[data-room-pane]")) pane.hidden = pane.dataset.roomPane !== tab;
+  $("room-form").hidden = tab !== "create";      // the message box belongs to the conversation, not to the gallery
   if (tab === "mine") roomLoadGallery(true);
   if (tab === "templates") roomRenderTemplates();
   roomRender();
