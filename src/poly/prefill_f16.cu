@@ -273,88 +273,136 @@ __global__ void cast_f16_kernel(const float* __restrict__ x, __half* __restrict_
 // and the accumulators stay in registers.  The tile keeps its activations for eight times as many output rows as the
 // first version, which is where its time went.
 constexpr int I8_BM = 128, I8_BN = 128, I8_BK = 64;
-constexpr size_t kI8Smem = (size_t) (I8_BM * I8_BK + I8_BN * I8_BK) + (I8_BM + 2 * I8_BN) * sizeof(float);
+// two sets of a tile: the weight codes, the activation codes, a half scale a weight row and two a token
+constexpr size_t kI8Set = (size_t) (I8_BM * I8_BK + I8_BN * I8_BK) + (I8_BM + 2 * I8_BN) * sizeof(__half);
+constexpr size_t kI8Smem = 2 * kI8Set;
 
-__global__ void __launch_bounds__(512, 2) fused_aq3_i8_kernel(const uint8_t* __restrict__ w, size_t row_bytes,
+__device__ __forceinline__ void cp_async16(void* dst, const void* src) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
+    const unsigned d = (unsigned) __cvta_generic_to_shared(dst);
+    asm volatile("cp.async.ca.shared.global [%0], [%1], 16;\n" ::"r"(d), "l"(src));
+#else
+    *(uint4*) dst = *(const uint4*) src;
+#endif
+}
+
+__device__ __forceinline__ void cp_async4(void* dst, const void* src) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
+    const unsigned d = (unsigned) __cvta_generic_to_shared(dst);
+    asm volatile("cp.async.ca.shared.global [%0], [%1], 4;\n" ::"r"(d), "l"(src));
+#else
+    *(uint32_t*) dst = *(const uint32_t*) src;
+#endif
+}
+
+__device__ __forceinline__ void cp_async_commit() {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
+    asm volatile("cp.async.commit_group;\n");
+#endif
+}
+
+__device__ __forceinline__ void cp_async_wait0() {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
+    asm volatile("cp.async.wait_group 0;\n");
+#endif
+}
+
+// AQ3 x int8 on the int8 tensor cores (opt-in STRATA_AQ3_I8): 128 rows by 128 tokens, k in tiles of 64.  Two shared
+// sets are staged with cp.async: a tile's codes are copied while the previous tile runs the mma, so the loop is one
+// barrier a tile and the copy engine, not the CUDA cores, does the staging.
+__global__ void __launch_bounds__(512, 1) fused_aq3_i8_kernel(const uint8_t* __restrict__ w, size_t row_bytes,
                                     const uint8_t* __restrict__ xq, float* __restrict__ y,
                                     int n_in, int n_out, int rows, int mode) {
     extern __shared__ char smem_i8[];
-    int8_t* a_s = (int8_t*) smem_i8;                 // BM x BK weight codes
-    int8_t* b_s = a_s + I8_BM * I8_BK;               // BN x BK activation codes
-    float* wsc = (float*) (b_s + I8_BN * I8_BK);     // a weight group scale a row
-    float* bsc = wsc + I8_BM;                        // two activation block scales a token
     const int m0 = blockIdx.x * I8_BM, t0 = blockIdx.y * I8_BN;
     const int tid = threadIdx.x, warp = tid >> 5, lane = tid & 31;
-    const int rg = warp >> 1, th = warp & 1;         // row band 0..7 (16 rows), token half 0/1 (64 tokens)
+    const int rg = warp >> 1, th = warp & 1;
+    const int groups = n_in / 128, xblocks = n_in / 32;
+    const __half* wscales = (const __half*) (w + (size_t) n_out * row_bytes);
+    const __half* xscales = (const __half*) (xq + (size_t) rows * row_bytes);
     float acc[2][4][4];
     for (auto& pass : acc) for (auto& g : pass) for (auto& v : g) v = 0.f;
-    for (int kt = 0; kt < n_in / I8_BK; ++kt) {
-        // the int8 codes of the AQ3 matrix (made once a call): a 16-byte copy a unit, four a row
-        if ((mode & 1) == 0)   // diagnostic: 1 skips the weight staging, 2 the activation staging, 4 the mma
-        for (int c = tid; c < I8_BM * (I8_BK / 16); c += (int) blockDim.x) {
-            const int m = c / (I8_BK / 16), q = c % (I8_BK / 16), col = m0 + m;
-            uint4* dst = (uint4*) (a_s + m * I8_BK + q * 16);
-            if (col >= n_out) {
-                *dst = make_uint4(0, 0, 0, 0);
-                continue;
+
+    auto stage = [&](int kt, int s) {
+        int8_t* a = (int8_t*) (smem_i8 + (size_t) s * kI8Set);
+        int8_t* b = a + I8_BM * I8_BK;
+        __half* wh = (__half*) (b + I8_BN * I8_BK);
+        __half* bh = wh + I8_BM;
+        if ((mode & 1) == 0) {   // diagnostic: 1 skips the weight staging, 2 the activation staging, 4 the mma
+            for (int c = tid; c < I8_BM * 4; c += 512) {
+                const int m = c >> 2, q = c & 3, col = m0 + m;
+                if (col >= n_out) *(uint4*) (a + m * I8_BK + q * 16) = make_uint4(0, 0, 0, 0);
+                else cp_async16(a + m * I8_BK + q * 16, w + (size_t) col * row_bytes + (size_t) kt * I8_BK + q * 16);
             }
-            *dst = *(const uint4*) (w + (size_t) col * row_bytes + (size_t) kt * I8_BK + q * 16);
-        }
-        if (tid < I8_BM) {
-            const int col = m0 + tid;
-            wsc[tid] = col < n_out
-                ? __half2float(((const __half*) (w + (size_t) n_out * row_bytes))[(size_t) col * (n_in / 128) +
-                                                                                (size_t) (kt >> 1)])
-                : 0.f;
-        }
-        if ((mode & 2) == 0)
-        for (int c = tid; c < I8_BN * (I8_BK / 16); c += (int) blockDim.x) {
-            const int t = c / (I8_BK / 16), q = c % (I8_BK / 16), tok = t0 + t;
-            uint4* dst = (uint4*) (b_s + t * I8_BK + q * 16);
-            if (tok >= rows) {
-                *dst = make_uint4(0, 0, 0, 0);
-                continue;
+            if (tid < I8_BM) {
+                const int col = m0 + tid;
+                wh[tid] = col < n_out ? wscales[(size_t) col * groups + (kt >> 1)] : __float2half(0.f);
             }
-            *dst = *(const uint4*) (xq + (size_t) tok * row_bytes + (size_t) kt * I8_BK + q * 16);
         }
-        if (tid < I8_BN * 2) {
-            const int t = tid >> 1, c = tid & 1, tok = t0 + t;
-            bsc[t * 2 + c] = tok < rows
-                ? __half2float(((const __half*) (xq + (size_t) rows * row_bytes))[(size_t) tok * (n_in / 32) +
-                                                                                 (size_t) kt * 2 + c])
-                : 0.f;
-        }
-        __syncthreads();
-        if ((mode & 4) == 0)
-        for (int c = 0; c < 2; ++c) {
-            ggml_cuda_mma::tile<16, 8, int> A;
-#pragma unroll
-            for (int l = 0; l < 4; ++l) {
-                // m16n8k32's A fragment: a0/a1 the first 8 rows, a2/a3 the next 8, 8 codes a register.
-                const int r = ((l & 1) * 8) + (lane >> 2), j = ((l >> 1) * 4) + (lane & 3);
-                A.x[l] = ((const int*) (a_s + (rg * 16 + r) * I8_BK + c * 32))[j];
+        if ((mode & 2) == 0) {
+            for (int c = tid; c < I8_BN * 4; c += 512) {
+                const int t = c >> 2, q = c & 3, tok = t0 + t;
+                if (tok >= rows) *(uint4*) (b + t * I8_BK + q * 16) = make_uint4(0, 0, 0, 0);
+                else cp_async16(b + t * I8_BK + q * 16, xq + (size_t) tok * row_bytes + (size_t) kt * I8_BK + q * 16);
             }
-            for (int pass = 0; pass < 2; ++pass) {
-                for (int g = 0; g < 4; ++g) {
-                    const int tg = th * 8 + pass * 4 + g;
-                    ggml_cuda_mma::tile<8, 8, int> B;
-                    ggml_cuda_mma::tile<16, 8, int> D;
+            if (tid < I8_BN) {
+                const int tok = t0 + tid;
+                if (tok < rows) cp_async4(bh + tid * 2, xscales + (size_t) tok * xblocks + (size_t) kt * 2);
+                else bh[tid * 2] = bh[tid * 2 + 1] = __float2half(0.f);
+            }
+        }
+    };
+
+    const int ktiles = n_in / I8_BK;
+    stage(0, 0);
+    cp_async_commit();
+    cp_async_wait0();
+    __syncthreads();
+    for (int kt = 0; kt < ktiles; ++kt) {
+        const int s = kt & 1;
+        if (kt + 1 < ktiles) {
+            stage(kt + 1, s ^ 1);
+            cp_async_commit();
+        }
+        if ((mode & 4) == 0) {
+            const int8_t* a = (const int8_t*) (smem_i8 + (size_t) s * kI8Set);
+            const int8_t* b = a + I8_BM * I8_BK;
+            const __half* wh = (const __half*) (b + I8_BN * I8_BK);
+            const __half* bh = wh + I8_BM;
+            for (int c = 0; c < 2; ++c) {
+                ggml_cuda_mma::tile<16, 8, int> A;
 #pragma unroll
-                    for (int l = 0; l < 2; ++l) {
-                        const int r = lane >> 2, j = (l * 4) + (lane & 3);
-                        B.x[l] = ((const int*) (b_s + (tg * 8 + r) * I8_BK + c * 32))[j];
-                    }
-                    D.x[0] = D.x[1] = D.x[2] = D.x[3] = 0;
-                    ggml_cuda_mma::mma(D, A, B);
+                for (int l = 0; l < 4; ++l) {
+                    // m16n8k32's A fragment: a0/a1 the first 8 rows, a2/a3 the next 8, 8 codes a register.
+                    const int r = ((l & 1) * 8) + (lane >> 2), j = ((l >> 1) * 4) + (lane & 3);
+                    A.x[l] = ((const int*) (a + (rg * 16 + r) * I8_BK + c * 32))[j];
+                }
+                for (int pass = 0; pass < 2; ++pass) {
+                    for (int g = 0; g < 4; ++g) {
+                        const int tg = th * 8 + pass * 4 + g;
+                        ggml_cuda_mma::tile<8, 8, int> B;
+                        ggml_cuda_mma::tile<16, 8, int> D;
 #pragma unroll
-                    for (int l = 0; l < 4; ++l) {
-                        const int r = ((l >> 1) * 8) + (lane >> 2), tk = ((lane & 3) * 2) + (l & 1);
-                        acc[pass][g][l] += wsc[rg * 16 + r] * bsc[(tg * 8 + tk) * 2 + c] * (float) D.x[l];
+                        for (int l = 0; l < 2; ++l) {
+                            const int r = lane >> 2, j = (l * 4) + (lane & 3);
+                            B.x[l] = ((const int*) (b + (tg * 8 + r) * I8_BK + c * 32))[j];
+                        }
+                        D.x[0] = D.x[1] = D.x[2] = D.x[3] = 0;
+                        ggml_cuda_mma::mma(D, A, B);
+#pragma unroll
+                        for (int l = 0; l < 4; ++l) {
+                            const int r = ((l >> 1) * 8) + (lane >> 2), tk = ((lane & 3) * 2) + (l & 1);
+                            acc[pass][g][l] += __half2float(wh[rg * 16 + r]) *
+                                               __half2float(bh[(tg * 8 + tk) * 2 + c]) * (float) D.x[l];
+                        }
                     }
                 }
             }
         }
-        __syncthreads();
+        if (kt + 1 < ktiles) {
+            cp_async_wait0();
+            __syncthreads();
+        }
     }
     for (int pass = 0; pass < 2; ++pass) {
         for (int g = 0; g < 4; ++g) {

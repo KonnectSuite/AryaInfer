@@ -980,3 +980,11 @@ the engine at 8K, batch 1024: **970.7 tok/s** against 1,554.2 for the expansion 
 the 2.891 ms into 0.79 of weight staging, 0.37 of activation staging, 0.29 of loop and barriers, and about 1.44 of
 mma and epilogue (~126 TFLOPS).  The next step is `cp.async` double buffering - the codes are 16-byte aligned now, so
 the staging can run on the copy engine under the product.
+### cp.async double buffering (2026-11-03)
+
+Two shared tile sets, the next one staged with `cp.async` (16-byte copies for the codes, 4 bytes for the token scales)
+while the mma runs on the other; one barrier a tile.  The kernel alone at 17,408 x 5,120 reads **65.2 TFLOPS** (63.1
+before), but the 5,120-square shapes are a little worse (72.2 and 69.1 against 76.2 and 74.4): the second set takes the
+block from two a multiprocessor to one.  Through the engine at 8K, batch 1024: **979.5 / 980.4 / 898.1** tok/s in three
+runs (970.7 in one run before), so the overlap is worth a few percent at this occupancy - a 32-value tile keeps two
+sets inside two blocks and is the next thing to try.
