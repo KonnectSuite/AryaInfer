@@ -46,6 +46,18 @@ offers the same steps as tools.
 - Keep the docs' style: plain words, measured numbers with what they were measured on, no claims without a
   measurement.
 
+## Interface work
+
+Every new or edited view, dialog, drawer, card or row is judged as design, not only as function:
+
+- Use the kit: the tokens in `serve/web/tokens.css` (never a new colour) and the components in
+  `serve/web/components.css`. A card has a title, a description and fields; a field's hint belongs under the field, not
+  floating to the right of its label; actions live in a footer or a row of their own and stay in reach.
+- One control for one job: a message box is the chat's composer, a dialog is `st-dialog`, a menu is `st-menu`. Do not
+  build a second, slightly different copy of something the page already has.
+- Look at it before calling it done: 1440 px and 390 px, light and dark. On a phone a dialog is full screen and the
+  layout is one column; nothing may be cut off or need a sideways scroll.
+
 ## Contributing a change or report
 
 - Search the open issues and pull requests first, and add to a thread that already covers your point.
