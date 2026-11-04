@@ -988,3 +988,12 @@ before), but the 5,120-square shapes are a little worse (72.2 and 69.1 against 7
 block from two a multiprocessor to one.  Through the engine at 8K, batch 1024: **979.5 / 980.4 / 898.1** tok/s in three
 runs (970.7 in one run before), so the overlap is worth a few percent at this occupancy - a 32-value tile keeps two
 sets inside two blocks and is the next thing to try.
+### The 32-value tile with two sets, and what the staging is (2026-11-03)
+
+A 32-value k tile fits two shared sets inside two blocks a multiprocessor, but on 17,408 x 5,120 it reads **32.1
+TFLOPS** (5.694 ms) against 65.2 for the 64-value pipelined tile - the per-tile weight scale load for 128 rows on 160
+tiles and the smaller copies cost more than the occupancy returns.  Reverted (patch in `build-env/`).
+
+The diagnostic also explains the weight staging: at 8 token blocks of 128 (a 1,024-token batch) the 89 MB matrix is
+read eight times, 713 MB, which at 672 GB/s is the 0.8-1.0 ms the mode-1 run removes.  Anything that keeps the weights
+in L2 between token blocks, or a token tile of 256, would cut that; both fight the 48 KB shared budget with two sets.
