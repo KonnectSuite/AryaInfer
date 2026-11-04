@@ -141,3 +141,21 @@ prompt (batch 2,048, 64K context), with 990 before the attention work; writing 8
 scores and bigger key blocks took its share of 62K prefill from 39% (24.4 s) to 35% (18.8 s).  The next structural step
 is still a fused softmax-into-values pass or a flash kernel for a 6-head group, which would remove the score/weight
 round-trip that is left.
+## Session end (prefill goal, 2026-11-03)
+
+Started at 8K 1,289, 62K ~912, decode 67-88.  Now **8K 1,636.6** tok/s (batch 2,048; 1,444 in a colder run),
+**62K 1,172-1,182** (batch 2,048, 64K context), **decode 101.6** at 8K.  Installed binary:
+`C:\AI\Strata-data\engines\arya-infer\aryainfer.exe` (the round-21 build; the source is committed and matches).
+
+What made the difference: the AQ3 Q8_0 expansion kernel's coalescing (711 -> 1,266 at 8K batch 512, 1,495 at 2,048);
+the prompt attention's fp16 scores (24.4 -> 19.7 s at 62K) and the full score buffer (-> 18.8 s), 990 -> 1,172 tok/s.
+Measured ceilings: batch 1,024 at 131K context, 2,048 at 64K; run-to-run band ~8-10%, so compare within a run.
+
+Left, in order:
+1. **A fused score product with the softmax in its epilogue** (or a flash kernel for the 6-head group): attention is
+   18.8 s of 52.8 s at 62K and structurally saturated - four micro-optimizations in a row measured neutral.
+2. **The int8 tensor-core product**: correct, 65.2 TFLOPS at 17,408 x 5,120 with int8 codes and cp.async staging,
+   980 tok/s through the engine; its product path alone is ~108 TFLOPS, so a schedule that hides the staging is the
+   gap.  Patches and stashes for the negatives are in `build-env/`.
+3. **Prompt-batch auto-tune**: 2,048 when the KV cache is small is worth +3-5%, but needs a VRAM-aware choice in the
+   engine rather than a config.
