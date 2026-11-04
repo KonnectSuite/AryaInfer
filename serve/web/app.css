@@ -448,6 +448,8 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 /* the cards scroll under the footer: a short fade says "there is more" instead of a row sliced by the border */
 .set-dialog__foot::before { content: ""; position: absolute; left: 0; right: 0; top: -17px; height: 17px;
                             background: linear-gradient(transparent, var(--st-surface)); pointer-events: none; }
+/* the Close is a <form method="dialog">: the browser closes the dialog on submit, with no script involved */
+.set-dialog__close { margin: 0; display: flex; }
 .set-card { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 18px;
             border: 1px solid var(--st-line); border-radius: 14px; background: var(--st-surface); }
 .set-card__title { display: flex; align-items: center; gap: 8px; margin: 0;

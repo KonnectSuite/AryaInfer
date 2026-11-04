@@ -6171,6 +6171,9 @@ def make_handler(svc: Service):
                 body = (ROOT / "serve" / "web" / ("monitor.html" if path else "index.html")).read_bytes()
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
+                # the page is read from disk on every request, so a browser that kept an old one runs old markup
+                # against new scripts: a phone showed a Close button whose handler it had never downloaded
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)

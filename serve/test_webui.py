@@ -175,12 +175,17 @@ class Contract(unittest.TestCase):
         # version so the title is not squeezed to "Image gener..."
         for dialog in ("image-dialog", "search-dialog"):
             self.assertIn(f'data-dialog-close="{dialog}"', self.html)
+            # the browser closes it: a <form method="dialog"> needs no script, so a page that kept an old app.js
+            # (which is exactly how this went wrong on a phone) still has a working way out
+            self.assertIn(f'<form method="dialog" class="set-dialog__close"><button class="st-btn st-btn--secondary" '
+                          f'type="submit" data-dialog-close="{dialog}">Close</button></form>', self.html)
         self.assertIn('e.target.closest("[data-dialog-close]")', self.js)
         self.assertIn('matchMedia("(max-width: 560px)")', self.js)
         css = (WEB / "app.css").read_text(encoding="utf-8")
         self.assertIn(".st-dialog__head .st-btn--icon { width: 44px; height: 44px; }", css)
         self.assertIn("-webkit-overflow-scrolling: touch", css)
         self.assertIn("touch-action: pan-y", css)
+        self.assertIn(".set-dialog__close { margin: 0; display: flex; }", css)
 
     def test_the_catalog_is_well_formed(self):
         catalog = (WEB / "mcp-catalog.js").read_text(encoding="utf-8")
