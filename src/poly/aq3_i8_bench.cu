@@ -79,7 +79,7 @@ static std::vector<uint8_t> make_q8(int rows, int n_in, unsigned seed) {
     return q8;
 }
 
-static double bench(int n_out, int n_in, int rows, int reps) {
+static double bench(int n_out, int n_in, int rows, int reps, int mode) {
     const std::vector<uint8_t> w = make_aq3(n_out, n_in, 11);
     const std::vector<uint8_t> q8 = make_q8(rows, n_in, 13);
     void *dw = nullptr, *dq8 = nullptr;
@@ -89,7 +89,7 @@ static double bench(int n_out, int n_in, int rows, int reps) {
     ck(cudaMalloc(&dy, (size_t) rows * n_out * sizeof(float)), "y");
     ck(cudaMemcpy(dw, w.data(), w.size(), cudaMemcpyHostToDevice), "w copy");
     ck(cudaMemcpy(dq8, q8.data(), q8.size(), cudaMemcpyHostToDevice), "q8 copy");
-    if (!fused_gemm_i8(dw, aq3_row_bytes(n_in), dq8, dy, n_in, n_out, rows, nullptr)) {
+    if (!fused_gemm_i8(dw, aq3_row_bytes(n_in), dq8, dy, n_in, n_out, rows, nullptr, mode)) {
         std::printf("declined %d x %d x %d\n", n_out, n_in, rows);
         std::exit(1);
     }
@@ -98,13 +98,14 @@ static double bench(int n_out, int n_in, int rows, int reps) {
     ck(cudaEventCreate(&a), "ev a");
     ck(cudaEventCreate(&b), "ev b");
     ck(cudaEventRecord(a), "rec a");
-    for (int i = 0; i < reps; ++i) fused_gemm_i8(dw, aq3_row_bytes(n_in), dq8, dy, n_in, n_out, rows, nullptr);
+    for (int i = 0; i < reps; ++i) fused_gemm_i8(dw, aq3_row_bytes(n_in), dq8, dy, n_in, n_out, rows, nullptr, mode);
     ck(cudaEventRecord(b), "rec b");
     ck(cudaEventSynchronize(b), "sync b");
     float ms = 0.f;
     ck(cudaEventElapsedTime(&ms, a, b), "elapsed");
     const double tflops = 2.0 * (double) n_out * n_in * rows * reps / ((double) ms * 1e9);
-    std::printf("%5d x %5d, %4d tokens: %.3f ms a call, %.1f TFLOPS\n", n_out, n_in, rows, ms / reps, tflops);
+    std::printf("%5d x %5d, %4d tokens, mode %d: %.3f ms a call, %.1f TFLOPS\n", n_out, n_in, rows, mode, ms / reps,
+                tflops);
     cudaFree(dw);
     cudaFree(dq8);
     cudaFree(dy);
@@ -113,9 +114,10 @@ static double bench(int n_out, int n_in, int rows, int reps) {
 
 int main() {
     std::printf("AQ3 int8 product, kernel alone\n");
-    bench(5120, 5120, 1024, 5);
-    bench(10240, 5120, 1024, 5);
-    bench(17408, 5120, 1024, 5);
-    bench(5120, 17408, 1024, 5);
+    bench(17408, 5120, 1024, 5, 0);
+    bench(17408, 5120, 1024, 5, 1);   // no weight staging
+    bench(17408, 5120, 1024, 5, 2);   // no activation staging
+    bench(17408, 5120, 1024, 5, 4);   // no mma or epilogue
+    bench(17408, 5120, 1024, 5, 7);   // no staging and no mma
     return 0;
 }

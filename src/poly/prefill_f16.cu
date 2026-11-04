@@ -238,7 +238,7 @@ constexpr size_t kI8Smem = (size_t) (I8_BM * I8_BK + I8_BN * I8_BK) + (I8_BM + 2
 
 __global__ void __launch_bounds__(512, 2) fused_aq3_i8_kernel(const uint8_t* __restrict__ w, size_t row_bytes,
                                     const uint8_t* __restrict__ xq, float* __restrict__ y,
-                                    int n_in, int n_out, int rows) {
+                                    int n_in, int n_out, int rows, int mode) {
     extern __shared__ char smem_i8[];
     int8_t* a_s = (int8_t*) smem_i8;                 // BM x BK weight codes
     int8_t* b_s = a_s + I8_BM * I8_BK;               // BN x BK activation codes
@@ -251,6 +251,7 @@ __global__ void __launch_bounds__(512, 2) fused_aq3_i8_kernel(const uint8_t* __r
     float acc[2][4][4];
     for (auto& pass : acc) for (auto& g : pass) for (auto& v : g) v = 0.f;
     for (int kt = 0; kt < n_in / I8_BK; ++kt) {
+        if ((mode & 1) == 0)   // diagnostic: 1 skips the weight staging, 2 the activation staging, 4 the mma
         for (int c = tid; c < I8_BM * (I8_BK / 8); c += (int) blockDim.x) {
             const int m = c / (I8_BK / 8), j = c % (I8_BK / 8), col = m0 + m;
             int8_t* out = a_s + m * I8_BK + j * 8;
@@ -268,7 +269,7 @@ __global__ void __launch_bounds__(512, 2) fused_aq3_i8_kernel(const uint8_t* __r
                                                  ((kt >> 1) & 1) * 2))
                 : 0.f;
         }
-        if (tid < I8_BN * 2) {
+        if ((mode & 2) == 0 && tid < I8_BN * 2) {
             const int t = tid >> 1, c = tid & 1, tok = t0 + t;
             int8_t* out = b_s + t * I8_BK + c * 32;
             if (tok >= rows) {
@@ -285,6 +286,7 @@ __global__ void __launch_bounds__(512, 2) fused_aq3_i8_kernel(const uint8_t* __r
             }
         }
         __syncthreads();
+        if ((mode & 4) == 0)
         for (int c = 0; c < 2; ++c) {
             ggml_cuda_mma::tile<16, 8, int> A;
 #pragma unroll
@@ -333,11 +335,11 @@ __global__ void __launch_bounds__(512, 2) fused_aq3_i8_kernel(const uint8_t* __r
 bool f16_type(int ggml_type) { return ggml_type == (int) GGML_TYPE_IQ3_XXS || ggml_type == (int) kTypeAQ3; }
 
 bool fused_gemm_i8(const void* w, size_t row_bytes, const void* xq, float* y, int n_in, int n_out, int rows,
-                   void* stream) {
+                   void* stream, int mode) {
     if (rows <= 0 || n_in <= 0 || n_in % I8_BK != 0) return false;
     const dim3 grid((unsigned) ((n_out + I8_BM - 1) / I8_BM), (unsigned) ((rows + I8_BN - 1) / I8_BN));
     fused_aq3_i8_kernel<<<grid, 512, kI8Smem, (cudaStream_t) stream>>>((const uint8_t*) w, row_bytes,
-                                                                     (const uint8_t*) xq, y, n_in, n_out, rows);
+                                                                     (const uint8_t*) xq, y, n_in, n_out, rows, mode);
     const cudaError_t launched = cudaPeekAtLastError();
     if (launched != cudaSuccess) {
         std::fprintf(stderr, "aq3 i8 launch: %s (n_in %d, n_out %d, rows %d)\n", cudaGetErrorString(launched), n_in,
@@ -404,7 +406,7 @@ namespace strata::poly {
 bool f16_type(int) { return false; }
 void cast_f16(const float*, uint16_t*, size_t, void*) {}
 bool fused_gemm_f16(const void*, size_t, int, const uint16_t*, float*, int, int, int, void*) { return false; }
-bool fused_gemm_i8(const void*, size_t, const void*, float*, int, int, int, void*) { return false; }
+bool fused_gemm_i8(const void*, size_t, const void*, float*, int, int, int, void*, int) { return false; }
 size_t aq3_row_bytes(int n_in) { return (size_t) (n_in / 256) * 100; }
 void aq3_to_q8_0(const void*, void*, int, int, void*) {}
 void aq3_gemv(const void*, const void*, float*, int, int, int, void*) {}

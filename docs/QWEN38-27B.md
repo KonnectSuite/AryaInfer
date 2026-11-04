@@ -953,3 +953,20 @@ this card is about 8% (the same expansion path read 1,418-1,556 at 8K across ses
 a run, not across days.Prefetching all eight B groups (no change) and reading the B fragments straight from the global q8_1 blocks instead of
 a shared tile (44.6-45.4 TFLOPS, worse than 49.8-50.9) were both tried and reverted.  The kernel is at a plateau for
 this structure: the next step is a pipelined loader (`cp.async`/`ldmatrix`), not another staging tweak.
+### Where the int8 kernel's time goes (2026-11-03)
+
+The kernel takes a diagnostic mode (bit 1 skips the weight staging, bit 2 the activation staging, bit 4 the mma and
+epilogue; `aq3_i8_bench` prints each).  On 17,408 x 5,120, 1,024 tokens:
+
+| mode | time a call | rate |
+|---|---:|---:|
+| all | 3.624 ms | 50.4 TFLOPS |
+| no weight staging | 2.602 | 70.2 |
+| no activation staging | 2.796 | 65.3 |
+| no mma or epilogue | 1.961 | (staging alone) |
+| neither | 0.269 | (loop and barriers) |
+
+So the mma and epilogue alone are about 1.66 ms - **110 TFLOPS**, above the ~77 the expansion path's whole prefill
+reaches - and the staging is 1.85 ms, 46% of the call.  Overlapping them (cp.async double buffering on pre-expanded
+int8 weights and q8_1 activations, or four producer warps unpacking the AQ3 tile while twelve consumer warps run the
+mma) is the change that would put this path ahead; more tile tuning cannot.
