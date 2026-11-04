@@ -1040,8 +1040,9 @@ not a queue's) and appends them to the file.  On this host, same build:
 | 8K, batch 2,048 | 5,488 ms | 447 ms | 8% |
 | 62K, batch 2,048 | 62,613 ms | **24,364 ms** | **39%** |
 
-The fallback (`attend_batch`) materializes each layer's full fp32 score matrix: 24 heads x 62K x 62K / 2 is about 46G
-scores a layer, 740G over the 16 full layers, each written and read twice - near 18 TB of traffic at 672 GB/s, which is
-the 24 s.  That also explains why the fourfold score budget bought nothing: it is traffic over the materialized matrix,
-not the pass count.  A flash-style kernel for a 6-head group would skip that matrix entirely; at the matmul's ~77
-TFLOPS the attention would be about 10-11 s, taking 62K prefill from ~990 to ~1,250 tok/s (+26%).
+The fallback (`attend_batch`) is not score-traffic bound, as a first reading of these numbers suggested: at 62K the
+whole attention's fp32 scores come to about 96 GB over the 16 full layers, about 0.15 s at 672 GB/s.  The 24 s is the
+auxiliary passes around the cuBLAS products - a softmax kernel with an exp per score, the dequantization of every key
+block into the workspace, and the scale/merge passes - which leave the products themselves at about 31 TFLOPS
+effective, less than half the matmul's 77.  A fused flash-style kernel removes those passes and the global scores; at
+60-70 TFLOPS it would be 11-13 s, taking 62K prefill from ~990 to ~1,200-1,250 tok/s (+21-26%).
