@@ -45,31 +45,35 @@ low-temperature set that the three Flash-Next MoE files preferred.
 | --- | ---: | ---: | ---: | ---: |
 | Ornith 1.5 35B-A3B APEX | 5 | 5 | 2 | 4 |
 | Qwen3.6 35B Abliterated Q4_K_M | 4 | 4 | 4 | 5 |
-| Qwen3.6 35B Opus Reasoning APEX | 5 | 4 | 4 | 4 |
 | Qwen3.6 35B UD-Q4_K_XL | 5 | 5 | 4 | 4 |
 | Qwen3.8 27B GSQ3 AQ3 | 3 | 5 | 4 | 5 |
 | Qwen3.8 27B Turbo Brilliance | 4 | 4 | 3 | 5 |
 | Qwen3.8 Flash Next IQ3_XXS | 5 | 4 | 5 | 6 |
 | Swift 1.5 Abliterated IQ3_XXS | 5 | 5 | 6 | 7 |
 | Swift 1.5 IQ3_XXS | 5 | 6 | 5 | 6 |
-| **total** | **41** | **42** | **37** | **46** |
+| **total** | **36** | **38** | **33** | **42** |
 
-Per fixture, across the nine models:
+The Qwen3.6 35B Opus Reasoning APEX row was measured with the others and removed from the
+table when its entry was uninstalled on November 5, 2026 (it did not think or perform like
+Opus on this host, and Ornith and UD-Q4_K_XL were preferred). The totals above are the eight
+installed models.
+
+Per fixture, across the eight models:
 
 | fixture | coding | coding-0.5 | family | precise |
 | --- | ---: | ---: | ---: | ---: |
-| `st_seal_in` | 7 | 9 | 7 | 9 |
-| `st_scale` | 8 | 9 | 8 | 8 |
-| `st_bits` | 7 | 7 | 6 | 7 |
+| `st_seal_in` | 6 | 8 | 6 | 8 |
+| `st_scale` | 7 | 8 | 7 | 7 |
+| `st_bits` | 6 | 7 | 6 | 7 |
 | `ld_rung` | 0 | 1 | 0 | 2 |
-| `l5x_xml` | 9 | 7 | 8 | 9 |
+| `l5x_xml` | 8 | 6 | 7 | 8 |
 | `hmi_vis` | 1 | 0 | 1 | 2 |
 | `hmi_alarm` | 0 | 0 | 0 | 0 |
-| `st_case` | 9 | 9 | 7 | 9 |
+| `st_case` | 8 | 8 | 6 | 8 |
 
-**Reading it.** Temperature 1.0 is the worst set for seven of the nine models and lowers
-every Structured Text fixture. Below 1.0 the sets are close: `precise` leads by four passes
-over `coding-0.5`, and the lead comes from the three Flash-Next MoE files (6, 7 and 6
+**Reading it.** Temperature 1.0 is the worst set, or tied for the worst, on all eight models
+and lowers the Structured Text fixtures. Below 1.0 the sets are close: `precise` leads by four
+passes over `coding-0.5`, and the lead comes from the three Flash-Next MoE files (6, 7 and 6
 against 5, 5 and 6). A difference of one pass on eight fixtures is treated as a tie here,
 and a tie keeps the family's documented set.
 
@@ -78,16 +82,16 @@ and a tie keeps the family's documented set.
 No model produced Studio 5000 NeutralText or FactoryTalk placeholder syntax, at any
 temperature, in any of the four sets:
 
-- `ld_rung` 2 of 36, and those two were still not one clean NeutralText rung. The answers
+- `ld_rung` 3 of 32, and none was one clean NeutralText rung. The answers
   were Siemens STL (`LD Start, LDN Stop, … ST Run`), a table row (`| Start | Stop | Run |`),
   a contact table, or boolean algebra with `->`.
-- `hmi_vis` 4 of 36. The answers were `!Auto && Running`, `NOT([Auto]) AND [Running]`,
+- `hmi_vis` 4 of 32. The answers were `!Auto && Running`, `NOT([Auto]) AND [Running]`,
   `NOT Auto AND Running`, or the same with `[Tag]` brackets — none used FactoryTalk's `{Tag}`.
-- `hmi_alarm` 0 of 36. The answers used `%Tag%`, `[TAG]`, `{Tag}` or `{Tag:Name}`, never the
+- `hmi_alarm` 0 of 32. The answers used `%Tag%`, `[TAG]`, `{Tag}` or `{Tag:Name}`, never the
   application's `{/Tag}`.
 
-Structured Text fares far better: the seal-in circuit passed 32 of 36, the 4-20 mA scale
-31 of 36, the `CASE` machine 34 of 36. The models know PLC structure and write valid ST;
+Structured Text fares far better: the seal-in circuit passed 28 of 32, the 4-20 mA scale
+29 of 32, the `CASE` machine 30 of 32. The models know PLC structure and write valid ST;
 they default to generic or Siemens surface syntax when a dialect is named.
 
 That is not a sampling setting. It is the place to fix at the contract: give AryaCode's PLC
@@ -106,7 +110,6 @@ was right.
 | --- | ---: | ---: | ---: | ---: | --- |
 | Ornith 1.5 35B APEX | 0 ok | 1,406 ok | 1,454 ok | 1,598 ok | 1,670 ok (medium) |
 | Qwen3.6 35B Abliterated | 0 ok | 1,502 ok | 1,474 ok | 1,535 ok | 1,667 ok (none) |
-| Qwen3.6 35B Opus APEX | 0 ok | 275 no | 2,057 no | 243 no | 431 ok (low) |
 | Qwen3.6 35B UD-Q4_K_XL | 0 ok | 1,568 ok | 1,676 no | 1,545 ok | 1,446 ok (medium) |
 | Qwen3.8 27B AQ3 | 0 ok | 1,432 ok | 1,481 ok | 1,650 no | 1,467 ok (medium) |
 | Qwen3.8 27B Turbo | 0 no | 1,527 ok | 1,478 no | 1,759 ok | 1,462 ok (medium) |
@@ -115,20 +118,18 @@ was right.
 | Swift 1.5 IQ3_XXS | 0 no | 1,110 ok | 1,335 ok | 1,610 no | 1,549 ok (medium) |
 
 One question per level is not a quality measurement, and the wrong answers move around with
-no level pattern: Opus answered `medium` wrong and its default (the same medium prompt) right,
-and Turbo did the same. What the table establishes is the wire: the level changes the request
-(110 / 138 / 134-108 / 150 prompt tokens on these templates), off is silent where the model
-offers it, and the shipped default is the level the server says it is.
+no level pattern: UD-Q4_K_XL answered `medium` wrong and its default (the same medium prompt)
+right, and Turbo did the same. What the table establishes is the wire: the level changes the
+request (110 / 138 / 134-108 / 150 prompt tokens on these templates), off is silent where the
+model offers it, and the shipped default is the level the server says it is.
 
 The shipped default effort follows the earlier per-model calibration in
-[AGENTIC_TUNING.md](AGENTIC_TUNING.md) and `models.json`: `low` for the Opus Reasoning APEX
-(6 of 6 probes there, and the cheaper of the two that scored 6), off (`none` in the config)
-for the Abliterated Q4_K_M (5 of 6 with thinking off against 4 of 6 with it), and `medium`
-elsewhere.
+[AGENTIC_TUNING.md](AGENTIC_TUNING.md) and `models.json`: off (`none` in the config) for the
+Abliterated Q4_K_M (5 of 6 with thinking off against 4 of 6 with it), and `medium` elsewhere.
 
 ## What each entry ships with now
 
-The four runtime configs (`strata-*.json` at the top of the checkout, which is what the
+The runtime configs (`strata-*.json` at the top of the checkout, which is what the
 controller starts) and the tracked copies in `docs/host-tuning` carry:
 
 | model | temperature | top_p | top_k | presence | default effort |
@@ -136,7 +137,6 @@ controller starts) and the tracked copies in `docs/host-tuning` carry:
 | Qwen3.8 27B AQ3 | 0.3 | 0.9 | 20 | 0.0 | medium |
 | Qwen3.8 27B Turbo Brilliance | 0.3 | 0.9 | 20 | 0.0 | medium |
 | Qwen3.6 35B UD-Q4_K_XL | 0.6 | 0.95 | 20 | 0.5 | medium |
-| Qwen3.6 35B Opus Reasoning APEX | 0.6 | 0.95 | 20 | 0.0 | low |
 | Qwen3.6 35B Abliterated Q4_K_M | 0.3 | 0.9 | 20 | 0.0 | none (off) |
 | Ornith 1.5 35B APEX | 0.6 | 0.95 | 20 | 0.5 | medium |
 | Qwen3.8 Flash Next IQ3_XXS | 0.3 | 0.9 | 20 | 0.0 | medium |
@@ -157,7 +157,6 @@ flat fallback:
 | medium | 8,000 | 9,600 |
 | high | 10,000 | 12,000 |
 | high (Turbo) | 12,000 | 14,400 |
-| high (Opus APEX) | 16,000 | 19,200 |
 | `reasoning_budget_tokens` | 8,000 | 9,600 |
 
 Two repairs came out of the same pass. The Abliterated entry gained the vision block the

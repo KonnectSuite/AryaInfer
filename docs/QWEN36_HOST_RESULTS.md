@@ -55,11 +55,14 @@ the app's model list if the updated entries are not visible.
 | Choice | Exact model ID | Weight quantization | When to use it on this host |
 |---|---|---|---|
 | Q4 | `qwen3.6-35b-a3b-ud-q4_k_xl` | UD-Q4_K_XL | Recommended daily coding-agent profile; more measured RAM headroom |
-| APEX I-Quality | `qwen3.6-35b-a3b-opus-reasoning` | APEX I-Quality | Reasoning distill with vision; shortest answers of the four files measured |
 | Abliterated | `qwen3.6-35b-a3b-abliterated` | Q4_K_M | Uncensored, text only; run it with thinking off |
 
 Q8_0 (`qwen3.6-35b-a3b-q8_0`) is listed above only as a measured comparison; it was uninstalled
 on November 3, 2026.
+
+The APEX I-Quality entry (`qwen3.6-35b-a3b-opus-reasoning`) was uninstalled on November 5, 2026: on this host it
+did not think or perform like Opus, and Ornith and UD-Q4_K_XL were preferred for it. Its measurements below stay
+as the record of the run they came from.
 
 Both profiles support text and image input, advertise 262,144 context tokens
 and 8,192 output tokens to the development adapter, and use the same compressed

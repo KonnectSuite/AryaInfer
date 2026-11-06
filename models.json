@@ -13,14 +13,6 @@
   ],
   "notes": "DavidAU's Qwen3.8 27B Turbo Brilliance 50X Reasoning-Instruct (GSQ-RCO IQ3_XXS, MTP) on the Arya engine (aryainfer.exe): a 27B dense fine-tune of Qwen3.8-27B with 27 reasoning + 27 instruct + 9 xhigh modes driven by {REASON:...} tags, 3.05 bpw mixed GSQ-RCO quants, 10.4 GB. The context was raised from 102,400 to 131,072 after the runs below were taken, so the 805.4 figure was measured at 100K. Measured on this host 2026-11-03: reading 1,241.9 tok/s at 8K prompt/32K context and 805.4 on a 99K prompt at 100K context (batch 1,024); writing 57.3 and 52.5 tok/s with the MTP draft (20/28 and 8/11 accepted). Thinking modes: off 4/6 probes, low/medium/high 6/6 each; sampling calibration (0.6/0.95/20): 10 requests, no loops, 6/7 code probes (one hit the 300-token cap), 3/3 adherence, mean 4-gram diversity 0.89. Kept as the daily driver after a first-try animated-HTML task. PLC/HMI calibration 2026-11-05 (docs/PLC_SAMPLING.md): 0.3 / 0.9 / 20 / 0.0 scored highest of four sets, replacing 0.7 / 0.95 / 64, and the display name now says 128K because the context has been 131,072 since it was raised. All four thinking levels reach the model. Budgets are 20% higher (high 14,400)."
  },
- "qwen3.6-35b-a3b-opus-reasoning": {
-  "display_name": "AryaInfer Qwen3.6 35B-A3B Claude Opus 4.7 Reasoning APEX I-Quality - 256K vision",
-  "aliases": [
-   "qwen36s-opus-reasoning",
-   "qwen36-35b-opus-reasoning"
-  ],
-  "notes": "mudler's Qwen3.6-35B-A3B Claude-4.7-Opus-Reasoning-Distilled APEX I-Quality (mixed 4/5/6-bit experts, 22.8 GiB) with mmproj vision, on the Poly engine (strata-poly.exe). Measured on this host 2026-11-03, warm: reading 1,725.6 tok/s on an 8K prompt at 32K context and 1,697.5 on a 128K prompt at 131K context (prompt batch 512, Q8_0 KV); writing 64.1 and 39.3 tok/s. It carries no MTP draft block, so its writing is the plain path (1 of 6 guesses accepted at 128K against 17 of 22 for UD-Q4_K_XL). Sampling calibration (0.6/0.95/20) on 10 coding requests: 7/7 Python/C#/SQL fixtures, 3/3 adherence, mean 4-gram diversity 1.00, no loops, and it answered in 40-189 tokens where the abliterated model needed 200-370. Thinking modes: off 5/6 probes, low 6/6, medium 5/6, high 6/6, none looping. Shipped tuned to the measured settings: default reasoning effort low (6/6 probes and the cheaper of the two that scored 6/6), and temperature 0.6 / top_p 0.95 / top_k 20 / presence 0.0, which is what the coding suite above ran. Re-tuned 2026-11-05 (docs/PLC_SAMPLING.md): the runtime config still carried the pre-calibration 1.0 / 0.95 / 20 / 0.5 with effort medium; it now runs the measured 0.6 / 0.95 / 20 / 0.0 with effort low, its best set on the industrial suite. Budgets are 20% higher (high 19,200)."
- },
  "qwen3.6-35b-a3b-abliterated": {
   "display_name": "AryaInfer Qwen3.6 35B-A3B Abliterated Q4_K_M - 256K vision",
   "aliases": [
