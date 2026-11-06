@@ -2962,8 +2962,13 @@ function wbKind(lang, code) {
 const WB_CSP = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; ` +
                `style-src 'unsafe-inline'; script-src 'unsafe-inline'; font-src data:; media-src data: blob:">`;
 function wbDoc(a) {
+  // A preview is a thumbnail, not a window: its own document must not scroll.  A document that can scroll keeps the
+  // wheel for itself (measured: 500 px of wheel over a scrollable preview moved the chat 0 px), so a conversation
+  // ending in a tall artifact could not be scrolled past it.  Clipped, the wheel chains to the chat.
+  const FIT = "html,body{height:100%;overflow:hidden}";
   if (a.lang === "markdown") {
     return `<!doctype html><html><head><meta charset="utf-8">${WB_CSP}<style>` +
+           FIT +
            `body{margin:0;padding:16px;font:15px/1.55 system-ui,sans-serif;color:#1b2431}` +
            `pre{background:#f2f5fa;padding:10px;border-radius:8px;overflow:auto}code{font-family:ui-monospace,monospace}` +
            `h1,h2{margin:.4em 0 .3em;line-height:1.2}table{border-collapse:collapse}td,th{border:1px solid #d4ddea;padding:4px 8px}` +
@@ -2973,13 +2978,16 @@ function wbDoc(a) {
   // zero in Chrome - the preview was a blank frame for every such drawing.  A flex box with width/height 100% lets the
   // viewBox scale the drawing (preserveAspectRatio keeps it centred).
   const inner = a.lang === "svg"
-    ? `<!doctype html><html><head><meta charset="utf-8">${WB_CSP}<style>html,body{margin:0;height:100%;background:#fff}` +
+    ? `<!doctype html><html><head><meta charset="utf-8">${WB_CSP}<style>${FIT};html,body{margin:0;background:#fff}` +
       `body{display:flex;align-items:center;justify-content:center}` +
       `svg{display:block;width:100%;height:100%}</style></head><body>${a.code}</body></html>`
     : a.code;
-  if (/<head[\s>]/i.test(inner)) return inner.replace(/<head([^>]*)>/i, `<head$1><meta charset="utf-8">${WB_CSP}`);
-  if (/<html[\s>]/i.test(inner)) return inner.replace(/<html([^>]*)>/i, `<html$1><head>${WB_CSP}</head>`);
-  return `<!doctype html><html><head><meta charset="utf-8">${WB_CSP}</head><body>${inner}</body></html>`;
+  const style = `<style>${FIT}</style>`;
+  if (/<head[\s>]/i.test(inner)) {
+    return inner.replace(/<head([^>]*)>/i, `<head$1><meta charset="utf-8">${WB_CSP}${style}`);
+  }
+  if (/<html[\s>]/i.test(inner)) return inner.replace(/<html([^>]*)>/i, `<html$1><head>${WB_CSP}${style}</head>`);
+  return `<!doctype html><html><head><meta charset="utf-8">${WB_CSP}${style}</head><body>${inner}</body></html>`;
 }
 // The file a downloaded block becomes: its own <title>, <h1> or first heading, else "artifact", with the kind's
 // extension.  Characters Windows does not allow in a name become dashes.
