@@ -48,13 +48,13 @@
   "presence_penalty": 0.0
  },
  "reasoning_loop_recovery": "recover",
- "display_name": "AryaStrata Qwen3.6 35B-A3B Claude Opus 4.7 Reasoning (APEX I-Quality) \u2014 256K vision",
+ "display_name": "AryaStrata Qwen3.6 35B-A3B Claude Opus 4.7 Reasoning (APEX I-Quality) - 256K vision",
  "reasoning_effort": "low",
- "reasoning_budget_tokens": 8000,
+ "reasoning_budget_tokens": 9600,
  "reasoning_budget_by_effort": {
   "off": 0,
-  "low": 4000,
-  "medium": 8000,
-  "high": 16000
+  "low": 4800,
+  "medium": 9600,
+  "high": 19200
  }
 }

@@ -68,12 +68,18 @@
  "switch_on_request": true,
  "display_name": "AryaStrata Qwen3.8 Flash Next IQ3_XXS \u2014 256K vision",
  "reasoning_effort": "medium",
- "reasoning_budget_tokens": 8000,
+ "reasoning_budget_tokens": 9600,
  "reasoning_loop_recovery": "recover",
  "reasoning_budget_by_effort": {
   "off": 0,
-  "low": 4000,
-  "medium": 8000,
-  "high": 10000
+  "low": 4800,
+  "medium": 9600,
+  "high": 12000
+ },
+ "sampling": {
+  "temperature": 0.3,
+  "top_p": 0.9,
+  "top_k": 20,
+  "presence_penalty": 0.0
  }
 }
