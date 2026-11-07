@@ -72,6 +72,32 @@ four private continuations in `engine-ninfer/shim/main.cpp`; with the derived
 defaults (one slot) a finished session is not device-resident, the reuse
 candidate is only expandable and the planner never selects it.
 
+## PLC and HMI calibration
+
+Ran on 6 November 2026 with 	ools/plc_sampling_probe.py (eight industrial
+fixtures, thinking off, 1,200-token cap) and 	ools/thinking_mode_probe.py
+on the running server:
+
+| set | temperature / top_p / top_k / presence | fixtures passed |
+| --- | --- | ---: |
+| coding | 0.6 / 0.95 / 20 / 0.0 | 5 of 8 |
+| coding-0.5 | 0.6 / 0.95 / 20 / 0.5 | 5 of 8 |
+| family | 1.0 / 0.95 / 20 / 0.5 | 4 of 8 |
+| precise | 0.3 / 0.9 / 20 / 0.0 | 5 of 8 |
+
+The entry ships precise (0.3 / 0.9 / 20 / 0.0), the set it tied for best
+with and the one the other Qwen3.8 entries use. coding-0.5 measures the same
+as coding because the shim does not pass presence penalties (see below).
+The failures are the same three fixtures that the other Qwen entries miss
+(one ladder rung in NeutralText, one FactoryTalk visibility expression and
+one alarm message); the model answers them in prose or with different
+placeholder syntax, not with the requested forms.
+
+Thinking modes: off is silent, low / medium / high produced 1,384 / 1,483 /
+1,651 reasoning characters on the probe question, so all four levels reach
+the model. The shipped budgets are 20% above the earlier fleet defaults:
+off 0, low 4,800, medium 9,600, high 12,000.
+
 ## What is not supported
 
 - **Vision**: no `vision` key in the config, images are off. The shim only
