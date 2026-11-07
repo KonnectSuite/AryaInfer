@@ -78,21 +78,19 @@ if ($LASTEXITCODE -ne 0) { throw 'vcpkg install failed' }
 
 Step 'cmake configure and build'
 $shim = (Join-Path $PSScriptRoot 'shim\main.cpp') -replace '\\', '/'
-$cmd = @(
-    "call `"$Vcvars`"",
-    "set PATH=$Cuda\bin;%PATH%",
-    "cmake -S `"$Src`" -B `"$Build`" -G Ninja -DCMAKE_BUILD_TYPE=Release",
-    "-DCMAKE_CUDA_ARCHITECTURES=89 -DCMAKE_CUDA_COMPILER=`"$Cuda\bin\nvcc.exe`"",
-    "-DNINFER_BUILD_APPS=ON -DNINFER_BUILD_BENCHMARKS=ON",
-    "-DNINFER_ARYAINFER_SHIM=`"$shim`"",
-    "-DCMAKE_CXX_FLAGS=/utf-8",
-    "-DCMAKE_TOOLCHAIN_FILE=`"$Vcpkg\scripts\buildsystems\vcpkg.cmake`"",
-    "-DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_MANIFEST_DIR=`"$Src`"",
-    "-DVCPKG_INSTALLED_DIR=`"$Src\vcpkg_installed`"",
+$bat = Join-Path $Work 'build-engine.cmd'
+$cmake = "cmake -S `"$Src`" -B `"$Build`" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89 -DCMAKE_CUDA_COMPILER=`"$Cuda\bin\nvcc.exe`" -DNINFER_BUILD_APPS=ON -DNINFER_BUILD_BENCHMARKS=ON -DNINFER_ARYAINFER_SHIM=`"$shim`" -DCMAKE_CXX_FLAGS=/utf-8 -DCMAKE_TOOLCHAIN_FILE=`"$Vcpkg\scripts\buildsystems\vcpkg.cmake`" -DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_MANIFEST_DIR=`"$Src`" -DVCPKG_INSTALLED_DIR=`"$Src\vcpkg_installed`""
+$lines = @(
+    '@echo off',
+    "call `"$Vcvars`" || exit /b 1",
+    "set `"PATH=$Cuda\bin;%PATH%`"",
+    $cmake,
+    'if errorlevel 1 exit /b 1',
     "cmake --build `"$Build`" --target ninfer-engine --parallel 20"
-) -join ' && '
+)
+Set-Content -Path $bat -Value $lines -Encoding ascii
 $log = Join-Path $Work 'build.log'
-cmd.exe /c "$cmd > `"$log`" 2>&1"
+cmd.exe /c "`"$bat`" > `"$log`" 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "build failed; see $log" }
 
 Copy-Item (Join-Path $Build 'apps\ninfer-engine.exe') (Join-Path $PSScriptRoot 'ninfer-engine.exe') -Force
