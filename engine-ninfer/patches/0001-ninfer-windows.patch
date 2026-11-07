@@ -1046,9 +1046,31 @@
          throw std::invalid_argument("prepared prompt media payload is incomplete");
      }
      for (std::size_t i = 0; i < prompt.media_payloads.size(); ++i) {
+@@ -297,10 +302,17 @@
+             if (begin < previous_end) {
+                 throw std::invalid_argument("vision item consumer spans overlap");
+             }
+-            if (item.merged_count > workspace_plan.vision->max_merged_tokens ||
+-                schedule::VisionContext::workspace_bytes(prompt.vision_items[index].patch_count,
+-                                                         item.merged_count) >
+-                    workspace_plan.vision->encode_peak_bytes) {
++            // External (pre-encoded) items never run the vision tower, so the
++            // encoder workspace envelope does not apply to them; the merged
++            // rows are copied straight into the prefill chunk.
++            const bool external_item =
++                index < prompt.vision_items.size() &&
++                !prompt.vision_items[index].external_embeddings.empty();
++            if (!external_item &&
++                (item.merged_count > workspace_plan.vision->max_merged_tokens ||
++                 schedule::VisionContext::workspace_bytes(
++                     prompt.vision_items[index].patch_count, item.merged_count) >
++                     workspace_plan.vision->encode_peak_bytes)) {
+                 throw std::invalid_argument("vision item exceeds the Program workspace envelope");
+             }
+             previous_end = item.token_end;
 --- a/src/targets/qwen3_6/impl/runtime/vision_context.h
 +++ b/src/targets/qwen3_6/impl/runtime/vision_context.h
-@@ -118,7 +118,9 @@
+@@ -118,7 +118,13 @@
      qwen3_6::PreparedPromptData& prompt_;
      const VisionPrefillPlan& plan_;
      std::size_t& handoff_peak_bytes_;
@@ -1056,12 +1078,16 @@
 +    // AryaInfer: constructed lazily so an external-embedding prompt never needs the tower.
 +    std::optional<VisionContext> context_;
 +    const LoadedModelData* model_ = nullptr;
++    // AryaInfer: own the device copy of pre-encoded rows so an oversized external
++    // image never has to fit the startup encoder workspace envelope.
++    DeviceBuffer external_handoff_;
++    bool external_only_ = false;
      std::size_t next_use_ = 0;
      std::optional<std::uint32_t> active_item_;
      std::size_t active_handoff_bytes_ = 0;
 --- a/src/targets/qwen3_6/impl/runtime/vision_context_impl.h
 +++ b/src/targets/qwen3_6/impl/runtime/vision_context_impl.h
-@@ -395,7 +395,7 @@
+@@ -395,12 +395,24 @@
                                             const VisionPrefillPlan& plan,
                                             std::size_t& handoff_peak_bytes)
      : device_(device), workspace_(workspace), workspace_plan_(workspace_plan), prompt_(prompt),
@@ -1070,7 +1096,26 @@
      if (plan_.control == nullptr || plan_.control->items.empty() || plan_.uses.empty()) {
          throw std::invalid_argument("Vision prefill plan has no suffix item spans");
      }
-@@ -410,15 +410,16 @@
+-    if (workspace_.data == nullptr || workspace_.bytes < workspace_plan_.capacity_bytes ||
+-        plan_.max_merged_count == 0 || plan_.max_merged_count > workspace_plan_.max_merged_tokens) {
++    // AryaInfer: pre-encoded (external) media never runs the tower, so it needs
++    // neither the encoder workspace envelope nor the startup handoff extent.
++    external_only_ = std::all_of(
++        plan_.uses.begin(), plan_.uses.end(), [&](const VisionUseSpan& use) {
++            return use.prepared_item_index < prompt_.vision_items.size() &&
++                   !prompt_.vision_items[use.prepared_item_index].external_embeddings.empty();
++        });
++    if (!external_only_ &&
++        (workspace_.data == nullptr || workspace_.bytes < workspace_plan_.capacity_bytes ||
++         plan_.max_merged_count == 0 ||
++         plan_.max_merged_count > workspace_plan_.max_merged_tokens)) {
++        throw std::invalid_argument("Vision prefill workspace plan is invalid");
++    }
++    if (external_only_ && plan_.max_merged_count == 0) {
+         throw std::invalid_argument("Vision prefill workspace plan is invalid");
+     }
+     std::uint32_t previous_end = 0;
+@@ -410,15 +422,16 @@
              use.end > prompt_.token_ids.size()) {
              throw std::invalid_argument("Vision suffix item spans are invalid or unordered");
          }
@@ -1090,17 +1135,20 @@
          if (control.scatter_indices.empty() ||
              use.end != static_cast<std::uint32_t>(control.scatter_indices.back()) + 1U ||
              (use.begin != static_cast<std::uint32_t>(control.scatter_indices.front()) &&
-@@ -434,13 +435,25 @@
+@@ -433,14 +446,27 @@
+             throw std::invalid_argument("Vision suffix item exceeds its request workspace extent");
          }
          const Tensor output =
-             VisionContext::bind_output(workspace_, workspace_plan_, control.merged_count);
+-            VisionContext::bind_output(workspace_, workspace_plan_, control.merged_count);
 -        const std::size_t patch_elements = checked_mul(
 -            control.patch_count, static_cast<std::size_t>(VisionScheduleConfig::patch_dim),
 -            "item patch elements");
 -        const auto& payload = prompt_.media_payloads[use.prepared_item_index];
 -        if (output.bytes() > workspace_plan_.handoff_capacity_bytes || !payload ||
 -            payload->patch_elements != patch_elements) {
-+        if (output.bytes() > workspace_plan_.handoff_capacity_bytes) {
++            external ? Tensor{} : VisionContext::bind_output(workspace_, workspace_plan_,
++                                                             control.merged_count);
++        if (!external && output.bytes() > workspace_plan_.handoff_capacity_bytes) {
              throw std::invalid_argument("Vision suffix item storage has an invalid shape");
 +        }
 +        if (external) {
@@ -1122,8 +1170,30 @@
          }
          previous_end  = use.end;
          previous_item = use.prepared_item_index;
-@@ -481,24 +494,34 @@
-     Tensor output = VisionContext::bind_output(workspace_, workspace_plan_, control.merged_count);
+@@ -478,27 +504,55 @@
+         return VisionChunk{static_cast<std::int32_t>(end - begin), nullptr, {}};
+     }
+     const qwen3_6::VisionItemControl& control = plan_.control->items[active->control_index];
+-    Tensor output = VisionContext::bind_output(workspace_, workspace_plan_, control.merged_count);
++    const qwen3_6::VisionItem& active_source = prompt_.vision_items[active->prepared_item_index];
++    const bool active_external = !active_source.external_embeddings.empty();
++    Tensor output;
++    if (active_external) {
++        const std::size_t bytes =
++            checked_mul(static_cast<std::size_t>(control.merged_count),
++                        static_cast<std::size_t>(VisionScheduleConfig::out_hidden) *
++                            sizeof(std::uint16_t),
++                        "external vision handoff");
++        if (external_handoff_.bytes < bytes) { external_handoff_ = DeviceBuffer(bytes); }
++        TensorRegion region;
++        region.region = LayoutRegion{0, bytes, kWorkspaceAlignment};
++        region.dtype  = DType::BF16;
++        region.shape  = {VisionScheduleConfig::out_hidden,
++                         static_cast<std::int32_t>(control.merged_count), 1, 1};
++        output = region.bind(DeviceSpan{external_handoff_.p, external_handoff_.bytes});
++    } else {
++        output = VisionContext::bind_output(workspace_, workspace_plan_, control.merged_count);
++    }
  
      if (!active_item_ || *active_item_ != active->prepared_item_index) {
 -        const auto& payload = prompt_.media_payloads[active->prepared_item_index];
@@ -1137,7 +1207,7 @@
 +            if (item.external_embeddings.size() * sizeof(std::uint16_t) != output.bytes()) {
 +                throw std::logic_error("External vision embeddings do not match the handoff");
 +            }
-+            copy_host(item.external_embeddings.data(), output, device_.stream);
++            external_handoff_.copy_from_host(item.external_embeddings.data(), output.bytes());
 +        } else {
 +            if (!context_) { context_.emplace(device_, *model_); }
 +            const auto& payload = prompt_.media_payloads[active->prepared_item_index];

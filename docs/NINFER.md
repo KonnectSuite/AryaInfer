@@ -101,17 +101,25 @@ off 0, low 4,800, medium 9,600, high 12,000.
 ## Vision
 
 Images work through the same path as the other non-native engines: the server's
-`strata-vision` encoder (CPU, one 1,024-token grid) writes an `.sve` file and
-sends it on a `GENI` line; the shim reads the embeddings and the engine splices
-them over the `<|image_pad|>` run instead of running its own tower. The
-`.ninfer` artifact has no vision tower, so the encoder's `model` field points
-at the AQ3 GGUF for the tokenizer metadata.
+`strata-vision` encoder (CPU; the grid follows the picture, so a screenshot can
+exceed the 1,024-token plan) writes an `.sve` file and sends it on a `GENI`
+line; the shim reads the embeddings and the engine splices them over the
+`<|image_pad|>` run instead of running its own tower. The `.ninfer` artifact
+has no vision tower, so the encoder's `model` field points at the AQ3 GGUF for
+the tokenizer metadata.
 
 Measured through the server: a 512×512 red PNG answered `"Red"` in 11.3 s
 (1,052 prompt tokens, 1,880 ms prefill) and a blue PNG answered `"Blue"` with
-identical prompt ids and `cache_n 0`. Image prompts never reuse a cached
-prefix, because the picture is not in the token ids and a stale one would be
-wrong; text prompts keep the 775/776-token reuse.
+identical prompt ids and `cache_n 0`. A 1264×625 screenshot (800 merged
+tokens) answered with a correct description in 11.9 s (1,080 prompt tokens),
+and a 1066-token `.sve` (larger than the startup plan) prefilled straight
+through `GENI` without the tower. Image prompts never reuse a cached prefix,
+because the picture is not in the token ids and a stale one would be wrong;
+text prompts keep the 775/776-token reuse.
+
+Because an external image does not run the tower, the request plan skips the
+encoder-workspace envelope for it and the prefill session copies the rows into
+a device buffer sized by the item, not by the startup grid.
 
 The config runs with `--no-cuda-graph`: with vision enabled and two device
 state slots the 131,072-token reservation did not fit (3,519,094,016 bytes
@@ -155,6 +163,10 @@ on this host:
    runs, the plan check accepts media with no tower payloads, and
    `VisionPrefillSession::prepare_chunk` uploads the `.sve` rows instead of
    calling the tower. Image prompts neither publish nor take a cached prefix.
+10. External images larger than the startup vision grid: the request plan
+    skips the encoder-workspace envelope for them, and the prefill session
+    keeps its own `DeviceBuffer` sized by the item instead of the handoff
+    region, so a 1,066-token screenshot works with a 1,024-token plan.
 
 The debug prints in the patch are gated by `NINFER_DEBUG_CACHE`; a normal run
 is silent. `NINFER_DEBUG_CACHE=1` prints selection and planner lines to the
