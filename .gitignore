@@ -95,3 +95,6 @@ dist-hip/
 # the vision encoder's scratch folders beside the app (random suffix, .sve cache): never source
 /strata-vision-*/
 *.sve
+# NInfer backend: the built engine binary (engine-ninfer/build.ps1 writes it)
+/engine-ninfer/*.exe
+/engine-ninfer/*.pdb

@@ -1,0 +1,813 @@
+--- a/apps/CMakeLists.txt
++++ b/apps/CMakeLists.txt
+@@ -18,6 +18,17 @@
+   ${PROJECT_SOURCE_DIR}/third_party/cpp-httplib)
+ target_link_libraries(ninfer-serve PRIVATE ninfer_serve ninfer_product_logging)
+ 
++# AryaInfer's engine shim (patch): built only when its source is supplied, so a stock checkout
++# still builds exactly what it built before.
++if(NINFER_ARYAINFER_SHIM)
++  add_executable(ninfer-engine "${NINFER_ARYAINFER_SHIM}")
++  target_include_directories(ninfer-engine PRIVATE
++    ${PROJECT_SOURCE_DIR}/include
++    ${PROJECT_SOURCE_DIR}/src
++    ${PROJECT_SOURCE_DIR}/third_party)
++  target_link_libraries(ninfer-engine PRIVATE ninfer_engine ninfer_product_logging)
++endif()
++
+ add_executable(ninfer-perplexity
+   perplexity/main.cpp
+   perplexity/corpus.cpp
+--- a/bench/context_cost/qwen3_6_context_fixture.cpp
++++ b/bench/context_cost/qwen3_6_context_fixture.cpp
+@@ -6,6 +6,7 @@
+ #include "core/host_kv_arena.h"
+ #include "core/layout.h"
+ #include "core/paged_kv_cache.h"
++#include "core/u128_math.h"
+ #include "ninfer/engine.h"
+ #include <ninfer/targets/qwen3_6_27b/package.h>
+ #include <ninfer/targets/qwen3_6_35b_a3b/package.h>
+@@ -399,12 +400,15 @@
+ }
+ 
+ std::uint64_t attention_pairs(std::uint32_t prefix, std::uint32_t suffix) {
+-    const unsigned __int128 pairs = static_cast<unsigned __int128>(prefix) * suffix +
+-                                    static_cast<unsigned __int128>(suffix) * (suffix + 1ULL) / 2U;
+-    if (pairs > std::numeric_limits<std::uint64_t>::max()) {
++    const wide::u128 pairs = wide::add_saturated(
++        wide::mul(prefix, suffix),
++        wide::shr(wide::mul(static_cast<std::uint64_t>(suffix),
++                            static_cast<std::uint64_t>(suffix) + 1ULL),
++                  1U));
++    if (!wide::fits_u64(pairs)) {
+         throw std::overflow_error("prefill attention-pair count exceeds uint64");
+     }
+-    return static_cast<std::uint64_t>(pairs);
++    return pairs.lo;
+ }
+ 
+ std::vector<std::uint8_t> block_ppm(int width, int height, std::uint8_t value) {
+--- /dev/null
++++ b/include/cuda_profiler_api.h
+@@ -0,0 +1,10 @@
++// CUDA 13.1 no longer ships cuda_profiler_api.h and cudart no longer exports
++// cudaProfilerStart/Stop. The NInfer benchmark only uses them for the optional
++// --profile-measured bracket, so provide success-returning no-ops on toolkits
++// that lack the API. See PATCHES.md.
++#pragma once
++
++#include <cuda_runtime_api.h>
++
++inline cudaError_t cudaProfilerStart() { return cudaSuccess; }
++inline cudaError_t cudaProfilerStop() { return cudaSuccess; }
+--- a/include/ninfer/types.h
++++ b/include/ninfer/types.h
+@@ -624,6 +624,12 @@
+     std::string text;
+ };
+ 
++// AryaInfer shim patch: the exact model tokens accepted at one output-commit boundary. The text
++// deltas above are lossy for a consumer that detokenizes itself; this carries the ids in order.
++struct TokenBatch {
++    std::vector<TokenId> token_ids;
++};
++
+ // Exact prompt accounting selected at admission. Streaming consumers receive this once before any
+ // OutputDelta, after the prefix choice and materialization reservation are committed and before
+ // transfer/prefill execution.
+@@ -658,6 +664,9 @@
+     virtual void progress(PromptProgress progress)          = 0;
+     virtual void timing(GenerationTimingObservation timing) = 0;
+     virtual void publish(OutputDelta delta)                 = 0;
++    // AryaInfer shim patch: a streaming consumer that emits token ids of its own. Default no-op so
++    // existing sinks (CLI, server, benchmarks) are unchanged.
++    virtual void tokens(TokenBatch batch) { (void)batch; }
+ };
+ 
+ enum class OutputConsumerMode : std::uint8_t {
+--- a/src/core/decode_graph.cpp
++++ b/src/core/decode_graph.cpp
+@@ -125,9 +125,12 @@
+     cudaGraphExecUpdateResultInfo result{};
+     const cudaError_t err = cudaGraphExecUpdate(exec_, definition.graph_, &result);
+     if (err != cudaSuccess || result.result != cudaGraphExecUpdateSuccess) {
+-        throw std::runtime_error(
+-            "CUDA Graph executable update failed: " + std::string(cudaGetErrorName(err)) +
+-            " (update result " + std::to_string(static_cast<int>(result.result)) + ")");
++        // Speculative decoding changes the graph topology between wide and narrow rounds, and
++        // CUDA only updates an executable in place when the topology is unchanged. Rebuild the
++        // executable from the new definition instead of failing the request, clearing the
++        // sticky update error first so it does not surface on the next kernel launch.
++        (void)cudaGetLastError();
++        instantiate(definition);
+     }
+ }
+ 
+--- /dev/null
++++ b/src/core/u128_math.h
+@@ -0,0 +1,85 @@
++// Minimal portable 128-bit helpers for the few exact cost calculations in the
++// engine. MSVC (and nvcc's MSVC host pass) has no __int128 on x64, so the
++// Windows build uses _umul128 and the 64-bit portable path uses __int128.
++#pragma once
++
++#include <cstdint>
++#include <limits>
++
++#if defined(_MSC_VER) && defined(_M_X64)
++#include <intrin.h>
++#endif
++
++namespace ninfer::wide {
++
++struct u128 {
++    std::uint64_t hi = 0;
++    std::uint64_t lo = 0;
++
++    [[nodiscard]] friend constexpr bool operator==(u128, u128) noexcept = default;
++};
++
++[[nodiscard]] inline u128 mul(std::uint64_t left, std::uint64_t right) noexcept {
++#if defined(_MSC_VER) && defined(_M_X64)
++    u128 out;
++    out.lo = _umul128(left, right, &out.hi);
++    return out;
++#else
++    const unsigned __int128 product = static_cast<unsigned __int128>(left) * right;
++    return u128{static_cast<std::uint64_t>(product >> 64U),
++                static_cast<std::uint64_t>(product)};
++#endif
++}
++
++[[nodiscard]] inline u128 add_saturated(u128 left, u128 right) noexcept {
++    u128 out;
++    out.lo               = left.lo + right.lo;
++    const std::uint64_t carry = out.lo < left.lo ? 1U : 0U;
++    if (left.hi > std::numeric_limits<std::uint64_t>::max() - right.hi ||
++        left.hi + right.hi > std::numeric_limits<std::uint64_t>::max() - carry) {
++        return u128{std::numeric_limits<std::uint64_t>::max(),
++                    std::numeric_limits<std::uint64_t>::max()};
++    }
++    out.hi = left.hi + right.hi + carry;
++    return out;
++}
++
++[[nodiscard]] inline u128 shr(std::uint64_t value, unsigned shift) noexcept {
++    return u128{0, value >> shift};
++}
++
++[[nodiscard]] inline u128 shr(std::uint64_t hi, std::uint64_t lo, unsigned shift) noexcept {
++    if (shift == 0) { return u128{hi, lo}; }
++    if (shift >= 64) { return u128{0, hi >> (shift - 64U)}; }
++    return u128{hi >> shift, (lo >> shift) | (hi << (64U - shift))};
++}
++
++[[nodiscard]] inline u128 shr(u128 value, unsigned shift) noexcept {
++    return shr(value.hi, value.lo, shift);
++}
++
++[[nodiscard]] inline int compare(u128 left, u128 right) noexcept {
++    if (left.hi != right.hi) { return left.hi < right.hi ? -1 : 1; }
++    if (left.lo != right.lo) { return left.lo < right.lo ? -1 : 1; }
++    return 0;
++}
++
++// Compares left_a * right_a against left_b * right_b without truncation.
++[[nodiscard]] inline int compare_products(std::uint64_t left_a, std::uint64_t right_a,
++                                          std::uint64_t left_b,
++                                          std::uint64_t right_b) noexcept {
++    return compare(mul(left_a, right_a), mul(left_b, right_b));
++}
++
++[[nodiscard]] inline std::uint64_t saturated_u64(u128 value) noexcept {
++    return value.hi == 0 ? value.lo : std::numeric_limits<std::uint64_t>::max();
++}
++
++[[nodiscard]] inline bool fits_u64(u128 value) noexcept { return value.hi == 0; }
++
++[[nodiscard]] inline std::uint64_t saturated_product(std::uint64_t left,
++                                                     std::uint64_t right) noexcept {
++    return saturated_u64(mul(left, right));
++}
++
++} // namespace ninfer::wide
+--- a/src/product/logging/logging.cpp
++++ b/src/product/logging/logging.cpp
+@@ -5,7 +5,11 @@
+ #include <spdlog/sinks/sink.h>
+ #include <spdlog/sinks/stdout_color_sinks.h>
+ 
++#if defined(_WIN32)
++#include <io.h>
++#else
+ #include <unistd.h>
++#endif
+ 
+ #include <atomic>
+ #include <chrono>
+@@ -101,7 +105,11 @@
+             const std::time_t wall_seconds = std::chrono::system_clock::to_time_t(
+                 std::chrono::system_clock::time_point(whole_seconds));
+             std::tm local{};
++#if defined(_WIN32)
++            localtime_s(&local, &wall_seconds);
++#else
+             localtime_r(&wall_seconds, &local);
++#endif
+             fmt::format_to(std::back_inserter(destination),
+                            "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}  ", local.tm_year + 1900,
+                            local.tm_mon + 1, local.tm_mday, local.tm_hour, local.tm_min,
+@@ -148,10 +156,18 @@
+     std::fflush(stderr);
+ }
+ 
++bool stderr_is_interactive() noexcept {
++#if defined(_WIN32)
++    return ::_isatty(::_fileno(stderr)) == 1;
++#else
++    return ::isatty(STDERR_FILENO) == 1;
++#endif
++}
++
+ class ProgressAwareStderrSink final : public spdlog::sinks::sink {
+ public:
+     explicit ProgressAwareStderrSink(spdlog::color_mode color)
+-        : sink_(color), interactive_(::isatty(STDERR_FILENO) == 1) {}
++        : sink_(color), interactive_(stderr_is_interactive()) {}
+ 
+     ~ProgressAwareStderrSink() override { clear(); }
+ 
+--- a/src/product/logging/startup_log.cpp
++++ b/src/product/logging/startup_log.cpp
+@@ -5,8 +5,12 @@
+ 
+ #include <spdlog/logger.h>
+ 
++#if defined(_WIN32)
++#include <windows.h>
++#else
+ #include <sys/ioctl.h>
+ #include <unistd.h>
++#endif
+ 
+ #include <algorithm>
+ #include <array>
+@@ -76,9 +80,19 @@
+ }
+ 
+ std::size_t terminal_columns() noexcept {
++#if defined(_WIN32)
++    CONSOLE_SCREEN_BUFFER_INFO info{};
++    if (::GetConsoleScreenBufferInfo(::GetStdHandle(STD_ERROR_HANDLE), &info)) {
++        const int width =
++            static_cast<int>(info.srWindow.Right) - static_cast<int>(info.srWindow.Left) + 1;
++        if (width > 0) { return static_cast<std::size_t>(width); }
++    }
++    return 120;
++#else
+     winsize size{};
+     if (::ioctl(STDERR_FILENO, TIOCGWINSZ, &size) == 0 && size.ws_col != 0) { return size.ws_col; }
+     return 120;
++#endif
+ }
+ 
+ std::string progress_bar(double ratio, std::size_t width) {
+--- a/src/runtime/contract/types.h
++++ b/src/runtime/contract/types.h
+@@ -2,6 +2,7 @@
+ 
+ #include "core/nvtx.h"
+ #include "core/transfer_work.h"
++#include "core/u128_math.h"
+ #include "ninfer/types.h"
+ 
+ #include <atomic>
+@@ -244,15 +245,12 @@
+     result.tokens                       = suffix_tokens;
+     result.vision_items                 = vision_items;
+     result.vision_patches               = vision_patches;
+-    const unsigned __int128 suffix      = suffix_tokens;
+-    const unsigned __int128 linear      = static_cast<unsigned __int128>(prefix_tokens) * suffix;
+-    const unsigned __int128 triangular  = suffix * (suffix + 1U) / 2U;
+-    constexpr unsigned __int128 maximum = ~static_cast<unsigned __int128>(0);
+-    const unsigned __int128 attention =
+-        triangular > maximum - linear ? maximum : linear + triangular;
+-    result.attention_pairs = attention > std::numeric_limits<std::uint64_t>::max()
+-                                 ? std::numeric_limits<std::uint64_t>::max()
+-                                 : static_cast<std::uint64_t>(attention);
++    const wide::u128 linear     = wide::mul(prefix_tokens, suffix_tokens);
++    const wide::u128 triangular = wide::shr(wide::mul(suffix_tokens, suffix_tokens + 1U), 1U);
++    const wide::u128 attention  = wide::add_saturated(linear, triangular);
++    result.attention_pairs      = wide::fits_u64(attention)
++                                      ? attention.lo
++                                      : std::numeric_limits<std::uint64_t>::max();
+     return result;
+ }
+ 
+--- a/src/runtime/engine/context_cost.cpp
++++ b/src/runtime/engine/context_cost.cpp
+@@ -12,7 +12,11 @@
+ #include <system_error>
+ #include <utility>
+ 
++#ifdef _WIN32
++#include <process.h>
++#else
+ #include <unistd.h>
++#endif
+ 
+ namespace ninfer::runtime {
+ 
+@@ -23,7 +27,6 @@
+ namespace {
+ 
+ using Json = nlohmann::json;
+-using U128 = unsigned __int128;
+ 
+ constexpr std::size_t direction_index(ContextTransferDirection direction) noexcept {
+     return static_cast<std::size_t>(direction);
+@@ -36,18 +39,21 @@
+ }
+ 
+ std::uint64_t saturating_product(std::uint64_t left, std::uint64_t right) noexcept {
+-    const U128 product = static_cast<U128>(left) * right;
+-    return product > std::numeric_limits<std::uint64_t>::max()
+-               ? std::numeric_limits<std::uint64_t>::max()
+-               : static_cast<std::uint64_t>(product);
++    return wide::saturated_product(left, right);
+ }
+ 
+ std::uint64_t q32_product_ns(std::uint64_t coefficient, std::uint64_t units) noexcept {
+     if (coefficient == 0 || units == 0) { return 0; }
+-    const U128 product        = static_cast<U128>(coefficient) * units;
+-    const U128 maximum_scaled = static_cast<U128>(std::numeric_limits<std::uint64_t>::max()) << 32U;
+-    if (product >= maximum_scaled) { return std::numeric_limits<std::uint64_t>::max(); }
+-    return static_cast<std::uint64_t>((product + kContextCostQ32One - 1U) >> 32U);
++    const wide::u128 product = wide::mul(coefficient, units);
++    const wide::u128 maximum_scaled{
++        std::numeric_limits<std::uint64_t>::max() >> 32U, 0};
++    if (wide::compare(product, maximum_scaled) >= 0) {
++        return std::numeric_limits<std::uint64_t>::max();
++    }
++    const wide::u128 rounded =
++        wide::add_saturated(product, wide::u128{0, kContextCostQ32One - 1U});
++    const wide::u128 shifted = wide::shr(rounded.hi, rounded.lo, 32U);
++    return shifted.lo;
+ }
+ 
+ void require_object(const Json& value, std::string_view context) {
+@@ -296,7 +302,12 @@
+     if (!path.parent_path().empty()) { std::filesystem::create_directories(path.parent_path()); }
+ 
+     std::filesystem::path temporary = path;
+-    temporary += ".tmp." + std::to_string(static_cast<long long>(::getpid())) + "." +
++#ifdef _WIN32
++    const long long process_id = static_cast<long long>(_getpid());
++#else
++    const long long process_id = static_cast<long long>(::getpid());
++#endif
++    temporary += ".tmp." + std::to_string(process_id) + "." +
+                  std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+     try {
+         {
+--- a/src/runtime/engine/engine_core.h
++++ b/src/runtime/engine/engine_core.h
+@@ -885,6 +885,8 @@
+                     for (auto& event : events) {
+                         if (auto* timing = std::get_if<GenerationTimingObservation>(&event)) {
+                             sink->timing(std::move(*timing));
++                        } else if (auto* batch = std::get_if<TokenBatch>(&event)) {
++                            sink->tokens(std::move(*batch));
+                         } else {
+                             sink->publish(std::move(std::get<OutputDelta>(event)));
+                         }
+@@ -982,6 +984,14 @@
+                                                                               : request->content;
+                 full += delta.text;
+                 if (streaming) { request->events.emplace_back(std::move(delta)); }
++            }
++            // AryaInfer shim patch: publish the ids accepted since the last commit, after the text
++            // deltas they produced.  `generated` grows at the commit site, whatever produced them.
++            if (streaming && request->generated.size() > request->tokens_published) {
++                const auto first = request->generated.begin() + request->tokens_published;
++                request->events.emplace_back(TokenBatch{
++                    .token_ids = std::vector<TokenId>(first, request->generated.end())});
++                request->tokens_published = request->generated.size();
+             }
+         }
+         if (streaming) { request->cv.notify_one(); }
+--- a/src/runtime/engine/materialization_planner.h
++++ b/src/runtime/engine/materialization_planner.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include "core/u128_math.h"
+ #include "runtime/engine/context_cost.h"
+ #include "runtime/engine/context_portfolio_value.h"
+ #include "runtime/engine/materialization_budget.h"
+@@ -9,6 +10,9 @@
+ #include <array>
+ #include <chrono>
+ #include <cstdint>
++#include <cstdio>
++#include <cstdlib>
++#include <iostream>
+ #include <limits>
+ #include <optional>
+ #include <span>
+@@ -113,7 +117,7 @@
+ 
+     template <class PressureInputsFn, class LogicalGoalFn, class FinalScheduleFn>
+     [[nodiscard]] std::optional<Result>
+-    plan(Program& program, const PreparedPrompt& prompt,
++    plan_impl(Program& program, const PreparedPrompt& prompt,
+          const ContextMachineCostModel& machine_cost, std::span<const CandidateInput> candidates,
+          std::uint32_t root_candidate_index, PressureInputsFn&& pressure_inputs,
+          LogicalGoalFn&& logical_goal, FinalScheduleFn&& final_schedule,
+@@ -144,6 +148,12 @@
+         std::vector<IdentityRoot> roots;
+         roots.reserve(candidates.size());
+         std::uint64_t projection_work = 0;
++        const bool dbg = std::getenv("NINFER_DEBUG_CACHE") != nullptr;
++        if (dbg) {
++        std::fprintf(stderr, "[mp] enter candidates=%llu root=%u\n",
++                     static_cast<unsigned long long>(candidates.size()), root_candidate_index);
++        std::fflush(stderr);
++        }
+         for (std::size_t index = 0; index < candidates.size(); ++index) {
+             const CandidateInput& input = candidates[index];
+             const IdentityMaterializationAssessment& identity =
+@@ -151,6 +161,22 @@
+             planning_saturating_add(projection_work, identity.projection_work);
+             const FoldedCost cost = fold_identity(input, identity, machine_cost);
+             identity_costs_.push_back(cost);
++            if (std::getenv("NINFER_DEBUG_CACHE") != nullptr) {
++                std::fprintf(stderr,
++                             "[mp] cand=%llu mode=%d total_ns=%llu lower_ns=%llu reuse=%u "
++                             "prefill_work=%llu feasible=%d\n",
++                             static_cast<unsigned long long>(index),
++                             static_cast<int>(identity.source_mode),
++                             static_cast<unsigned long long>(cost.total_ns),
++                             static_cast<unsigned long long>(cost.lower_bound_ns),
++                             cost.reused_prompt_tokens,
++                             static_cast<unsigned long long>(
++                                 identity.machine_work.remaining_prefill_work.tokens),
++                             identity.physical_status == MaterializationPhysicalStatus::Feasible
++                                 ? 1
++                                 : 0);
++                std::fflush(stderr);
++            }
+             std::optional<LogicalGoal> goal;
+             if (identity.physical_status == MaterializationPhysicalStatus::Feasible) {
+                 goal = logical_goal(input.id, identity.source_mode,
+@@ -178,6 +204,24 @@
+                 .lower_bound_ns  = cost.lower_bound_ns,
+                 .expandable      = needs_pressure || pressure_can_improve,
+             });
++        }
++
++        if (std::getenv("NINFER_DEBUG_CACHE") != nullptr) {
++            if (identity_best) {
++                std::fprintf(stderr,
++                             "[mp] best=%u mode=%d total_ns=%llu reuse=%u needs_optional=%d\n",
++                             identity_best->candidate_index,
++                             static_cast<int>(identity_best->source_mode),
++                             static_cast<unsigned long long>(identity_best->cost.total_ns),
++                             identity_best->cost.reused_prompt_tokens,
++                             std::any_of(roots.begin(), roots.end(),
++                                         [](const IdentityRoot& root) { return root.expandable; })
++                                 ? 1
++                                 : 0);
++            } else {
++                std::fprintf(stderr, "[mp] best=none\n");
++            }
++            std::fflush(stderr);
+         }
+ 
+         if (identity_best) {
+@@ -389,6 +433,15 @@
+             if (goal) {
+                 mark_target(assessment.stable_target_ordinal, kTargetFeasible);
+                 candidate_seeded[expected_candidate] = true;
++            }
++            if (dbg) {
++            std::fprintf(stderr,
++                         "[as] cand=%u status=%d goal=%d cost=%llu incumbent=%llu\n",
++                         expected_candidate, static_cast<int>(assessment.physical_status),
++                         goal ? 1 : 0,
++                         static_cast<unsigned long long>(cost.total_ns),
++                         static_cast<unsigned long long>(incumbent.cost.total_ns));
++            std::fflush(stderr);
+             }
+             if (goal && cost.less(incumbent.cost)) {
+                 if (cost.total_ns < initial_cost_ns && !first_improvement_ns) {
+@@ -708,7 +761,14 @@
+                     budget_exhausted = true;
+                     break;
+                 }
+-                if (!expand_target(queue_pop())) {
++                const auto popped = queue_pop();
++                const bool expanded = expand_target(popped);
++                if (dbg) {
++                std::fprintf(stderr, "[mp] expand cand=%u ok=%d\n",
++                             static_cast<unsigned>(popped.candidate_index), expanded ? 1 : 0);
++                std::fflush(stderr);
++                }
++                if (!expanded) {
+                     stop_reason      = MaterializationStopReason::ExpansionCapacity;
+                     budget_exhausted = true;
+                     break;
+@@ -780,7 +840,7 @@
+          PlanningAllowance allowance = {}) {
+         const auto no_optional_schedule = [](PlanningCandidateId, const RequestPlanSummary&,
+                                              const auto&) { return std::vector<std::uint32_t>{}; };
+-        return plan(program, prompt, machine_cost, candidates, root_candidate_index,
++        return plan_impl(program, prompt, machine_cost, candidates, root_candidate_index,
+                     std::forward<PressureInputsFn>(pressure_inputs),
+                     std::forward<LogicalGoalFn>(logical_goal), no_optional_schedule,
+                     planning_started, allowance);
+@@ -947,9 +1007,8 @@
+                            ? item.estimated_total_ns - parent.estimated_total_ns
+                            : 0;
+             };
+-            const __uint128_t left  = static_cast<__uint128_t>(delta(cost)) * b;
+-            const __uint128_t right = static_cast<__uint128_t>(delta(prior)) * a;
+-            if (left != right) { return left < right; }
++            const int order = wide::compare_products(delta(cost), b, delta(prior), a);
++            if (order != 0) { return order < 0; }
+         }
+         return cost.key() < prior.key();
+     }
+--- a/src/runtime/engine/request_record.h
++++ b/src/runtime/engine/request_record.h
+@@ -109,7 +109,7 @@
+     using OutputSession  = typename Package::OutputSession;
+     using BasePlan       = typename Package::RequestBasePlan;
+     using SequenceHandle = typename Package::SequenceHandle;
+-    using StreamEvent    = std::variant<GenerationTimingObservation, OutputDelta>;
++    using StreamEvent    = std::variant<GenerationTimingObservation, OutputDelta, TokenBatch>;
+ 
+     RequestRecord(std::uint64_t request_identity, std::uint64_t publication_sequence,
+                   PreparedPrompt input, OutputSession output_session, PromptSummary summary,
+@@ -171,6 +171,8 @@
+     std::optional<BeginSummary> admitted_begin;
+     std::optional<BeginSummary> begin;
+     std::vector<TokenId> generated;
++    // AryaInfer shim patch: how many generated ids have already been streamed to the sink.
++    std::size_t tokens_published = 0;
+     std::string content;
+     std::string reasoning;
+     std::optional<LaneId> lane;
+--- a/src/runtime/engine/resource_manager.h
++++ b/src/runtime/engine/resource_manager.h
+@@ -12,6 +12,8 @@
+ #include <chrono>
+ #include <cstddef>
+ #include <cstdint>
++#include <cstdio>
++#include <cstdlib>
+ #include <functional>
+ #include <limits>
+ #include <optional>
+@@ -314,6 +316,11 @@
+         }
+         std::vector<Candidate> candidates;
+         candidates.reserve(1U + prefix_index_.size());
++        const bool debug_cache = std::getenv("NINFER_DEBUG_CACHE") != nullptr;
++        if (debug_cache) {
++            std::fprintf(stderr, "[rm] cache=%d index=%zu\n", cache_enabled_ ? 1 : 0,
++                         prefix_index_.size());
++        }
+         std::optional<AdmissionCandidate> root = program.inspect_admission(
+             prompt, base, *destination, nullptr, nullptr, std::nullopt, false);
+         if (!root) { throw std::logic_error("Program rejected isolated root planning"); }
+@@ -324,6 +331,10 @@
+                 if (!valid_prefix_index_entry(index)) { continue; }
+                 const std::optional<PrefixShortlistKey> incoming =
+                     base.prefix_shortlist_key(index.key.frontier);
++                if (debug_cache) {
++                    std::fprintf(stderr, "[rm] idx frontier=%u shared=%d valid_in=%d\n",
++                                 index.key.frontier, index.shared ? 1 : 0, incoming ? 1 : 0);
++                }
+                 if (!incoming || *incoming != index.key) { continue; }
+ 
+                 if (!index.shared) {
+@@ -339,6 +350,11 @@
+                     std::optional<AdmissionCandidate> plan =
+                         program.inspect_admission(prompt, base, *destination, &*entry.handle,
+                                                   nullptr, index.checkpoint, retain);
++                    if (debug_cache) {
++                        std::fprintf(stderr, "[rm] private frontier=%u plan=%d reuse=%u\n",
++                                     index.key.frontier, plan ? 1 : 0,
++                                     plan ? plan->summary().reusable_prompt_tokens : 0U);
++                    }
+                     if (!plan) { continue; }
+                     if (plan->summary().reusable_prompt_tokens == 0 ||
+                         (retain &&
+@@ -394,9 +410,31 @@
+             }
+         }
+ 
+-        std::optional<Choice> selected =
+-            plan_materialization(program, prompt, base, *destination, candidates, publication_order,
+-                                 planning_started, provisional_demand, allowance);
++        std::optional<Choice> selected;
++        if (debug_cache) {
++            std::fprintf(stderr, "[rm] planning candidates=%llu\n",
++                         static_cast<unsigned long long>(candidates.size()));
++            std::fflush(stderr);
++        }
++        try {
++            std::optional<Choice> planned = plan_materialization(
++                program, prompt, base, *destination, candidates, publication_order,
++                planning_started, provisional_demand, allowance);
++            if (planned) { selected.emplace(std::move(*planned)); }
++        } catch (const std::exception& error) {
++            if (debug_cache) {
++                std::fprintf(stderr, "[rm] planning threw: %s\n", error.what());
++                std::fflush(stderr);
++            }
++            throw;
++        }
++        if (debug_cache) {
++            std::fprintf(stderr, "[rm] selected=%d reuse=%u\n", selected ? 1 : 0,
++                         selected && selected->plan_
++                             ? selected->plan_->summary().reusable_prompt_tokens
++                             : 0U);
++            std::fflush(stderr);
++        }
+         if (!selected) { return {.readiness = Readiness::TemporarilyBlocked}; }
+         return {
+             .readiness = selected->needs_transfer() ? Readiness::NeedsTransfer : Readiness::Ready,
+@@ -1942,6 +1980,12 @@
+                          std::vector<Candidate>& candidates, std::uint64_t publication_order,
+                          typename Planner::Clock::time_point planning_started,
+                          PrefixDemandRecord& provisional_demand, PlanningAllowance allowance) {
++        const bool dbg = std::getenv("NINFER_DEBUG_CACHE") != nullptr;
++        if (dbg) {
++        std::fprintf(stderr, "[rm] member enter candidates=%llu\n",
++                     static_cast<unsigned long long>(candidates.size()));
++        std::fflush(stderr);
++        }
+         std::vector<typename Planner::CandidateInput> candidate_inputs;
+         std::vector<const ContinuationHandle*> private_owners;
+         std::vector<PlanningOwnerId> private_owner_ids;
+@@ -2096,6 +2140,13 @@
+                                       PrivateSourceMode source_mode,
+                                       std::span<const PressureOwnerOutcome> outcomes)
+             -> std::optional<typename Planner::LogicalGoal> {
++            const bool lg_debug = std::getenv("NINFER_DEBUG_CACHE") != nullptr;
++            if (lg_debug) {
++            std::fprintf(stderr, "[lg] cand=%u mode=%d cat=%u\n",
++                         static_cast<unsigned>(candidate_id.value),
++                         static_cast<int>(source_mode), catalog_count_);
++            std::fflush(stderr);
++            }
+             const auto candidate_record =
+                 std::find_if(candidate_inputs.begin(), candidate_inputs.end(),
+                              [&](const typename Planner::CandidateInput& input) {
+@@ -2106,15 +2157,15 @@
+                 static_cast<std::size_t>(candidate_record - candidate_inputs.begin());
+             const Candidate& candidate = candidates[candidate_index];
+             if (candidate.shared_source && source_mode != PrivateSourceMode::Retain) {
+-                return std::nullopt;
++                { if (lg_debug) { std::fprintf(stderr, "[lg] null line %d\n", __LINE__); std::fflush(stderr); } return std::nullopt; }
+             }
+             if (!candidate.private_source && !candidate.shared_source &&
+                 source_mode == PrivateSourceMode::Retain) {
+-                return std::nullopt;
++                { if (lg_debug) { std::fprintf(stderr, "[lg] null line %d\n", __LINE__); std::fflush(stderr); } return std::nullopt; }
+             }
+             if (candidate.private_source && source_mode != PrivateSourceMode::Retain &&
+                 source_mode != PrivateSourceMode::ConsumeToActive) {
+-                return std::nullopt;
++                { if (lg_debug) { std::fprintf(stderr, "[lg] null line %d\n", __LINE__); std::fflush(stderr); } return std::nullopt; }
+             }
+ 
+             std::uint32_t publication_slot = kInvalidCatalogSlot;
+@@ -2133,13 +2184,13 @@
+                 const PressureOwnerOutcome& outcome = outcomes[row];
+                 if (outcome.disposition != VictimDisposition::Retained &&
+                     outcome.disposition != VictimDisposition::Evicted) {
+-                    return std::nullopt;
++                { if (lg_debug) { std::fprintf(stderr, "[lg] null line %d\n", __LINE__); std::fflush(stderr); } return std::nullopt; }
+                 }
+                 if (std::find_if(outcomes.begin(), outcomes.begin() + row,
+                                  [&](const PressureOwnerOutcome& prior) {
+                                      return prior.owner == outcome.owner;
+                                  }) != outcomes.begin() + row) {
+-                    return std::nullopt;
++                { if (lg_debug) { std::fprintf(stderr, "[lg] null line %d\n", __LINE__); std::fflush(stderr); } return std::nullopt; }
+                 }
+                 const auto record = std::find_if(
+                     owner_records.begin(), owner_records.end(),
+@@ -2150,14 +2201,14 @@
+                     const std::uint32_t slot = record->capability.slot;
+                     if (slot >= catalog_count_ ||
+                         (candidate.private_source && slot == candidate.private_source->slot)) {
+-                        return std::nullopt;
++                { if (lg_debug) { std::fprintf(stderr, "[lg] null line %d\n", __LINE__); std::fflush(stderr); } return std::nullopt; }
+                     }
+                     const CatalogEntry& entry = catalog_[slot];
+                     if (entry.state != CatalogState::Catalogued || !entry.handle ||
+                         entry.id != record->capability.owner.id ||
+                         entry.revision != record->capability.generation ||
+                         private_has_active_edge(slot)) {
+-                        return std::nullopt;
++                { if (lg_debug) { std::fprintf(stderr, "[lg] null line %d\n", __LINE__); std::fflush(stderr); } return std::nullopt; }
+                     }
+                     if (publication_slot == kInvalidCatalogSlot &&
+                         outcome.disposition == VictimDisposition::Evicted) {
+@@ -2167,14 +2218,14 @@
+                     const std::uint32_t slot = record->capability.slot;
+                     if (slot >= shared_catalog_count_ ||
+                         (candidate.shared_source && slot == candidate.shared_source->slot)) {
+-                        return std::nullopt;
++                { if (lg_debug) { std::fprintf(stderr, "[lg] null line %d\n", __LINE__); std::fflush(stderr); } return std::nullopt; }
+                     }
+                     const SharedCatalogEntry& entry = shared_catalog_[slot];
+                     if (entry.state != SharedCatalogState::Catalogued || !entry.handle ||
+                         entry.id != record->capability.owner.id ||
+                         entry.revision != record->capability.generation ||
+                         entry.transaction_pins != 0 || shared_active_edge_count(slot) != 0) {
+-                        return std::nullopt;
++                { if (lg_debug) { std::fprintf(stderr, "[lg] null line %d\n", __LINE__); std::fflush(stderr); } return std::nullopt; }
+                     }
+                 }
+             }
+@@ -2198,9 +2249,22 @@
+                                                           provisional_demand, split_cost);
+         };
+ 
++        if (dbg) {
++        std::fprintf(stderr, "[rm] pre-plan\n");
++        std::fflush(stderr);
++        }
+         std::optional<typename Planner::Result> planned =
+-            planner_.plan(program, prompt, cost_model_, candidate_inputs, 0, build_pressure_inputs,
++            planner_.plan_impl(program, prompt, cost_model_, candidate_inputs, 0, build_pressure_inputs,
+                           logical_goal, final_schedule, planning_started, allowance);
++        const int has_plan = planned.has_value() ? 1 : 0;
++        const unsigned long long plan_candidate =
++            planned.has_value() ? static_cast<unsigned long long>(planned->candidate.value)
++                                : ~0ull;
++        if (dbg) {
++        std::fprintf(stderr, "[rm] post-plan planned=%d candidate=%llu\n", has_plan,
++                     plan_candidate);
++        std::fflush(stderr);
++        }
+         const auto selected_candidate =
+             planned ? std::find_if(candidate_inputs.begin(), candidate_inputs.end(),
+                                    [&](const typename Planner::CandidateInput& input) {
+--- a/src/targets/qwen3_6/impl/frontend/frontend.cpp
++++ b/src/targets/qwen3_6/impl/frontend/frontend.cpp
+@@ -1595,7 +1595,19 @@
+     assign_text_positions(result);
+     result.identity.reusable                  = allow_prefix_identity;
+     result.context_cache.retention            = runtime::RetentionClass::RecentPrivate;
+-    result.context_cache.update_session_index = false;
++    result.context_cache.update_session_index = true;
++    // AryaInfer: the message path anchors the prompt endpoint (prepare_context_cache), and
++    // without an anchor a finished token prompt is never catalogued as a reusable prefix.
++    // The token path has no message boundaries, so anchor the last prompt token: it is the
++    // frontier the next turn's identical prefix can reuse (the endpoint itself stays owned by
++    // the live sequence and is not offered as a private continuation).
++    if (allow_prefix_identity && result.token_ids.size() > 1) {
++        result.context_cache.opportunities.push_back(PreparedCacheOpportunity{
++            .kind        = PromptCacheMarkerKind::PrivateLongAnchor,
++            .evidence    = SharedCandidateEvidence::None,
++            .frontier    = static_cast<std::uint32_t>(result.token_ids.size() - 1),
++            .input_order = 0});
++    }
+     result.prepare.seconds = std::chrono::duration<double>(Clock::now() - start).count();
+     return PreparedPrompt(std::move(prepared));
+ }
+--- a/src/targets/qwen3_6/impl/runtime/program.h
++++ b/src/targets/qwen3_6/impl/runtime/program.h
+@@ -283,7 +283,10 @@
+ 
+ template <>
+ AdmissionCandidate<NINFER_QWEN36_VARIANT>&
+-AdmissionCandidate<NINFER_QWEN36_VARIANT>::operator=(AdmissionCandidate&&) noexcept = default;
++AdmissionCandidate<NINFER_QWEN36_VARIANT>::operator=(AdmissionCandidate&& other) noexcept {
++    impl_ = std::move(other.impl_);
++    return *this;
++}
+ 
+ template <>
+ AdmissionCandidate<NINFER_QWEN36_VARIANT>::~AdmissionCandidate() = default;
+@@ -299,8 +302,11 @@
+ 
+ template <>
+ CapturePressureCandidate<NINFER_QWEN36_VARIANT>&
+-CapturePressureCandidate<NINFER_QWEN36_VARIANT>::operator=(CapturePressureCandidate&&) noexcept =
+-    default;
++CapturePressureCandidate<NINFER_QWEN36_VARIANT>::operator=(
++    CapturePressureCandidate&& other) noexcept {
++    impl_ = std::move(other.impl_);
++    return *this;
++}
+ 
+ template <>
+ CapturePressureCandidate<NINFER_QWEN36_VARIANT>::~CapturePressureCandidate() = default;

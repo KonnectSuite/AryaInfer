@@ -1,0 +1,53 @@
+{
+    "exe":  "C:\\Users\\KNPhu\\AryaCode\\KonnectSuite\\AryaInfer\\engine-ninfer\\ninfer-engine.exe",
+    "args":  [
+                 "--model",
+                 "C:\\AI\\Strata-data\\models\\qwen3_8_27b_gsq3.ninfer",
+                 "--max-context",
+                 "131072",
+                 "--kv-dtype",
+                 "rk4v4-e8",
+                 "--prefill-chunk",
+                 "2688",
+                 "--spec",
+                 "mtp",
+                 "--draft-tokens",
+                 "3",
+                 "--lm-head-draft",
+                 "--host-kv-mib",
+                 "4096",
+                 "--max-concurrency",
+                 "1"
+             ],
+    "cwd":  "C:\\Users\\KNPhu\\AryaCode\\KonnectSuite\\AryaInfer",
+    "tokenizer":  "C:\\AI\\Strata-data\\models\\qwen38-27b\\tokenizer",
+    "model_name":  "qwen3.8-27b-ninfer",
+    "display_name":  "Qwen3.8 27B GSQ3 (NInfer engine, 128K)",
+    "log":  "C:\\Users\\KNPhu\\AryaCode\\KonnectSuite\\AryaInfer\\strata-qwen3.8-27b-ninfer.log",
+    "lib_dirs":  [
+                     "C:\\AI\\Strata-data\\cuda\\13.1.2\\bin\\x64",
+                     "C:\\AI\\Strata-data\\cuda\\13.1.2\\bin"
+                 ],
+    "port":  8088,
+    "gpu":  0,
+    "switch_on_request":  true,
+    "aliases":  [
+                    "qwen3.8-27b-ninfer",
+                    "ninfer-27b"
+                ],
+    "sampling":  {
+                     "temperature":  0.3,
+                     "top_p":  0.9,
+                     "top_k":  20,
+                     "presence_penalty":  0.0
+                 },
+    "reasoning_effort":  "medium",
+    "reasoning_budget_tokens":  9600,
+    "reasoning_budget_by_effort":  {
+                                       "off":  0,
+                                       "low":  4800,
+                                       "medium":  9600,
+                                       "high":  12000
+                                   },
+    "context":  131072
+}
