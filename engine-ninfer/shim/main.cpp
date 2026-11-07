@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <deque>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -34,6 +35,7 @@ namespace {
 
 using ninfer::Engine;
 using ninfer::EngineOptions;
+using ninfer::ExternalVisionItem;
 using ninfer::GenerationResult;
 using ninfer::KvCacheStorage;
 using ninfer::OutputDelta;
@@ -55,12 +57,15 @@ struct Options {
     SpeculativeBackend spec      = SpeculativeBackend::Mtp;
     ProposalHead head            = ProposalHead::Optimized;
     bool use_graphs              = true;
+    bool vision                  = false;
 };
 
 struct Request {
     int max_new = 0;
     std::vector<TokenId> ids;
     RequestOptions options;
+    std::vector<ExternalVisionItem> vision;
+    TokenId image_pad = -1;
 };
 
 std::mutex g_mutex;
@@ -136,6 +141,10 @@ Options parse_args(int argc, char** argv) {
             out.head = ProposalHead::Optimized;
         } else if (arg == "--no-cuda-graph") {
             out.use_graphs = false;
+        } else if (arg == "--vision") {
+            // The server adds this when the config has a vision section; the shim takes the
+            // encoder's .sve rows through GENI, so it only has to reserve vision capacity.
+            out.vision = true;
         } else if (arg == "--max-concurrency" || arg == "--ngram" || arg == "--ngram-max" ||
                    arg == "--ngram-n" || arg == "--ngram-min" || arg == "--ngram-pool-mib" ||
                    arg == "--log-level" || arg == "--vram-reserve-mib" || arg == "--prompt-batch" ||
@@ -203,13 +212,64 @@ void print_done(const GenerationResult& result, std::size_t prompt_tokens) {
         result.reused_prompt_tokens);
 }
 
+std::uint16_t bf16_of(float value) {
+    std::uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof bits);
+    bits += 0x7FFFU + ((bits >> 16U) & 1U);
+    return static_cast<std::uint16_t>(bits >> 16U);
+}
+
+// One .sve file holds one record per image: int32 header (magic "SVE1", rows, nx, lines,
+// n_embd), then rows * n_embd float32 values.  The server's strata-vision encoder writes it.
+std::vector<ExternalVisionItem> load_sve(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in) { throw std::invalid_argument("cannot open vision embeddings: " + path); }
+    std::vector<ExternalVisionItem> items;
+    for (;;) {
+        std::int32_t hdr[5] = {};
+        in.read(reinterpret_cast<char*>(hdr), sizeof hdr);
+        if (in.gcount() == 0) { break; }
+        if (in.gcount() != static_cast<std::streamsize>(sizeof hdr) ||
+            hdr[0] != 0x31455653 || hdr[1] <= 0 || hdr[2] <= 0 || hdr[3] <= 0 || hdr[4] <= 0 ||
+            static_cast<std::int64_t>(hdr[2]) * hdr[3] != hdr[1]) {
+            throw std::invalid_argument("vision embeddings file has an invalid record: " + path);
+        }
+        ExternalVisionItem item;
+        item.rows    = static_cast<std::uint32_t>(hdr[1]);
+        item.nx      = static_cast<std::uint32_t>(hdr[2]);
+        item.lines   = static_cast<std::uint32_t>(hdr[3]);
+        item.columns = static_cast<std::uint32_t>(hdr[4]);
+        const std::size_t row_elements = static_cast<std::size_t>(item.columns);
+        item.embeddings_bf16.resize(static_cast<std::size_t>(item.rows) * row_elements);
+        std::vector<float> row(row_elements);
+        for (std::uint32_t r = 0; r < item.rows; ++r) {
+            in.read(reinterpret_cast<char*>(row.data()),
+                    static_cast<std::streamsize>(row_elements * sizeof(float)));
+            if (!in) { throw std::invalid_argument("vision embeddings file is truncated: " + path); }
+            for (std::size_t c = 0; c < row_elements; ++c) {
+                item.embeddings_bf16[static_cast<std::size_t>(r) * row_elements + c] =
+                    bf16_of(row[c]);
+            }
+        }
+        items.push_back(std::move(item));
+    }
+    if (items.empty()) { throw std::invalid_argument("vision embeddings file has no records: " + path); }
+    return items;
+}
+
 Request parse_request(const std::string& line) {
     std::istringstream stream(line);
     std::vector<std::string> fields;
     std::string field;
     while (stream >> field) { fields.push_back(field); }
     if (fields.size() < 3) { throw std::invalid_argument("GEN needs a token budget and a prompt"); }
-    if (fields[0] != "GEN") { throw std::invalid_argument("only GEN is supported (no GENI embeddings)"); }
+    const bool with_vision = fields[0] == "GENI";
+    if (!with_vision && fields[0] != "GEN") {
+        throw std::invalid_argument("only GEN and GENI are supported");
+    }
+    if (with_vision && fields.size() < 4) {
+        throw std::invalid_argument("GENI needs an embeddings file and a prompt");
+    }
 
     Request request;
     request.max_new = std::stoi(fields[1]);
@@ -220,7 +280,8 @@ Request parse_request(const std::string& line) {
     request.options.stop.include_model_defaults       = true;
     request.options.output.preserve_special_tokens    = true;
 
-    for (std::size_t i = 2; i + 1 < fields.size(); ++i) {
+    const std::size_t key_end = with_vision ? fields.size() - 2 : fields.size() - 1;
+    for (std::size_t i = 2; i < key_end; ++i) {
         const std::string& key_value = fields[i];
         const std::size_t eq         = key_value.find('=');
         if (eq == std::string::npos) { continue; }
@@ -241,10 +302,12 @@ Request parse_request(const std::string& line) {
             sampling.frequency_penalty = std::stof(value);
         } else if (key == "seed") {
             sampling.seed = std::stoull(value);
+        } else if (key == "image_pad") {
+            request.image_pad = static_cast<TokenId>(std::stoi(value));
         } else if (key == "penalty_repeat" || key == "penalty_last_n" || key == "turn_at" ||
                    key == "pin" || key == "ckpt" || key == "cvec" || key == "pipe" ||
                    key == "pcie_frac" || key == "spec_min_p" || key == "aux_cpus" ||
-                   key == "image_pad" || key == "img_keys") {
+                   key == "img_keys") {
             // AryaInfer/strata keys with no NInfer equivalent (or handled by the server). The
             // presence penalty arrives as penalty_present; repetition penalties are not modelled.
         } else {
@@ -265,6 +328,11 @@ Request parse_request(const std::string& line) {
         begin = end + 1;
     }
     if (request.ids.empty()) { throw std::invalid_argument("GEN carries no prompt tokens"); }
+    if (with_vision) {
+        if (request.image_pad < 0) { throw std::invalid_argument("GENI carries no image_pad id"); }
+        request.vision = load_sve(fields[fields.size() - 2]);
+        request.options.execution.allow_prefix_reuse = false;   // picture state is not in the token ids
+    }
     return request;
 }
 
@@ -332,6 +400,8 @@ int main(int argc, char** argv) {
     engine_options.speculative.proposal_head = options.head;
     engine_options.speculative.ngram.mode    = ninfer::NgramDraftMode::Off;
     engine_options.use_cuda_graph            = options.use_graphs;
+    engine_options.enable_vision             = options.vision;
+    engine_options.vision_max_tokens         = 1024;   // the server's encoder is pinned to 1024 tokens
     engine_options.context_cache.enabled     = true;
     engine_options.context_cache.host_state_slots     = 8;
     engine_options.context_cache.device_state_slots   = 2;
@@ -371,7 +441,11 @@ int main(int argc, char** argv) {
 
         const std::size_t prompt_tokens = request.ids.size();
         try {
-            auto prepared = engine->prepare_tokens(std::move(request.ids));
+            auto prepared = request.vision.empty()
+                                ? engine->prepare_tokens(std::move(request.ids))
+                                : engine->prepare_tokens_with_vision(
+                                      std::move(request.ids), std::move(request.vision),
+                                      request.image_pad);
             auto handle   = engine->submit(
                 std::move(prepared), std::move(request.options), ninfer::OutputConsumerMode::Streaming,
                 ninfer::GenerationObservationOptions{

@@ -61,9 +61,27 @@
 +
 +inline cudaError_t cudaProfilerStart() { return cudaSuccess; }
 +inline cudaError_t cudaProfilerStop() { return cudaSuccess; }
+--- a/include/ninfer/engine.h
++++ b/include/ninfer/engine.h
+@@ -76,6 +76,15 @@
+     [[nodiscard]] PreparedPrompt prepare_tokens(std::vector<TokenId> token_ids,
+                                                 bool allow_prefix_identity = true) const;
+ 
++    // AryaInfer: raw token input plus precomputed vision embeddings. The ids must contain one
++    // run of `image_pad_token` per external item, each exactly item.rows long; the engine
++    // splices the given BF16 rows over those positions instead of running a vision tower.
++    [[nodiscard]] PreparedPrompt
++    prepare_tokens_with_vision(std::vector<TokenId> token_ids,
++                               std::vector<ExternalVisionItem> items,
++                               TokenId image_pad_token,
++                               bool allow_prefix_identity = true) const;
++
+     // Artifact-tokenizer raw-text encoding. No chat template or implicit special token is added.
+     [[nodiscard]] std::vector<TokenId> tokenize_text(std::string_view text) const;
+ 
 --- a/include/ninfer/types.h
 +++ b/include/ninfer/types.h
-@@ -624,6 +624,12 @@
+@@ -624,6 +624,24 @@
      std::string text;
  };
  
@@ -73,10 +91,22 @@
 +    std::vector<TokenId> token_ids;
 +};
 +
++// AryaInfer: precomputed vision embeddings for one image, in the .sve layout the server's
++// strata-vision encoder writes: `rows` merged tokens, each `columns` BF16 values, arranged as
++// `lines` rows of `nx` tokens. The engine splices these over the image_pad run instead of
++// running its own vision tower.
++struct ExternalVisionItem {
++    std::uint32_t rows    = 0;
++    std::uint32_t nx      = 0;
++    std::uint32_t lines   = 0;
++    std::uint32_t columns = 0;
++    std::vector<std::uint16_t> embeddings_bf16;
++};
++
  // Exact prompt accounting selected at admission. Streaming consumers receive this once before any
  // OutputDelta, after the prefix choice and materialization reservation are committed and before
  // transfer/prefill execution.
-@@ -658,6 +664,9 @@
+@@ -658,6 +676,9 @@
      virtual void progress(PromptProgress progress)          = 0;
      virtual void timing(GenerationTimingObservation timing) = 0;
      virtual void publish(OutputDelta delta)                 = 0;
@@ -371,6 +401,45 @@
                   std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
      try {
          {
+--- a/src/runtime/engine/engine.cpp
++++ b/src/runtime/engine/engine.cpp
+@@ -459,8 +459,34 @@
+         impl_->active);
+ }
+ 
+-std::vector<TokenId> Engine::tokenize_text(std::string_view text) const {
+-    if (impl_ == nullptr) { throw std::logic_error("Engine is moved from"); }
++PreparedPrompt
++Engine::prepare_tokens_with_vision(std::vector<TokenId> token_ids,
++                                   std::vector<ExternalVisionItem> items, TokenId image_pad_token,
++                                   bool allow_prefix_identity) const {
++    nvtx::ScopedRange prepare_range(nvtx::Name::FrontendPrepare, nvtx::Category::Runtime,
++                                    static_cast<std::uint64_t>(token_ids.size()));
++    if (impl_ == nullptr) { throw std::logic_error("Engine is moved from"); }
++    return std::visit(
++        [&](const auto& target_ptr) -> PreparedPrompt {
++            if (target_ptr == nullptr) { throw std::logic_error("Engine target is not active"); }
++            if (token_ids.size() > target_ptr->capacity) {
++                throw RequestError(RequestErrorKind::ContextLengthExceeded,
++                                   context_capacity_error(token_ids.size(), target_ptr->capacity));
++            }
++            auto prepared = target_ptr->loaded->frontend.prepare_tokens_with_vision(
++                std::move(token_ids), std::move(items), image_pad_token, allow_prefix_identity);
++            PromptSummary info = prepared.summary();
++            if (info.prompt_tokens > target_ptr->capacity) {
++                throw std::logic_error("target Frontend admitted prompt tokens beyond capacity");
++            }
++            const PromptPreparationStats preparation = prepared.preparation_stats();
++            return PreparedPrompt(std::make_unique<PreparedPrompt::Impl>(
++                info, preparation, SamplingMode::Thinking, std::move(prepared)));
++        },
++        impl_->active);
++}
++
++std::vector<TokenId> Engine::tokenize_text(std::string_view text) const {    if (impl_ == nullptr) { throw std::logic_error("Engine is moved from"); }
+     return std::visit(
+         [&](const auto& target_ptr) {
+             if (target_ptr == nullptr) { throw std::logic_error("Engine target is not active"); }
 --- a/src/runtime/engine/engine_core.h
 +++ b/src/runtime/engine/engine_core.h
 @@ -885,6 +885,8 @@
@@ -760,9 +829,122 @@
          const auto selected_candidate =
              planned ? std::find_if(candidate_inputs.begin(), candidate_inputs.end(),
                                     [&](const typename Planner::CandidateInput& input) {
+--- a/src/targets/qwen3_6/export/ninfer/targets/qwen3_6/frontend.h
++++ b/src/targets/qwen3_6/export/ninfer/targets/qwen3_6/frontend.h
+@@ -141,6 +141,11 @@
+                                              const PreparationControl& control = {}) const;
+     [[nodiscard]] PreparedPrompt prepare_tokens(std::vector<TokenId> token_ids,
+                                                 bool allow_prefix_identity = true) const;
++    // AryaInfer: raw tokens plus precomputed .sve vision embeddings in place of the tower.
++    [[nodiscard]] PreparedPrompt prepare_tokens_with_vision(std::vector<TokenId> token_ids,
++                                                           std::vector<ExternalVisionItem> items,
++                                                           TokenId image_pad_token,
++                                                           bool allow_prefix_identity = true) const;
+     [[nodiscard]] std::vector<TokenId> tokenize_text(std::string_view text) const;
+     [[nodiscard]] PromptCapabilities prompt_capabilities() const noexcept;
+     [[nodiscard]] MediaCacheSummary media_cache_summary() const;
+--- a/src/targets/qwen3_6/export/ninfer/targets/qwen3_6/prepared_prompt.h
++++ b/src/targets/qwen3_6/export/ninfer/targets/qwen3_6/prepared_prompt.h
+@@ -63,6 +63,10 @@
+     VisionGrid grid;
+     std::size_t patch_begin = 0;
+     std::size_t patch_count = 0;
++    // AryaInfer: precomputed merged-token rows from the server's .sve encoder. When set, the
++    // vision prefill session splices these instead of running the tower for this item.
++    std::vector<std::uint16_t> external_embeddings;
++    std::uint32_t external_columns = 0;
+     // SHA-256 of the owned encoded media bytes. Grid/modality/span identity is carried
+     // separately so this digest binds the content without retaining the request payload.
+     std::array<std::uint8_t, 32> content_digest{};
 --- a/src/targets/qwen3_6/impl/frontend/frontend.cpp
 +++ b/src/targets/qwen3_6/impl/frontend/frontend.cpp
-@@ -1595,7 +1595,19 @@
+@@ -1524,6 +1524,85 @@
+     return PreparedPrompt(std::move(prepared));
+ }
+ 
++PreparedPrompt Frontend::prepare_tokens_with_vision(std::vector<TokenId> token_ids,
++                                                    std::vector<ExternalVisionItem> items,
++                                                    TokenId image_pad_token,
++                                                    bool allow_prefix_identity) const {
++    const auto start = Clock::now();
++    if (items.empty()) {
++        throw std::invalid_argument("external vision requires at least one item");
++    }
++    if (token_ids.size() > impl_->max_context) {
++        throw_context_length_exceeded(impl_->max_context);
++    }
++    (void)checked_token_count(token_ids.size());
++    for (const TokenId token : token_ids) {
++        if (!impl_->tokenizer->is_valid_token(token)) {
++            throw std::out_of_range("prompt token is outside the checkpoint vocabulary: " +
++                                    std::to_string(token));
++        }
++    }
++    auto prepared              = std::make_unique<PreparedPromptData>();
++    PreparedPromptData& result = *prepared;
++    result.token_ids           = std::move(token_ids);
++    assign_text_positions(result);
++    // External embeddings are not part of the token ids, so two prompts with different
++    // pictures would look identical to the prefix cache. Do not publish or take a cached
++    // prefix for a vision prompt: stale picture state is worse than a cold prefill.
++    result.identity.reusable                  = false;
++    result.context_cache.retention            = runtime::RetentionClass::RecentPrivate;
++    result.context_cache.update_session_index = false;
++
++    std::size_t cursor       = 0;
++    std::size_t patch_cursor = 0;
++    std::uint64_t vision_tokens = 0;
++    for (ExternalVisionItem& item : items) {
++        const std::uint64_t merged_tokens =
++            static_cast<std::uint64_t>(item.nx) * static_cast<std::uint64_t>(item.lines);
++        const std::uint64_t embedding_values =
++            static_cast<std::uint64_t>(item.rows) * static_cast<std::uint64_t>(item.columns);
++        if (item.rows == 0 || item.nx == 0 || item.lines == 0 || item.columns == 0 ||
++            merged_tokens != item.rows || embedding_values != item.embeddings_bf16.size()) {
++            throw std::invalid_argument("external vision item has an invalid shape");
++        }
++        while (cursor < result.token_ids.size() && result.token_ids[cursor] != image_pad_token) {
++            ++cursor;
++        }
++        const std::size_t begin = cursor;
++        while (cursor < result.token_ids.size() && result.token_ids[cursor] == image_pad_token) {
++            ++cursor;
++        }
++        if (cursor - begin != item.rows) {
++            throw std::invalid_argument("external vision item does not match an image_pad run");
++        }
++        for (std::size_t index = begin; index < cursor; ++index) {
++            result.token_types[index] = static_cast<std::uint8_t>(PromptModality::Image);
++        }
++        VisionItem vision;
++        vision.modality = PromptModality::Image;
++        vision.grid = VisionGrid{.temporal = 1,
++                                 .height   = static_cast<std::int32_t>(2 * item.lines),
++                                 .width    = static_cast<std::int32_t>(2 * item.nx)};
++        vision.patch_begin    = patch_cursor;
++        vision.patch_count    = static_cast<std::size_t>(4) * item.rows;
++        vision.token_spans.push_back(TokenSpan{.begin = begin, .count = item.rows});
++        vision.external_embeddings = std::move(item.embeddings_bf16);
++        vision.external_columns    = item.columns;
++        patch_cursor += vision.patch_count;
++        vision_tokens += item.rows;
++        result.vision_items.push_back(std::move(vision));
++        result.prepare.media_items += 1;
++    }
++    if (std::find(result.token_ids.begin() + static_cast<std::ptrdiff_t>(cursor),
++                  result.token_ids.end(), image_pad_token) != result.token_ids.end()) {
++        throw std::invalid_argument("prompt has image_pad tokens with no external vision item");
++    }
++    result.prepare.raw_patches   = patch_cursor;
++    result.prepare.vision_tokens = vision_tokens;
++    result.prepare.seconds       = std::chrono::duration<double>(Clock::now() - start).count();
++    return PreparedPrompt(std::move(prepared));
++}
++
+ std::uint32_t Frontend::count_tokens(PromptInput input, const PreparationControl& control) const {
+     fi::check_preparation_control(control);
+     const PromptOptions options           = input.options;
+@@ -1595,7 +1674,19 @@
      assign_text_positions(result);
      result.identity.reusable                  = allow_prefix_identity;
      result.context_cache.retention            = runtime::RetentionClass::RecentPrivate;
@@ -811,3 +993,176 @@
  
  template <>
  CapturePressureCandidate<NINFER_QWEN36_VARIANT>::~CapturePressureCandidate() = default;
+--- a/src/targets/qwen3_6/impl/runtime/program_impl.h
++++ b/src/targets/qwen3_6/impl/runtime/program_impl.h
+@@ -4456,17 +4456,27 @@
+             throw std::logic_error("free request lane retained prefill bookkeeping");
+         }
+         if (request_plan.vision) {
+-            std::vector<bool> used(prompt.media_payloads.size(), false);
++            // External (precomputed) media has vision items but no tower payloads; the
++            // plan's item indices then address vision_items rather than media_payloads.
++            const bool external_media =
++                prompt.media_payloads.empty() && !prompt.vision_items.empty() &&
++                std::all_of(prompt.vision_items.begin(), prompt.vision_items.end(),
++                            [](const auto& item) { return !item.external_embeddings.empty(); });
++            std::vector<bool> used(external_media ? prompt.vision_items.size()
++                                                  : prompt.media_payloads.size(),
++                                   false);
+             for (const VisionUseSpan& use : request_plan.vision->uses) {
+                 if (use.prepared_item_index >= used.size()) {
+                     throw std::logic_error("Vision plan references a missing media payload");
+                 }
+                 used[use.prepared_item_index] = true;
+             }
+-            for (std::size_t index = 0; index < used.size(); ++index) {
+-                if (!used[index]) {
+-                    prompt.media_payloads[index].reset();
+-                    continue;
++            if (!external_media) {
++                for (std::size_t index = 0; index < used.size(); ++index) {
++                    if (!used[index]) {
++                        prompt.media_payloads[index].reset();
++                        continue;
++                    }
+                 }
+             }
+             VisionPrefillPlan& vision      = *request_plan.vision;
+--- a/src/targets/qwen3_6/impl/runtime/request_plan_impl.h
++++ b/src/targets/qwen3_6/impl/runtime/request_plan_impl.h
+@@ -232,8 +232,13 @@
+         prompt.positions.size() != 3ULL * prompt.token_ids.size()) {
+         throw std::invalid_argument("prepared prompt token metadata has an invalid shape");
+     }
+-    if (prompt.has_media() != !prompt.media_payloads.empty() ||
+-        prompt.media_payloads.size() != prompt.vision_items.size()) {
++    // AryaInfer: external vision items carry their embeddings, so they need no media payload.
++    const bool external_media =
++        prompt.has_media() &&
++        std::all_of(prompt.vision_items.begin(), prompt.vision_items.end(),
++                    [](const auto& item) { return !item.external_embeddings.empty(); });
++    if ((!external_media && prompt.has_media() != !prompt.media_payloads.empty()) ||
++        prompt.media_payloads.size() != (external_media ? 0U : prompt.vision_items.size())) {
+         throw std::invalid_argument("prepared prompt media payload is incomplete");
+     }
+     for (std::size_t i = 0; i < prompt.media_payloads.size(); ++i) {
+--- a/src/targets/qwen3_6/impl/runtime/vision_context.h
++++ b/src/targets/qwen3_6/impl/runtime/vision_context.h
+@@ -118,7 +118,9 @@
+     qwen3_6::PreparedPromptData& prompt_;
+     const VisionPrefillPlan& plan_;
+     std::size_t& handoff_peak_bytes_;
+-    VisionContext context_;
++    // AryaInfer: constructed lazily so an external-embedding prompt never needs the tower.
++    std::optional<VisionContext> context_;
++    const LoadedModelData* model_ = nullptr;
+     std::size_t next_use_ = 0;
+     std::optional<std::uint32_t> active_item_;
+     std::size_t active_handoff_bytes_ = 0;
+--- a/src/targets/qwen3_6/impl/runtime/vision_context_impl.h
++++ b/src/targets/qwen3_6/impl/runtime/vision_context_impl.h
+@@ -395,7 +395,7 @@
+                                            const VisionPrefillPlan& plan,
+                                            std::size_t& handoff_peak_bytes)
+     : device_(device), workspace_(workspace), workspace_plan_(workspace_plan), prompt_(prompt),
+-      plan_(plan), handoff_peak_bytes_(handoff_peak_bytes), context_(device, model) {
++      plan_(plan), handoff_peak_bytes_(handoff_peak_bytes), model_(&model) {
+     if (plan_.control == nullptr || plan_.control->items.empty() || plan_.uses.empty()) {
+         throw std::invalid_argument("Vision prefill plan has no suffix item spans");
+     }
+@@ -410,15 +410,16 @@
+             use.end > prompt_.token_ids.size()) {
+             throw std::invalid_argument("Vision suffix item spans are invalid or unordered");
+         }
++        const qwen3_6::VisionItemControl& control = plan_.control->items[use.control_index];
++        const qwen3_6::VisionItem& source         = prompt_.vision_items[use.prepared_item_index];
++        const bool external = !source.external_embeddings.empty();
+         if (use.control_index >= plan_.control->items.size() ||
+             use.prepared_item_index >= prompt_.vision_items.size() ||
+-            use.prepared_item_index >= prompt_.media_payloads.size() ||
++            (!external && use.prepared_item_index >= prompt_.media_payloads.size()) ||
+             plan_.control->prepared_item_begin + use.control_index != use.prepared_item_index ||
+             (previous_item && use.prepared_item_index <= *previous_item)) {
+             throw std::invalid_argument("Vision suffix item indices are invalid or unordered");
+         }
+-        const qwen3_6::VisionItemControl& control = plan_.control->items[use.control_index];
+-        const qwen3_6::VisionItem& source         = prompt_.vision_items[use.prepared_item_index];
+         if (control.scatter_indices.empty() ||
+             use.end != static_cast<std::uint32_t>(control.scatter_indices.back()) + 1U ||
+             (use.begin != static_cast<std::uint32_t>(control.scatter_indices.front()) &&
+@@ -434,13 +435,25 @@
+         }
+         const Tensor output =
+             VisionContext::bind_output(workspace_, workspace_plan_, control.merged_count);
+-        const std::size_t patch_elements = checked_mul(
+-            control.patch_count, static_cast<std::size_t>(VisionScheduleConfig::patch_dim),
+-            "item patch elements");
+-        const auto& payload = prompt_.media_payloads[use.prepared_item_index];
+-        if (output.bytes() > workspace_plan_.handoff_capacity_bytes || !payload ||
+-            payload->patch_elements != patch_elements) {
++        if (output.bytes() > workspace_plan_.handoff_capacity_bytes) {
+             throw std::invalid_argument("Vision suffix item storage has an invalid shape");
++        }
++        if (external) {
++            const std::size_t row_elements = checked_mul(
++                control.merged_count, static_cast<std::size_t>(source.external_columns),
++                "external vision embeddings");
++            if (source.external_columns != VisionScheduleConfig::out_hidden ||
++                source.external_embeddings.size() != row_elements) {
++                throw std::invalid_argument("External vision embeddings have an invalid shape");
++            }
++        } else {
++            const std::size_t patch_elements = checked_mul(
++                control.patch_count, static_cast<std::size_t>(VisionScheduleConfig::patch_dim),
++                "item patch elements");
++            const auto& payload = prompt_.media_payloads[use.prepared_item_index];
++            if (!payload || payload->patch_elements != patch_elements) {
++                throw std::invalid_argument("Vision suffix item storage has an invalid shape");
++            }
+         }
+         previous_end  = use.end;
+         previous_item = use.prepared_item_index;
+@@ -481,24 +494,34 @@
+     Tensor output = VisionContext::bind_output(workspace_, workspace_plan_, control.merged_count);
+ 
+     if (!active_item_ || *active_item_ != active->prepared_item_index) {
+-        const auto& payload = prompt_.media_payloads[active->prepared_item_index];
+-        timers_.emplace_back(device_);
+-        timers_.back().start();
+-        context_.encode(VisionItemView{payload->span(), &control}, output, workspace_,
+-                        workspace_plan_);
+-        timers_.back().record_stop();
++        const qwen3_6::VisionItem& item = prompt_.vision_items[active->prepared_item_index];
++        if (!item.external_embeddings.empty()) {
++            if (item.external_embeddings.size() * sizeof(std::uint16_t) != output.bytes()) {
++                throw std::logic_error("External vision embeddings do not match the handoff");
++            }
++            copy_host(item.external_embeddings.data(), output, device_.stream);
++        } else {
++            if (!context_) { context_.emplace(device_, *model_); }
++            const auto& payload = prompt_.media_payloads[active->prepared_item_index];
++            timers_.emplace_back(device_);
++            timers_.back().start();
++            context_->encode(VisionItemView{payload->span(), &control}, output, workspace_,
++                             workspace_plan_);
++            timers_.back().record_stop();
++            encoded_payloads_pending_release_.push_back(active->prepared_item_index);
++        }
+         active_item_          = active->prepared_item_index;
+         active_handoff_bytes_ = output.bytes();
+         handoff_peak_bytes_   = std::max(handoff_peak_bytes_, active_handoff_bytes_);
+-        encoded_payloads_pending_release_.push_back(active->prepared_item_index);
+     }
+     return VisionChunk{static_cast<std::int32_t>(end - begin), &control, output};
+ }
+ 
+ void VisionPrefillSession::release_encoded_media_payloads() noexcept {
+     for (const std::uint32_t item_index : encoded_payloads_pending_release_) {
+-        if (item_index >= prompt_.media_payloads.size()) { std::terminate(); }
+-        prompt_.media_payloads[item_index].reset();
++        if (item_index < prompt_.media_payloads.size()) {
++            prompt_.media_payloads[item_index].reset();
++        }
+     }
+     encoded_payloads_pending_release_.clear();
+ }

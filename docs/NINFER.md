@@ -98,11 +98,28 @@ Thinking modes: off is silent, low / medium / high produced 1,384 / 1,483 /
 the model. The shipped budgets are 20% above the earlier fleet defaults:
 off 0, low 4,800, medium 9,600, high 12,000.
 
+## Vision
+
+Images work through the same path as the other non-native engines: the server's
+`strata-vision` encoder (CPU, one 1,024-token grid) writes an `.sve` file and
+sends it on a `GENI` line; the shim reads the embeddings and the engine splices
+them over the `<|image_pad|>` run instead of running its own tower. The
+`.ninfer` artifact has no vision tower, so the encoder's `model` field points
+at the AQ3 GGUF for the tokenizer metadata.
+
+Measured through the server: a 512×512 red PNG answered `"Red"` in 11.3 s
+(1,052 prompt tokens, 1,880 ms prefill) and a blue PNG answered `"Blue"` with
+identical prompt ids and `cache_n 0`. Image prompts never reuse a cached
+prefix, because the picture is not in the token ids and a stale one would be
+wrong; text prompts keep the 775/776-token reuse.
+
+The config runs with `--no-cuda-graph`: with vision enabled and two device
+state slots the 131,072-token reservation did not fit (3,519,094,016 bytes
+requested against 3,361,206,272 available), and eager mode fits.
+
 ## What is not supported
 
-- **Vision**: no `vision` key in the config, images are off. The shim only
-  implements the `GEN` command.
-- **Embeddings**: `GENI` returns an error.
+- **Embeddings**: `GENI` is the vision path; there is no embeddings API.
 - **Repetition penalties**: the shim passes temperature, top_p, top_k, min_p
   and seed, but not `penalty_repeat`, `penalty_present` or `penalty_freq`.
   The default config has presence 0.0, so the default path is unaffected; a
@@ -133,6 +150,11 @@ on this host:
    speculative round whose topology changed.
 8. `NINFER_ARYAINFER_SHIM` in `apps/CMakeLists.txt`, which builds
    `ninfer-engine` from `engine-ninfer/shim/main.cpp`.
+9. External vision: `ExternalVisionItem` and `prepare_tokens_with_vision` in
+   the public API; the frontend fills `vision_items` from the `image_pad`
+   runs, the plan check accepts media with no tower payloads, and
+   `VisionPrefillSession::prepare_chunk` uploads the `.sve` rows instead of
+   calling the tower. Image prompts neither publish nor take a cached prefix.
 
 The debug prints in the patch are gated by `NINFER_DEBUG_CACHE`; a normal run
 is silent. `NINFER_DEBUG_CACHE=1` prints selection and planner lines to the
