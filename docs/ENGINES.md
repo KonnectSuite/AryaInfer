@@ -73,6 +73,13 @@ the Flash-Next and AQ3 rows read JSON/HTTP requests, the NInfer row reads a
 fixed token corpus, and the 35B rows read long synthetic prompts. Compare
 within a row, not across engines.
 
+Four installed profiles have **no speed row here**: Qwen3.8-27B Turbo IQ3_XXS,
+Qwen3.5-4B Q4_K_M, Swift 1.5 IQ3_XXS and Swift 1.5 Abliterated IQ3_XXS. They
+run daily on this host; their speeds were not re-measured on the current
+engine builds, so no number is claimed for them. The Swift 1.5 IQ3_XXS
+headline against a cloud API is documented in
+[BENCHMARK_GOJO_SWIFT_VS_DEEPSEEK.md](BENCHMARK_GOJO_SWIFT_VS_DEEPSEEK.md).
+
 ### Strata 0.1.58 (November 7, 2026) - Qwen3.8-Flash-Next IQ3_XXS
 
 DFlash2, `--kv int8`, 32K resident KV, 262,144 context, temperature 0.3. One
