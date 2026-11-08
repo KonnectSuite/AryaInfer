@@ -14,13 +14,20 @@ audit.
 ## Where things stand
 
 - Repo: `C:\Users\KNPhu\AryaCode\KonnectSuite\AryaInfer`, branch `main`,
-  HEAD `44f02a28`, pushed to `origin` (KonnectSuite/AryaInfer).
+  HEAD `dadb269e`, pushed to `origin` (KonnectSuite/AryaInfer).
 - Recent commits:
+  - `dadb269e` docs: mark translations as describing the 0.1.45 two-engine world
+  - `634b1354` docs: name the installed profiles that carry no speed row
+  - `4975f7ee` docs: refresh per-family pages against the current roster
+  - `733cde36` docs: record the showcase pass in the handoff
   - `44f02a28` docs: repair double-encoded text in benchmark and family pages
-  - `ead9402c` docs: record voxel runs and correct decode speeds
-  - `e88902fa` docs: point PolyStrata links at the simplexai-labs transfer
-  - `fff819ae` docs: add gojo voxel swift vs deepseek showcase
-  - `28caa40d` docs: hand off the public documentation refresh
+- **The remaining-work list below is done** (2026-11-08): per-family pages
+  refreshed (Q8 banner, QWEN38-27B current summary, PLC_SAMPLING NInfer
+  thinking row + Qwen3.5-4B row, MODELS.md installed-ten table); ENGINES.md
+  names the four installed profiles with no speed row; translations carry a
+  staleness banner pointing at the English README; link/claim audit clean
+  (all root+docs links resolve, ENGINES anchors live, counts consistent);
+  `aryainfer_names.py --check` exits 0.
 - Progress on the remaining-work list below (2026-11-08, this session):
   - **Headline showcase added**: `README.md` now leads with the Gojo Voxel
     comparison (local Swift 1.5 IQ3_XXS vs the DeepSeek v4 Flash API, same
