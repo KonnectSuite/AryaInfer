@@ -14,12 +14,31 @@ audit.
 ## Where things stand
 
 - Repo: `C:\Users\KNPhu\AryaCode\KonnectSuite\AryaInfer`, branch `main`,
-  HEAD `06540c89`, pushed to `origin` (KonnectSuite/AryaInfer).
+  HEAD `44f02a28`, pushed to `origin` (KonnectSuite/AryaInfer).
 - Recent commits:
-  - `06540c89` docs: name the installed PolyStrata build exactly
-  - `35b9bd38` docs: four engines, one inference space
-  - `790fdaa4` engine: update the native Strata engine to 0.1.58
-  - `c1d0d577` engine-ninfer: AryaCode tuning, fit_max_tokens and the MTP flag
+  - `44f02a28` docs: repair double-encoded text in benchmark and family pages
+  - `ead9402c` docs: record voxel runs and correct decode speeds
+  - `e88902fa` docs: point PolyStrata links at the simplexai-labs transfer
+  - `fff819ae` docs: add gojo voxel swift vs deepseek showcase
+  - `28caa40d` docs: hand off the public documentation refresh
+- Progress on the remaining-work list below (2026-11-08, this session):
+  - **Headline showcase added**: `README.md` now leads with the Gojo Voxel
+    comparison (local Swift 1.5 IQ3_XXS vs the DeepSeek v4 Flash API, same
+    prompt hash, same harness) with side-by-side renders, in-browser
+    recordings (`.webp`), and a UI-screenshots section. Full write-up:
+    `docs/BENCHMARK_GOJO_SWIFT_VS_DEEPSEEK.md`, artifacts under
+    `docs/benchmarks/gojo-voxel/`.
+  - **PolyStrata links**: the canonical org is now
+    `https://github.com/simplexai-labs/PolyStrata` (VecSzn's account was
+    flagged and the repo transferred; VecSzn remains the author). Applied
+    repo-wide.
+  - **Decode speeds corrected**: harness `usage.outputTokens` counts visible
+    output only; reasoning streams on top. The Gojo numbers are ~99 tok/s
+    (local) and ~233 tok/s (API) all-streamed, not the 49.3/116.5 visible-only
+    rates.
+  - **Section 3 (encoding damage) is done**: targeted cp1252 round-trip
+    repairs across 11 files; remaining `Â`/`â€`/`U+FFFD` hits are only the
+    intentional scan-pattern literals in this file (lines 97 and 101).
 - Working tree: `models.json` is modified and `docs/QWEN35-4B.md` is untracked.
   Both are the user's files. Leave them alone; do not commit them.
 - Installed engines:
