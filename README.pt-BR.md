@@ -1,5 +1,7 @@
 > **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](docs/ARYAINFER.md).
 
+> **Nota:** esta tradução descreve a versão de dois motores 0.1.45. O [README em inglês](README.md) é a versão autoritativa e descreve o estado atual com quatro backends e o motor 0.1.58.
+
 <h1 align="center">AryaInfer</h1>
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Español](README.es.md) · **Português**
