@@ -94,8 +94,8 @@ clearly as historical or refresh the stale claims. Do not invent numbers.
 ### 3. Encoding damage
 
 Several inherited files contain mojibake, for example `README.md` line 5
-(`Â·`), line 9-16 (`â€™`), and the `MODEL_ROSTER_HOST_RESULTS.md` title
-(`â€”`). `docs/DETAILS.md`, `docs/MODELS.md` and
+(`·`), line 9-16 (`â€™`), and the `MODEL_ROSTER_HOST_RESULTS.md` title
+(`—`). `docs/DETAILS.md`, `docs/MODELS.md` and
 `docs/COMMUNITY_BENCHMARKS.md` have the same banner. Fix only when you can do it
 without changing meaning: read UTF-8, write UTF-8 without BOM, then grep for
 `U+FFFD` (`\uFFFD`) and for the literal `Â`/`â€` sequences.

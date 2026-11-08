@@ -67,9 +67,9 @@ number and no patched-engine substitute in this comparison.
 | Q4_K_XL, MTP T4 | 0.1.40 | **257.6** | 3.035 | **5.024** | **101.9** |
 | Q4_K_XL, no MTP | 0.1.39 | 118.5 | 3.017 | 7.340 | 69.8 |
 | Q4_K_XL, no MTP | 0.1.40 | **129.9** | 3.115 | **7.057** | **72.6** |
-| Q8_0, MTP T4 | 0.1.39 | Unsupported Q8 PLE | â€” | â€” | â€” |
+| Q8_0, MTP T4 | 0.1.39 | Unsupported Q8 PLE | — | — | — |
 | Q8_0, MTP T4 | 0.1.40 | **140.2** | 12.812 | 16.465 | 31.1 |
-| Q8_0, no MTP | 0.1.39 | Unsupported Q8 PLE | â€” | â€” | â€” |
+| Q8_0, no MTP | 0.1.39 | Unsupported Q8 PLE | — | — | — |
 | Q8_0, no MTP | 0.1.40 | **82.6** | 12.790 | 18.989 | 27.0 |
 
 Decode is committed output count / engine decode time. Effective throughput is

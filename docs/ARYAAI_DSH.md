@@ -172,7 +172,7 @@ new model metadata is used.
 
 ## Context and output budget
 
-The model labelâ€™s 256K means 256 Ã— 1,024 = 262,144 tokens.
+The model label’s 256K means 256 × 1,024 = 262,144 tokens.
 262,144 is the total context ceiling, not a guaranteed amount of user text plus
 unlimited output. An 8,192-token output allowance leaves at most 253,952 input
 tokens before any additional system/tool budgeting, and compaction can start

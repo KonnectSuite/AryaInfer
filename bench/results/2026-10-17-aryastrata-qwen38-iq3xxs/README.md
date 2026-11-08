@@ -1,6 +1,6 @@
 # Qwen3.8 Flash Next IQ3_XXS on the AryaStrata host
 
-Measured October 17, 2026 (America/New_York). AryaStrata is a fork of [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221â€™s original Strata](https://github.com/Niko1221/Strata). These are measurements on our own host, using upstream release engine 0.1.45; no custom engine build or engine-code speedup is claimed.
+Measured October 17, 2026 (America/New_York). AryaStrata is a fork of [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). These are measurements on our own host, using upstream release engine 0.1.45; no custom engine build or engine-code speedup is claimed.
 
 ## Host and model
 
@@ -19,27 +19,27 @@ Measured October 17, 2026 (America/New_York). AryaStrata is a fork of [PolyStrat
 --adapt-every 1 --adapt-swaps 80 --adapt-decay 0.97
 ```
 
-The launch requests MTP `--spec 4`; the default suffix drafter can extend lookup windows to 6, as recorded in the engine metadata. Vision is off. The server listens only on `127.0.0.1:8080`; `fit_max_tokens` is enabled. These are per-install settings, not changes to defaults for other hardware. The context ceiling restores the old installationâ€™s 262,144-token ceiling. A ceiling is not a claim that every task succeeds at that length.
+The launch requests MTP `--spec 4`; the default suffix drafter can extend lookup windows to 6, as recorded in the engine metadata. Vision is off. The server listens only on `127.0.0.1:8080`; `fit_max_tokens` is enabled. These are per-install settings, not changes to defaults for other hardware. The context ceiling restores the old installation’s 262,144-token ceiling. A ceiling is not a claim that every task succeeds at that length.
 
 ## Same-context API comparison
 
-Both runs use the same release binary, model, 262K ceiling, int8 KV, 32K resident KV, 1,792 MiB VRAM reserve and 15 workers. The baseline uses the new installationâ€™s automatic/default PCIe, draft-floor and expert-cache settings; the tuned run pins the settings above. Each starts a fresh engine, warms it, then runs the same benchmark suite. The full phases ran sequentially (baseline, then tuned), not in alternating order.
+Both runs use the same release binary, model, 262K ceiling, int8 KV, 32K resident KV, 1,792 MiB VRAM reserve and 15 workers. The baseline uses the new installation’s automatic/default PCIe, draft-floor and expert-cache settings; the tuned run pins the settings above. Each starts a fresh engine, warms it, then runs the same benchmark suite. The full phases ran sequentially (baseline, then tuned), not in alternating order.
 
 Values are medians with observed ranges and sample counts. Engine timings measure prompt/decode speeds; first-token and full-response latency are client HTTP timings. Short chat is a mixed three-question workload, including one coding prompt. Agent-style speed sessions summarize repository files with four tool schemas present; they do not execute edits. Correctness is tested separately below.
 
 | Metric | New-install baseline, 262K ceiling | Tuned, 262K ceiling |
 | --- | ---: | ---: |
-| Short-chat generation, tokens/s | 76.4 (59.8â€“89.4; n=9) | 86.1 (70.0â€“105.0; n=9) |
-| Short-chat first token, s | 0.447 (0.375â€“0.892; n=9) | 0.368 (0.321â€“0.771; n=9) |
-| Fresh 4K prompt, tokens/s | 2058.9 (1908.1â€“2068.8; n=3) | 2037.7 (1873.9â€“2075.3; n=3) |
-| Fresh 16K prompt, tokens/s | 2879.2 (2789.2â€“2951.2; n=3) | 2983.3 (2887.6â€“2983.8; n=3) |
-| Fresh 32K prompt, tokens/s | 2933.7 (2898.9â€“2947.4; n=3) | 2915.0 (2913.3â€“2941.4; n=3) |
-| Fresh 32K first token, s | 10.961 (10.914â€“11.093; n=3) | 11.032 (10.931â€“11.035; n=3) |
-| Agent-style generation, tokens/s | 86.8 (52.1â€“110.7; n=15) | 95.6 (58.1â€“112.6; n=15) |
-| Agent-style follow-up first token, s | 2.105 (1.893â€“2.278; n=15) | 2.122 (1.975â€“2.226; n=15) |
-| Agent-style cache reuse, % | 66.91 (66.78â€“66.98; n=3) | 66.80 (66.80â€“67.01; n=3) |
-| Extra old tokens re-read / session | 73.0 (4.0â€“74.0; n=3) | 71.0 (4.0â€“72.0; n=3) |
-| Two queued clients, total tokens/s | 57.38 (54.71â€“62.07; n=3) | 55.61 (53.36â€“61.29; n=3) |
+| Short-chat generation, tokens/s | 76.4 (59.8–89.4; n=9) | 86.1 (70.0–105.0; n=9) |
+| Short-chat first token, s | 0.447 (0.375–0.892; n=9) | 0.368 (0.321–0.771; n=9) |
+| Fresh 4K prompt, tokens/s | 2058.9 (1908.1–2068.8; n=3) | 2037.7 (1873.9–2075.3; n=3) |
+| Fresh 16K prompt, tokens/s | 2879.2 (2789.2–2951.2; n=3) | 2983.3 (2887.6–2983.8; n=3) |
+| Fresh 32K prompt, tokens/s | 2933.7 (2898.9–2947.4; n=3) | 2915.0 (2913.3–2941.4; n=3) |
+| Fresh 32K first token, s | 10.961 (10.914–11.093; n=3) | 11.032 (10.931–11.035; n=3) |
+| Agent-style generation, tokens/s | 86.8 (52.1–110.7; n=15) | 95.6 (58.1–112.6; n=15) |
+| Agent-style follow-up first token, s | 2.105 (1.893–2.278; n=15) | 2.122 (1.975–2.226; n=15) |
+| Agent-style cache reuse, % | 66.91 (66.78–66.98; n=3) | 66.80 (66.80–67.01; n=3) |
+| Extra old tokens re-read / session | 73.0 (4.0–74.0; n=3) | 71.0 (4.0–72.0; n=3) |
+| Two queued clients, total tokens/s | 57.38 (54.71–62.07; n=3) | 55.61 (53.36–61.29; n=3) |
 | Two queued clients, p95 response latency, s | 4.624 | 4.749 |
 
 The observed short-chat median changed by **+12.7%**. Run ranges overlap: this is a workload-specific observation, not a universal speed guarantee. Prompt speeds and agent latency must be assessed separately; a faster short answer does not establish faster repository work. The engine still serves one request at a time: the two-client test measures queuing, not batch-parallel decoding.
@@ -53,26 +53,26 @@ The built-in calibration ran before the API comparison. It sweeps seven PCIe sha
 
 | Candidate | Median tokens/s | Range |
 | --- | ---: | ---: |
-| PCIe: 0.0 | 78.2 | 70.8â€“89.9 (n=3) |
-| PCIe: 0.2 | 87.3 | 81.2â€“91.7 (n=3) |
-| PCIe: 0.35 | 73.1 | 66.6â€“80.2 (n=3) |
-| PCIe: 0.55 | 63.1 | 59.4â€“66.5 (n=3) |
-| PCIe: 0.75 | 55.1 | 50.0â€“57.1 (n=3) |
-| PCIe: 0.9 | 51.1 | 47.9â€“51.2 (n=3) |
-| PCIe: 1.0 | 42.3 | 40.0â€“42.8 (n=3) |
-| Draft floor: 0.3 | 78.7 | 63.2â€“83.8 (n=3) |
-| Draft floor: 0.5 | 75.7 | 75.1â€“77.7 (n=3) |
-| Draft floor: 0.7 | 82.5 | 80.4â€“98.6 (n=3) |
-| Confirmation PCIe/floor: 0.55/0.5 | 58.6 | 58.3â€“66.5 (n=3) |
-| Confirmation PCIe/floor: 0.2/0.7 | 90.6 | 86.1â€“97.1 (n=3) |
-| Workers: 23 | 82.5 | 77.5â€“87.6 (n=2) |
-| Workers: 15 | 91.2 | 89.9â€“92.4 (n=2) |
-| Workers: 12 | 85.9 | 81.2â€“90.7 (n=2) |
-| Workers: 6 | 82.1 | 81.0â€“83.3 (n=2) |
-| Workers: 7 | 89.4 | 89.1â€“89.6 (n=2) |
-| Cache every/swaps/decay: default | 95.9 | 89.8â€“102.0 (n=2) |
-| Cache every/swaps/decay: 1/80/0.97 | 103.9 | 103.6â€“104.2 (n=2) |
-| Cache every/swaps/decay: 1/160/0.97 | 96.1 | 95.3â€“96.9 (n=2) |
+| PCIe: 0.0 | 78.2 | 70.8–89.9 (n=3) |
+| PCIe: 0.2 | 87.3 | 81.2–91.7 (n=3) |
+| PCIe: 0.35 | 73.1 | 66.6–80.2 (n=3) |
+| PCIe: 0.55 | 63.1 | 59.4–66.5 (n=3) |
+| PCIe: 0.75 | 55.1 | 50.0–57.1 (n=3) |
+| PCIe: 0.9 | 51.1 | 47.9–51.2 (n=3) |
+| PCIe: 1.0 | 42.3 | 40.0–42.8 (n=3) |
+| Draft floor: 0.3 | 78.7 | 63.2–83.8 (n=3) |
+| Draft floor: 0.5 | 75.7 | 75.1–77.7 (n=3) |
+| Draft floor: 0.7 | 82.5 | 80.4–98.6 (n=3) |
+| Confirmation PCIe/floor: 0.55/0.5 | 58.6 | 58.3–66.5 (n=3) |
+| Confirmation PCIe/floor: 0.2/0.7 | 90.6 | 86.1–97.1 (n=3) |
+| Workers: 23 | 82.5 | 77.5–87.6 (n=2) |
+| Workers: 15 | 91.2 | 89.9–92.4 (n=2) |
+| Workers: 12 | 85.9 | 81.2–90.7 (n=2) |
+| Workers: 6 | 82.1 | 81.0–83.3 (n=2) |
+| Workers: 7 | 89.4 | 89.1–89.6 (n=2) |
+| Cache every/swaps/decay: default | 95.9 | 89.8–102.0 (n=2) |
+| Cache every/swaps/decay: 1/80/0.97 | 103.9 | 103.6–104.2 (n=2) |
+| Cache every/swaps/decay: 1/160/0.97 | 96.1 | 95.3–96.9 (n=2) |
 
 The old Strata configuration already pinned PCIe 0.20, draft floor 0.70 and 15 workers, with 160 cache swaps. The new calibration favored 80 swaps. This report does **not** compare the old engine binary with the new engine; neither the API baseline nor the calibration-default comparison should be presented as that claim. The old vision-enabled configuration was not benchmarked here.
 
@@ -85,11 +85,11 @@ Three small Python bug-fix fixtures cover merging sorted lists, chunking with in
 | none | 9/9 | 4.74 |
 | low | 9/9 | 6.49 |
 
-Each row is three fixtures Ã— three runs. These few tests cannot establish general coding quality. Use the raw traces to inspect failed or repaired attempts; reasoning settings are choices per task, not interchangeable quality guarantees. The existing development-profile reasoning preference was preserved.
+Each row is three fixtures × three runs. These few tests cannot establish general coding quality. Use the raw traces to inspect failed or repaired attempts; reasoning settings are choices per task, not interchangeable quality guarantees. The existing development-profile reasoning preference was preserved.
 
 ## AryaAI development DSH transport
 
-The development runtimeâ€™s actual `dsh-llm-pi-ai` adapter (0.2.0-rc.2) and `BlockAssembler` ran 3 streaming tool-call/tool-result-replay trials: **3/3 passed**. The tool result contains a known build label which the final answer must reproduce. The probe uses the same 262K context, 8,192-token output capability, gateway output-budget mode and text-only metadata as the updated profile, with reasoning off. It uses a public placeholder against loopback and reads no account credentials.
+The development runtime’s actual `dsh-llm-pi-ai` adapter (0.2.0-rc.2) and `BlockAssembler` ran 3 streaming tool-call/tool-result-replay trials: **3/3 passed**. The tool result contains a known build label which the final answer must reproduce. The probe uses the same 262K context, 8,192-token output capability, gateway output-budget mode and text-only metadata as the updated profile, with reasoning off. It uses a public placeholder against loopback and reads no account credentials.
 The active development desktop profile still selects provider `strata`, model `qwen3.8-flash-next-iq3_xxs`, endpoint `http://127.0.0.1:8080/v1`. Its label and capabilities were corrected, with a local backup. This is an adapter/replay test, **not** a fully exercised native desktop session, compaction, approval, recovery or large-repository workflow. The authenticated desktop API was not used.
 
 ## Long-context recall
@@ -98,10 +98,10 @@ The configured ceiling is 262,144 tokens. The ladder sizes repository-code excer
 
 | Target input size | Actual server prompt tokens | All three facts found | Median prompt tokens/s | Median first token, s |
 | --- | --- | ---: | ---: | ---: |
-| 32,768 | 32,486â€“32,486 | 3/3 | 2834.1 | 11.55 |
-| 65,536 | 65,345â€“65,345 | 3/3 | 2861.2 | 22.91 |
-| 131,072 | 131,031â€“131,031 | 3/3 | 2752.4 | 47.75 |
-| 258,048 | 258,300â€“258,300 | 3/3 | 2550.6 | 101.56 |
+| 32,768 | 32,486–32,486 | 3/3 | 2834.1 | 11.55 |
+| 65,536 | 65,345–65,345 | 3/3 | 2861.2 | 22.91 |
+| 131,072 | 131,031–131,031 | 3/3 | 2752.4 | 47.75 |
+| 258,048 | 258,300–258,300 | 3/3 | 2550.6 | 101.56 |
 
 This validates the listed retrieval trials, not arbitrary reasoning over an entire repository. Excerpts repeat when necessary, so this is not a diversity-controlled benchmark. A 262K total context with 8,192 tokens reserved for output leaves at most about 254K input tokens, before additional tool/system overhead; agent compaction may start earlier. The near-ceiling raw-engine trials deliberately request only 128 output tokens. No context beyond 262,144 or RoPE extension was tested.
 
@@ -109,7 +109,7 @@ This validates the listed retrieval trials, not arbitrary reasoning over an enti
 
 Measurements were sampled about every five seconds with psutil and NVIDIA-SMI during the 262K comparison and correctness/recall stages, not the initial 32K run or calibration. These are sampled peaks/minima, not guaranteed instantaneous maxima. GPU memory is total device usage, including the desktop; engine RSS can include mapped pages and is not the same as total system memory.
 
-| Request phase | Max system RAM used, GiB | Min available RAM, GiB | Peak GPU memory, MiB | Peak GPU Â°C | Peak GPU W |
+| Request phase | Max system RAM used, GiB | Min available RAM, GiB | Peak GPU memory, MiB | Peak GPU °C | Peak GPU W |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | agent-low-running | 58.88 | 4.93 | 14895 | 56 | 174.57 |
 | agent-none-running | 58.88 | 4.93 | 14911 | 59 | 192.77 |

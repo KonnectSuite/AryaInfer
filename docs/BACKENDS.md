@@ -1,4 +1,4 @@
-> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221â€™s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # Models and backends
 
@@ -255,7 +255,7 @@ and, by the tokenizer's `pre` name, how the model writes its reasoning and its t
 | Qwen3.8, Qwen3.6, Ornith, Clover | the prompt opens it, `</think>` ends it | `<tool_call><function=NAME><parameter=P>...` |
 | GLM | the same | `<tool_call>NAME<arg_key>K</arg_key><arg_value>V</arg_value>...` |
 | Gemma 4 | `<\|channel>thought` to `<channel\|>`, opened by the model | `<\|tool_call>call:NAME{key:value,...}<tool_call\|>` |
-| DeepSeek V4 | the prompt opens it, `</think>` ends it | `<ï½œDSMLï½œinvoke name="NAME"><ï½œDSMLï½œparameter name="K" string="true">V...` |
+| DeepSeek V4 | the prompt opens it, `</think>` ends it | `<｜DSML｜invoke name="NAME"><｜DSML｜parameter name="K" string="true">V...` |
 | LFM2.5 | the prompt opens it, `</think>` ends it | `<\|tool_call_start\|>[NAME(K='V', ...), NAME2()]<\|tool_call_end\|>` |
 | Flint | `<think>` to `</think>`, opened by the model | as GLM's |
 | Kolibri 1 | the prompt opens it, `</think>` ends it | a JSON object in the wrapper: `{"name": NAME, "arguments": {...}}` |

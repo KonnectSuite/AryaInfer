@@ -241,9 +241,9 @@ MTP and default suffix drafting are enabled; the engine reports lookup windows u
 to 6. Vision was off during these benchmarks. `fit_max_tokens` is enabled. Calibration is saved using setup's
 per-hardware/per-model/per-context settings format so updates can retain it.
 
-The same-day 262K-ceiling API comparison measured **76.4 â†’ 86.1 tokens/s** for
-short chat and **86.8 â†’ 95.6 tokens/s** for agent-style generation. Fresh 32K
-prompt processing was **2,933.7 â†’ 2,915.0 tokens/s**, with about **11 seconds** to
+The same-day 262K-ceiling API comparison measured **76.4 → 86.1 tokens/s** for
+short chat and **86.8 → 95.6 tokens/s** for agent-style generation. Fresh 32K
+prompt processing was **2,933.7 → 2,915.0 tokens/s**, with about **11 seconds** to
 first token. Agent follow-up latency was essentially unchanged at about **2.1 s**.
 Three repetitions were used; the full report preserves ranges and sample counts.
 
