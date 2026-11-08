@@ -24,7 +24,7 @@
     "--kv-resident",
     "32768",
     "--vram-reserve-mib",
-    "1000",
+    "2048",
     "--vision",
     "--pcie-frac",
     "0.20",
