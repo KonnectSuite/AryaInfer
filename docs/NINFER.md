@@ -72,6 +72,15 @@ four private continuations in `engine-ninfer/shim/main.cpp`; with the derived
 defaults (one slot) a finished session is not device-resident, the reuse
 candidate is only expandable and the planner never selects it.
 
+The host checkpoint budget gates how long a reusable prefix can be, and it is
+much larger than the KV itself: the planner allows about one token per 4 MiB of
+`--host-kv-mib`, so 12 GiB covers 3,072 tokens and 240 GiB covers 61,440. The
+budget is address space, not resident memory: a 57,018-token prompt reused
+57,017 tokens on the second request (30.1 s -> 41 ms) with `--host-kv-mib 245760`
+while free RAM stayed at 38 GB. The shipped config therefore carries 245,760
+MiB; a session can keep one long conversation reusable, and evicting a second
+one costs no GPU time.
+
 ## PLC and HMI calibration
 
 Ran on 6 November 2026 with 	ools/plc_sampling_probe.py (eight industrial

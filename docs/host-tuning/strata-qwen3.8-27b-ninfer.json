@@ -15,7 +15,7 @@
                  "3",
                  "--lm-head-draft",
                  "--host-kv-mib",
-                 "4096",
+                 "245760",
                  "--max-concurrency",
                  "1"
              ],
