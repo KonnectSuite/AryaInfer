@@ -435,11 +435,18 @@ DRAFT_HEAD_HINT = ("a smaller draft vocabulary needs less VRAM: --draft-vocab cy
                    "it - START-HERE.bat --draft-vocab en (Windows) or ./setup.sh --draft-vocab en - and the model "
                    "keeps it; or a smaller --context in setup.")
 
+CAPACITY_FAIL = ("bytes are available for runtime capacity", "cudaMallocHost failed")
+CAPACITY_HINT = ("the engine asked for more memory than this machine can give it: lower --max-context in the "
+                 "strata-*.json this model comes from, and --host-kv-mib too when the line above says "
+                 "cudaMallocHost (that budget is pinned host RAM the engine reserves at startup, not address space)")
+
 
 def start_failure_hint(log: str | None, offset: int) -> str:
     """#474: what to change when the engine stopped at the start because the MTP draft head did not fit the VRAM
     left: the engine's own `strata mtp:` lines after that failure (0.1.36+: what it needs, what is free, the smaller
-    subsets), else the same advice in words for an older engine.  "" for any other failure: the log says why."""
+    subsets), else the same advice in words for an older engine. Also the two capacity refusals - a sequence that
+    needs more VRAM than is free, or a host KV arena the machine cannot pin.  "" for any other failure: the log says
+    why."""
     if not log:
         return ""
     try:
@@ -448,11 +455,13 @@ def start_failure_hint(log: str | None, offset: int) -> str:
             text = f.read().decode("utf-8", "replace")
     except (OSError, ValueError):
         return ""
-    if DRAFT_HEAD_FAIL not in text:
-        return ""
-    said = [x.strip()[len("strata mtp: "):] for x in text.splitlines()
-            if x.strip().startswith("strata mtp: ") and ("draft head over" in x or "hint:" in x)]
-    return ". mtp: " + DRAFT_HEAD_FAIL + ". " + (" ".join(said) if said else "Hint: " + DRAFT_HEAD_HINT)
+    if DRAFT_HEAD_FAIL in text:
+        said = [x.strip()[len("strata mtp: "):] for x in text.splitlines()
+                if x.strip().startswith("strata mtp: ") and ("draft head over" in x or "hint:" in x)]
+        return ". mtp: " + DRAFT_HEAD_FAIL + ". " + (" ".join(said) if said else "Hint: " + DRAFT_HEAD_HINT)
+    if any(mark in text for mark in CAPACITY_FAIL):
+        return ". capacity: " + CAPACITY_HINT
+    return ""
 
 
 def start_log_tail(log: str | None, offset: int, n: int = 20) -> str:

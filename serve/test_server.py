@@ -2676,6 +2676,21 @@ class DraftHeadHint(unittest.TestCase):
         p, off = self.log("strata serve: mtp: the draft head does not fit\n")
         self.assertIn("--draft-vocab en", start_failure_hint(p, off))
 
+    def test_a_sequence_that_does_not_fit_says_which_knob_to_lower(self):
+        p, off = self.log("[strata] engine started: ninfer-engine.exe --serve --max-context 131072\n"
+                          "[ninfer-engine] engine did not start: requested Engine runtime reservation requires "
+                          "3355516160 bytes, but only 3341320192 bytes are available for runtime capacity\n")
+        h = start_failure_hint(p, off)
+        self.assertIn("--max-context", h)
+        self.assertIn("cudaMallocHost", h)   # it names the condition that would also need --host-kv-mib lowered
+
+    def test_a_host_arena_the_machine_cannot_pin_names_both_knobs(self):
+        p, off = self.log("[ninfer-engine] engine did not start: cudaMallocHost failed: "
+                          "cudaErrorMemoryAllocation: out of memory\n")
+        h = start_failure_hint(p, off)
+        self.assertIn("--max-context", h)
+        self.assertIn("--host-kv-mib", h)
+
     def test_other_failures_and_earlier_starts_add_nothing(self):
         p, off = self.log("strata serve: cannot open the pack\n")
         self.assertEqual(start_failure_hint(p, off), "")
