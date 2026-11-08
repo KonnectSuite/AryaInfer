@@ -56,7 +56,7 @@ The roster is the `strata-*.json` files next to the config you start with
 | --- | --- | ---: | --- |
 | `qwen3.8-flash-next-iq3_xxs` | Strata 0.1.58 | 262,144 | Fastest long-context MoE path here; DFlash2 + MTP |
 | `qwen3.8-27b-aq3` | AryaInfer | 131,072 | Dense 27B quality at 3-bit codes, 1.2K tok/s prompt reads |
-| `qwen3.8-27b-ninfer` | NInfer | 131,072 | Highest measured prefill on this card (2,039 tok/s at 8K) |
+| `qwen3.8-27b-ninfer` | NInfer | 114,688 | Highest measured prefill on this card (2,039 tok/s at 8K); 131,072 overruns a 16 GiB card with vision |
 | `qwen3.6-35b-a3b-ud-q4_k_xl` | PolyStrata | 262,144 | Best validated 35B MoE for agent work |
 | `qwen3.6-35b-a3b-abliterated` | PolyStrata | 262,144 | Unrestricted 35B variant |
 | `ornith-1.5-35b-a3b-apex-i-quality` | PolyStrata | 262,144 | 18/18 bounded coding with low reasoning |
@@ -112,8 +112,12 @@ Full AQ3 notes, the Q8_0 expansion fix and the context ladder:
 
 ### NInfer - Qwen3.8-27B GSQ3 `.ninfer`
 
-`rk4v4-e8` KV, MTP draft 3, `--max-context 131072`, repeated-id corpus so the
-draft acceptance is 96-100% (optimistic for prose).
+`rk4v4-e8` KV, MTP draft 3, `--max-context 114688`, repeated-id corpus so the
+draft acceptance is 96-100% (optimistic for prose). The numbers below were
+measured at 131,072, which needs 3,355,516,160 bytes of runtime reservation and
+does not fit a 16 GiB card that also drives a desktop; the shipped entry runs
+114,688 and starts reliably. `--host-kv-mib` pins host memory at startup, so it
+is 12,288 MiB here, not the 245,760 MiB the 57,018-token reuse measurement used.
 
 | Prompt | Prefill | Decode |
 | ---: | ---: | ---: |
@@ -126,7 +130,8 @@ draft acceptance is 96-100% (optimistic for prose).
 On real prose the same build wrote 74.7 tok/s with 47% acceptance. Prefix reuse
 takes a repeated 1,220-token turn from 1,845 ms to 33 ms (`reused 1219`), and a
 57,018-token turn from 30.1 s to 41 ms, once `--host-kv-mib` is large enough
-(245,760 here). Limits and measurements: [NINFER.md](NINFER.md).
+(245,760 there, which pins 240 GiB of RAM and so only fits a host that large).
+Limits and measurements: [NINFER.md](NINFER.md).
 
 ### PolyStrata - Qwen3.6-35B-A3B
 

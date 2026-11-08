@@ -21,7 +21,7 @@ budget, tools, images, API, web app) is shared:
 | Strata (native Qwen engine, upstream 0.1.58) | `C:\AI\Strata-data\engines\strata-0.1.58\strata.exe` | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5, Swift abliterated | 262,144 |
 | PolyStrata (`strata-poly`) | `engine-poly\strata-poly.exe` (0.1.45, src `7bc1d82f`) | Qwen3.6-35B-A3B UD-Q4, abliterated, Ornith 1.5, and the GGUF families | 262,144 |
 | AryaInfer build (`aryainfer`) | `build-poly\aryainfer.exe` (2026-11-03) | Qwen3.8-27B AQ3, 27B Turbo IQ3_XXS, Qwen3.5-4B | 131,072 / 65,536 |
-| NInfer (ported) | `engine-ninfer\ninfer-engine.exe` (pinned `2469b57` + shim) | Qwen3.8-27B GSQ3 `.ninfer` | 131,072 |
+| NInfer (ported) | `engine-ninfer\ninfer-engine.exe` (pinned `2469b57` + shim) | Qwen3.8-27B GSQ3 `.ninfer` | 131,072; the entry ships 114,688 to fit a 16 GiB card |
 
 The split, the protocol each one speaks and the measured tables are in
 [ENGINES.md](ENGINES.md). The short version: the server tokenizes, applies the

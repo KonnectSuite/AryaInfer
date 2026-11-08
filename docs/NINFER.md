@@ -64,8 +64,16 @@ faster there; its long-context decode is ahead of AQ3, its short real-prose
 decode is roughly parity.
 
 Memory at 131,072: weights 10.91 GiB, sequence state 2.44 GiB, workspace peak
-about 400 MiB, 761 MiB free after startup. The engine starts with 131,072
-context in this config.
+about 400 MiB, 761 MiB free after startup on the reference host.
+
+On a 16 GiB card that is the edge of what fits, so the shipped config runs
+114,688 tokens instead. With `--vision` and the shim's two device state slots
+the 131,072 plan asks for 3,355,516,160 bytes of runtime reservation; a host
+that had 3,341,320,192 bytes free once the weights had landed refused it
+(`requested Engine runtime reservation requires 3355516160 bytes, but only
+3341320192 bytes are available for runtime capacity`) and the switch failed.
+The 114,688 plan reserves about 3.0 GB, starts, and leaves roughly 680 MiB free
+with a desktop already holding a couple of gigabytes of VRAM.
 
 Prefix reuse works for repeated conversations: a 776-token prompt reused 775
 tokens on the second identical request, prompt time 653.6 ms -> 36.4 ms
@@ -76,12 +84,17 @@ candidate is only expandable and the planner never selects it.
 
 The host checkpoint budget gates how long a reusable prefix can be, and it is
 much larger than the KV itself: the planner allows about one token per 4 MiB of
-`--host-kv-mib`, so 12 GiB covers 3,072 tokens and 240 GiB covers 61,440. The
-budget is address space, not resident memory: a 57,018-token prompt reused
-57,017 tokens on the second request (30.1 s -> 41 ms) with `--host-kv-mib 245760`
-while free RAM stayed at 38 GB. The shipped config therefore carries 245,760
-MiB; a session can keep one long conversation reusable, and evicting a second
-one costs no GPU time.
+`--host-kv-mib`, so 12 GiB covers 3,072 tokens and 240 GiB covers 61,440.
+
+That budget is pinned host memory, not address space: `HostKVArena` reserves it
+once at startup through `PinnedHostBuffer` (`src/core/host_kv_arena.cpp`,
+`src/core/arena.cu` call `cudaMallocHost`), so a 240 GiB request needs 240 GiB of
+physical RAM to start. On a 64 GiB host it fails with `cudaMallocHost failed:
+cudaErrorMemoryAllocation: out of memory`, which is what happened before the
+shipped value was lowered. A 57,018-token reuse needs the full 245,760 MiB and
+therefore only reproduces on a host with that much RAM; it was measured with
+free RAM at 38 GB. The shipped config carries 12,288 MiB, about 3,072 reusable
+tokens, which pins comfortably on a 64 GiB machine.
 
 ## PLC and HMI calibration
 
