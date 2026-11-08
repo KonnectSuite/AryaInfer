@@ -29,8 +29,10 @@
   },
   "input_tokens_new": 85283,
   "cache_read_tokens": 4093721,
-  "output_tokens": 42052,
-  "output_tokens_per_s_wall": 49.3,
+  "output_tokens_visible": 42052,
+  "output_tokens_per_s_wall_visible_only": 49.3,
+  "decode_tokens_per_s_all_streamed": 99,
+  "decode_speed_evidence": "harness badge 90.1 tok/s mid-run (docs/media/ui/arya-infer-chat.jpg); Monitor peak 122.4 t/s (docs/media/ui/arya-infer-monitor.jpg). usage.outputTokens counts visible output only; reasoning tokens stream on top, so engine decode speed is ~2x the visible rate.",
   "self_verification": {
     "headless_chrome_run": true,
     "screenshots_taken": 8,
