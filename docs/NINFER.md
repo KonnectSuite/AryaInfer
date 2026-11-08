@@ -107,6 +107,12 @@ Thinking modes: off is silent, low / medium / high produced 1,384 / 1,483 /
 the model. The shipped budgets are 20% above the earlier fleet defaults:
 off 0, low 4,800, medium 9,600, high 12,000.
 
+The config sets `reasoning_close_retry: true`. A long turn can end on the
+model's stop token while it is still thinking, leaving the client with
+reasoning and no answer; the server then closes the thinking once and lets
+the reply continue. It is off by default, and for an agent client the empty
+answer otherwise reaches the proxy as a degenerate turn.
+
 ## Vision
 
 Images work through the same path as the other non-native engines: the server's
