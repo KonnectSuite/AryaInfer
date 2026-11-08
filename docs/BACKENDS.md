@@ -5,6 +5,11 @@
 AryaInfer runs more than one model family. This page says which, how the engine is put together so that it can,
 how a model is recognized, how to add one, and how to change the model that answers.
 
+The four engine backends behind the same server - Strata, `strata-poly`, our
+`aryainfer` build and the ported NInfer core - are compared in
+[ENGINES.md](ENGINES.md), with what each one runs and its measured table. This
+page keeps the per-family recognition, quantization and setup detail.
+
 AryaInfer host measurements are separate from the inherited comparisons below:
 [Qwen3.6 Q4/Q8](QWEN36_HOST_RESULTS.md) and
 [MiniCPM-V 4.7 Q4](MINICPMV_HOST_RESULTS.md), both at 262,144-token capacity

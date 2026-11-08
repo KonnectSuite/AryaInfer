@@ -19,6 +19,9 @@ one-click installer (`setup.py`, started by `START-HERE.bat` / `setup.sh`).
 A second engine, `strata-poly` (`src/poly/`), runs GLM 5.3 Flash, DeepSeek V4 Flash and six smaller model families
 from their GGUF files. The six smaller families have Windows and Linux paths; larger models and other backends
 have separate limits: [docs/GLM.md](docs/GLM.md), [docs/BACKENDS.md](docs/BACKENDS.md).
+A third path, `aryainfer` (also built from `src/poly/`), runs the dense Qwen3.8-27B AQ3 and Turbo quants; a fourth,
+`engine-ninfer/`, is a ported NInfer core behind a shim for the GSQ3 `.ninfer` artifact. All four answer the same
+engine protocol and are served by the same Python server: [docs/ENGINES.md](docs/ENGINES.md).
 Qwen3.6 also has a native Strata path with vision and MTP (`--family qwen36-strata`): [docs/QWEN36.md](docs/QWEN36.md).
 The Qwen engine, the installer, the server and the web app come from
 [Strata](https://github.com/Niko1221/Strata).

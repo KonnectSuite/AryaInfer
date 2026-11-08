@@ -2,6 +2,13 @@
 
 Measured on the i9-14900KF, RTX 4070 Ti SUPER 16 GB, 64 GB DDR5-6000, Windows 11 host with NVIDIA driver 610.88. AryaInfer is a fork of PolyStrata (VecSzn), which is a fork of original Strata (Niko1221). See [credits](../CREDITS.md).
 
+> **Roster moved on.** This report records the October 17-18 batch (eight
+> profiles). The checkout now installs ten profiles across the four engine
+> backends, including the dense 27B AQ3 and NInfer entries and Qwen3.5-4B;
+> the current list and each engine's measured table are in
+> [ENGINES.md](ENGINES.md). The October numbers below remain the record for the
+> files that were measured then.
+
 ## Complete model coverage
 
 This report covers **all eight installed model profiles across seven families**.

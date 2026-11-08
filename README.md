@@ -11,7 +11,7 @@ which is a fork of **[the original Strata](https://github.com/Niko1221/Strata)**
 Niko1221 and the Strata contributors. Their engines, tooling and research make this
 fork possible. See [credits](CREDITS.md) and the original [MIT license](LICENSE).
 
-[Supported models](#supported-models) Â· [Host results](#measured-on-this-host) Â· [Install](#install) Â· [Using it](#using-it) Â· [How it works](#how-does-it-work) Â· [Support](#support-and-contributing)
+[Supported models](#supported-models) Â· [Engines](docs/ENGINES.md) Â· [Host results](#measured-on-this-host) Â· [Install](#install) Â· [Using it](#using-it) Â· [How it works](#how-does-it-work) Â· [Support](#support-and-contributing)
 
 AryaInfer inherits Strata and PolyStrataâ€™s local inference engines, installer, web chat,
 live resource monitor, and compatible APIs. It shares model work across GPU memory,
@@ -25,12 +25,19 @@ own network behavior.
 
 ## Supported models
 
-It runs twelve models, on two engines.
+It installs ten profiles here, served by four engine backends in one program:
+the upstream Strata engine, PolyStrata's `strata-poly`, our `aryainfer` build of
+the same tree with the AQ3 kernels, and a ported NInfer core. The server, API,
+chat page, tools and settings are the same whichever one a model uses. See
+[Engines](docs/ENGINES.md) for the split and the measured numbers.
 
-The inherited installer includes twelve model families across the original Strata
-engine and PolyStrataâ€™s additional `strata-poly` engine. Support in the codebase
+The inherited installer covers twelve model families across the original Strata
+engine and PolyStrata's additional `strata-poly` engine. Support in the codebase
 does not mean every model, quantization or platform has been tested on our PC.
 The linked guides retain upstream measurements, hardware requirements and limitations.
+The table below is the inherited support matrix; the ten profiles actually
+installed and measured here are listed in [Engines](docs/ENGINES.md#choosing-a-model-not-an-engine)
+and [the roster report](docs/MODEL_ROSTER_HOST_RESULTS.md).
 
 | Model family | Engine / inherited platform path | Image input | AryaInfer host status | Guide |
 | --- | --- | --- | --- | --- |
@@ -70,12 +77,33 @@ by turning Qwen vision on. Model weights retain their own licenses.
 
 ## Measured on this host
 
-Qwen3.8-Flash-Next **IQ3_XXS**, upstream release engine **0.1.45**, native Windows.
+### Strata 0.1.58, November 7, 2026
+
+Qwen3.8-Flash-Next **IQ3_XXS** on the official **0.1.58** engine (upstream
+v0.2.12), native Windows, 262,144-token context, int8 KV, 32K resident KV,
+DFlash2, temperature 0.3, vision enabled. One run per row, so these are spot
+measurements, not medians.
+
+| Prompt | Prefill | Decode |
+| ---: | ---: | ---: |
+| 19 tokens | 52.6 tokens/s | 86.4 tokens/s |
+| 4,621 tokens | 1,886.0 tokens/s | 78.4 tokens/s |
+| 16,121 tokens | 1,336.9 tokens/s | 74.4 tokens/s |
+
+On 0.1.56 the same configuration read prompts at 491-523 tokens/s in the engine
+log and the Monitor showed 52.8 tokens/s decode around 15K, so 0.1.58 is roughly
+2.7x faster at prompt reading and 40% faster at writing there. The release notes
+credit the CPU/upload share following the measured CPU speed (ceiling 0.95
+instead of 0.60) and a larger automatic prompt chunk. All four engine backends,
+with their measured tables, are in [Engines](docs/ENGINES.md).
+
+### October 17, 2026, engine 0.1.45 (historical)
+
 The selected profile restores the old **262,144-token context ceiling**, with int8
 KV, 32K resident KV, a 1,792 MiB VRAM reserve, MTP and 15 CPU expert workers.
-Vision was off for this benchmark suite. GPU vision is now enabled; these text
-results have not been remeasured with the image encoder loaded. These are host
-settings, not universal defaults.
+Vision was off for that suite; GPU vision is enabled now. These are host
+settings, not universal defaults. The table is kept for comparison with the
+newer engine above.
 
 October 17, 2026 results (medians):
 
@@ -108,9 +136,10 @@ Additional full-context host results: [Qwen3.6 Q4 versus Q8](docs/QWEN36_HOST_RE
 and [MiniCPM-V 4.7 Q4 with vision](docs/MINICPMV_HOST_RESULTS.md). The MiniCPM
 report uses corrected coding-validator results and retains the original records
 for audit; its speed, image and recall results are separate measurements.
-The [complete host model report](docs/MODEL_ROSTER_HOST_RESULTS.md) includes all
-eight installed profiles: Qwen3.8 IQ3_XXS, Qwen3.6 Q4/Q8, MiniCPM Q4,
-Ornith APEX-I-QUALITY, Gemma 4 Q4, Tiel Coder Q4 and text-only LFM2.5 Q4.
+The [complete host model report](docs/MODEL_ROSTER_HOST_RESULTS.md) includes the
+older eight-profile roster. The current roster has ten profiles across all four
+engines (Qwen3.8 Flash-Next, 27B AQ3, 27B NInfer, 27B Turbo, 35B UD-Q4 and
+abliterated, 35B Ornith, and Qwen3.5 4B): [Engines](docs/ENGINES.md#choosing-a-model-not-an-engine).
 It records exact model IDs, cold/cached agent timings, failures, resource
 observations and differences between test protocols. GLM and DeepSeek are
 listed explicitly without host benchmark results.

@@ -54,6 +54,27 @@ document or code base is read at over 1,000 tokens per second. The experts of th
 PCIe while the current layer's attention runs. After the first message, AryaInfer keeps the conversation and reads only
 what is new, so follow-ups start in seconds.
 
+## Four engines, one program
+
+AryaInfer is not tied to one inference engine. The same server, chat page, API,
+tools and settings serve four backends, and the model you pick decides which one
+runs:
+
+- **Strata** (`strata.exe`, upstream 0.1.58): the native Qwen engine for
+  Flash-Next, Swift 1.5 and the 262K MoE profiles.
+- **PolyStrata** (`strata-poly`): the GGUF engine for Qwen3.6-35B-A3B, Ornith,
+  GLM 5.3 Flash, DeepSeek V4 Flash and the other families in
+  [BACKENDS.md](BACKENDS.md).
+- **AryaInfer** (`aryainfer`): our build of the same tree with the AQ3 kernels,
+  for the dense 27B AQ3 and Turbo quants and Qwen3.5-4B.
+- **NInfer** (`engine-ninfer`): a ported NInfer core behind a small shim, for the
+  Qwen3.8-27B GSQ3 `.ninfer` artifact, with its own 128K path and prefix reuse.
+
+The engine never sees the chat template or the thinking rules: the server owns
+those and sends token ids. That is what lets a model roster mix engines without
+changing how you use it. The measured tables for all four are in
+[ENGINES.md](ENGINES.md).
+
 ## More
 
 The [details](DETAILS.md#how-it-works) explain every part and its numbers, and the
@@ -70,9 +91,12 @@ The [details](DETAILS.md#how-it-works) explain every part and its numbers, and t
   [Swift 1.5](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF) by UkisAI; the experimental
   [UD-Q4_K_XL](https://huggingface.co/unsloth/Qwen3.8-Flash-Next-GGUF) by Unsloth (its support follows
   [eddoursul/Strata](https://github.com/eddoursul/Strata)). Their licenses apply to the model files.
-- Built with parts of [llama.cpp / ggml](https://github.com/ggml-org/llama.cpp) (MIT). Ideas from
-  [Splash](https://github.com/incoai/splash), [ninfer](https://github.com/Neroued/ninfer) and
-  [HyperQwen](https://github.com/syv-ai/HyperQwen). More in the [details](DETAILS.md#credits-and-licenses).
+- Built with parts of [llama.cpp / ggml](https://github.com/ggml-org/llama.cpp) (MIT). The NInfer backend is
+  [roofkid's ninfer-4080](https://github.com/roofkid/ninfer-4080) core (Apache-2.0, pinned at commit `2469b57`)
+  behind our shim, with its own debt to [Neroued's ninfer](https://github.com/Neroued/ninfer). The 3-bit GSQ
+  checkpoints come from [ISTA-DASLab](https://huggingface.co/ISTA-DASLab). Ideas also came from
+  [Splash](https://github.com/incoai/splash) and [HyperQwen](https://github.com/syv-ai/HyperQwen). More in the
+  [details](DETAILS.md#credits-and-licenses) and [ENGINES.md](ENGINES.md#credits).
 - The AMD (HIP) backend: [AMD_HIP.md](AMD_HIP.md) names the contributors and the machines it was validated on.
 
 ## License

@@ -8,8 +8,10 @@ server still renders the chat template, applies the thinking budget, parses
 tool calls and serves the web app; the engine only turns prompt ids into
 generated ids.
 
-Status: opt-in, text only. The stock `aryainfer` and `strata-poly` paths are
-unchanged; nothing in `serve/` changed for this backend.
+Status: opt-in. Text and image input both work (image turns take the server's
+`.sve` embeddings through `GENI`; see [Vision](#vision)). The stock `aryainfer`
+and `strata-poly` paths are unchanged; nothing in `serve/` changed for this
+backend. [ENGINES.md](ENGINES.md) places it next to the other three backends.
 
 ## What it needs
 

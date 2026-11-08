@@ -3,7 +3,8 @@
 What each installed model does on industrial code, measured 5 November 2026 on the
 i9-14900KF / RTX 4070 Ti SUPER host, and the sampling each entry now ships with. The work
 exists because AryaCode writes PLC and HMI code: IEC 61131-3 Structured Text, Studio 5000
-ladder in NeutralText and L5X, and FactoryTalk View ME expressions.
+ladder in NeutralText and L5X, and FactoryTalk View ME expressions. The NInfer profile was
+added on 7 November and is reported separately below.
 
 Everything below is one run per model per set unless a line says otherwise. The probe is
 `tools/plc_sampling_probe.py`; the thinking check is `tools/thinking_mode_probe.py`. Both
@@ -57,6 +58,17 @@ The Qwen3.6 35B Opus Reasoning APEX row was measured with the others and removed
 table when its entry was uninstalled on November 5, 2026 (it did not think or perform like
 Opus on this host, and Ornith and UD-Q4_K_XL were preferred). The totals above are the eight
 installed models.
+
+The NInfer profile arrived later and was measured on November 7, 2026, so it is
+reported separately instead of changing the eight-model totals:
+
+| model | coding | coding-0.5 | family | precise |
+| --- | ---: | ---: | ---: | ---: |
+| Qwen3.8 27B NInfer GSQ3 | 5 | 5 | not run | 5 |
+
+It misses the same three fixtures as every other Qwen entry (`ld_rung`, `hmi_vis`,
+`hmi_alarm`), and `coding-0.5` measures identical to `coding` because its sampler
+ignores the presence penalty; the config ships `precise`.
 
 Per fixture, across the eight models:
 
@@ -142,6 +154,7 @@ controller starts) and the tracked copies in `docs/host-tuning` carry:
 | Qwen3.8 Flash Next IQ3_XXS | 0.3 | 0.9 | 20 | 0.0 | medium |
 | Swift 1.5 IQ3_XXS | 0.3 | 0.9 | 20 | 0.0 | medium |
 | Swift 1.5 Abliterated IQ3_XXS | 0.3 | 0.9 | 20 | 0.0 | medium |
+| Qwen3.8 27B NInfer GSQ3 | 0.3 | 0.9 | 20 | 0.0 | medium |
 
 The three Flash Next / Swift entries had no `sampling` block before this pass and ran the
 engine's own defaults; they now state theirs, so the setting the app shows is the setting the
