@@ -74,8 +74,8 @@ cd C:\Users\KNPhu\AryaCode\KonnectSuite\AryaInfer
 
 Then `http://127.0.0.1:8083/v1/chat/completions` with `"model": "qwen3.5-4b"`.
 
-With the desktop: the Control Center lists it as **AryaStrata Qwen3.5 4B Q4_K_M - 64K vision
-(pairs with ComfyUI)** and `POST /api/models/load {"model": "qwen3.5-4b"}` switches to it
+With the desktop: the Control Center lists it as `AryaStrata Qwen3.5 4B Q4_K_M - 64K vision
+(pairs with ComfyUI)` and `POST /api/models/load {"model": "qwen3.5-4b"}` switches to it
 without a restart. Loading a text model asks ComfyUI to free its memory first (`POST /free`), so
 the first ComfyUI image after a switch pays for a reload.
 
