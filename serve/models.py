@@ -141,7 +141,10 @@ def describe(config: Path) -> dict | None:
         "efforts": _effort_levels(tok),
         "multimodal": bool(cfg.get("vision")),
         "aliases": _aliases(cfg.get("aliases")),
-        "mtp": bool(_arg(args, "--draft-model")) and "--no-draft" not in args,
+        # --draft-model is the Arya engine's own draft; the poly and NInfer engines take
+        # --spec mtp/dflash2 and the MTP head from the model itself.
+        "mtp": (bool(_arg(args, "--draft-model")) or _arg(args, "--spec") in {"mtp", "dflash", "dflash2"}
+                or "--lm-head-draft" in args) and "--no-draft" not in args,
         "ram_gb": None, "vram_gb": None,
         "status": "available", "problem": None,
     }

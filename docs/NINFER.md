@@ -140,13 +140,35 @@ The config runs with `--no-cuda-graph`: with vision enabled and two device
 state slots the 131,072-token reservation did not fit (3,519,094,016 bytes
 requested against 3,361,206,272 available), and eager mode fits.
 
+## AryaCode setup
+
+The entry is wired like the other Qwen entries: `switch_on_request`, the
+aliases `qwen3.8-27b-ninfer` and `ninfer-27b`, precise sampling
+(0.3 / 0.9 / 20 / 0.0), thinking budgets off 0 / low 4,800 / medium 9,600 /
+high 12,000, vision on, and `fit_max_tokens: true` so a long prompt shortens
+the output cap instead of refusing the request once the context fills. It also
+sets `reasoning_close_retry` and `reasoning_loop_recovery`.
+
+Measured through the server on 2026-11-07:
+
+- PLC/HMI probe (8 fixtures, thinking off): precise 5/8, coding 5/8,
+  coding-0.5 5/8. The same three fixtures miss in every set (a NeutralText
+  rung, a FactoryTalk visibility expression and an alarm message), so the
+  sampling set is not what limits this model; the shipped set stays precise.
+- Thinking modes: off produced no reasoning; low / medium / high produced
+  1,384 / 1,483 / 1,651 reasoning characters on the probe question. A request
+  budget of 200 versus 2,000 tokens produced 857 versus 1,665 characters, so
+  the budget is enforced and its wrap-up still leaves an answer.
+- `temperature: 0` is deterministic (two identical replies), and a fixed seed
+  repeats its reply.
+
 ## What is not supported
 
 - **Embeddings**: `GENI` is the vision path; there is no embeddings API.
-- **Repetition penalties**: the shim passes temperature, top_p, top_k, min_p
-  and seed, but not `penalty_repeat`, `penalty_present` or `penalty_freq`.
-  The default config has presence 0.0, so the default path is unaffected; a
-  request that sets a repetition penalty does not get it.
+- **Presence and frequency penalties**: the shim passes them on the wire, but
+  the engine's sampler ignores them — presence 0.0 and 2.0 produced identical
+  text with the same seed. The shipped sampling uses presence 0.0, so the
+  default path is unaffected.
 - **n-gram speculation**: the draft mode is forced off; only MTP is used.
 - **Context beyond 131,072**: the benchmark needs prompt + generation + 6
   tokens of headroom, so the largest benchmark prompt was 130,816.

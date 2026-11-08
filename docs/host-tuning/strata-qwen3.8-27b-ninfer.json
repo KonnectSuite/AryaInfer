@@ -50,5 +50,6 @@
     "high": 12000
   },
   "context": 131072,
+  "fit_max_tokens": true,
   "reasoning_close_retry": true
 }
