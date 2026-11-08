@@ -5,6 +5,21 @@
 > AQ3 entry on the Arya engine (`qwen3.8-27b-aq3`, `aryainfer.exe`).  The comparisons below were measured on the files
 > that were removed and cannot be reproduced here as they stand.
 
+## Current summary (Arya engine, 0.1.58-era build, measured 2026-11-03)
+
+The 27B path running on this host today is **Qwen3.8-27B AQ3** on `aryainfer.exe`
+(`--kv q4_0`, `STRATA_GDN_MMA=1`, 131,072 context):
+
+| Prompt | Batch | Prefill | Decode |
+| ---: | ---: | ---: | ---: |
+| 8K | 2,048 | 1,229.3 tok/s | 85.1 tok/s |
+| 32K | 2,048 | 1,062.5 tok/s | 80.5 tok/s |
+| 130,672 tokens | 1,024 | 582.6 tok/s | 68.4 tok/s |
+
+The roster also carries **Qwen3.8-27B Turbo IQ3_XXS** (`qwen3.8-27b-turbo-iq3xxs`, same
+engine, 131,072 context): installed and in daily use, with no speed table measured on this
+host yet. Roster-wide numbers for all four backends: [ENGINES.md](ENGINES.md).
+
 A dense Qwen3.8 model for AryaInfer's second engine.  It is Qwen35's model with one dense FFN where the routed
 experts are (llama.cpp calls the architecture `qwen35`), so the engine runs it through the same layers, the same
 gated delta net, the same 3-axis vision rope and the same block that guesses ahead - with no router anywhere.

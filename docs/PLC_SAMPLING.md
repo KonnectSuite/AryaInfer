@@ -128,12 +128,15 @@ was right.
 | Qwen3.8 Flash Next IQ3_XXS | 0 ok | 692 ok | 1,451 ok | 1,672 ok | 1,595 ok (medium) |
 | Swift 1.5 Abliterated | 0 ok | 1,512 ok | 1,084 ok | 1,747 ok | 1,376 ok (medium) |
 | Swift 1.5 IQ3_XXS | 0 no | 1,110 ok | 1,335 ok | 1,610 no | 1,549 ok (medium) |
+| Qwen3.8 27B NInfer GSQ3 | 0 | 1,384 | 1,483 | 1,651 | not measured |
 
 One question per level is not a quality measurement, and the wrong answers move around with
 no level pattern: UD-Q4_K_XL answered `medium` wrong and its default (the same medium prompt)
 right, and Turbo did the same. What the table establishes is the wire: the level changes the
 request (110 / 138 / 134-108 / 150 prompt tokens on these templates), off is silent where the
-model offers it, and the shipped default is the level the server says it is.
+model offers it, and the shipped default is the level the server says it is. The NInfer row
+records the reasoning characters the shim streamed at each level; its answer correctness on
+this fixture was not recorded.
 
 The shipped default effort follows the earlier per-model calibration in
 [AGENTIC_TUNING.md](AGENTIC_TUNING.md) and `models.json`: off (`none` in the config) for the
@@ -155,6 +158,7 @@ controller starts) and the tracked copies in `docs/host-tuning` carry:
 | Swift 1.5 IQ3_XXS | 0.3 | 0.9 | 20 | 0.0 | medium |
 | Swift 1.5 Abliterated IQ3_XXS | 0.3 | 0.9 | 20 | 0.0 | medium |
 | Qwen3.8 27B NInfer GSQ3 | 0.3 | 0.9 | 20 | 0.0 | medium |
+| Qwen3.5 4B Q4_K_M | 0.7 | 0.8 | 20 | 1.5 | none (off) |
 
 The three Flash Next / Swift entries had no `sampling` block before this pass and ran the
 engine's own defaults; they now state theirs, so the setting the app shows is the setting the
@@ -189,3 +193,5 @@ its context had already been raised to 131,072.
   [AGENTIC_TUNING.md](AGENTIC_TUNING.md) still stands for that workload.
 - The 70 GB MoE files were measured through the running server on this host with the GPU
   shared, not on a clean card.
+- Qwen3.5-4B was not measured on these fixtures. Its row in the ships-with table is the
+  shipped configuration, not a result.

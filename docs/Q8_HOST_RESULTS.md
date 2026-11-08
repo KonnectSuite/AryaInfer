@@ -1,5 +1,8 @@
 # 8-bit model set: AryaInfer host results
 
+> **Historical record (October 2026, engine 0.1.45).** The 8-bit profiles measured here were later uninstalled
+> from this host. Current roster and current numbers: [ENGINES.md](ENGINES.md).
+
 Measured on the i9-14900KF, RTX 4070 Ti SUPER 16 GB, 64 GB DDR5, Windows 11 (10.0.26200) host with NVIDIA
 driver 610.88. AryaInfer 0.1.45, commit 4820a00e, the pre-built `strata-poly` engine. AryaInfer is a fork of
 PolyStrata (VecSzn), which is a fork of Niko1221's original Strata. See [credits](../CREDITS.md).
