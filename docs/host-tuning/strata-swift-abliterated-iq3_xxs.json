@@ -25,7 +25,7 @@
     "32768",
     "--vision",
     "--vram-reserve-mib",
-    "1000",
+    "2048",
     "--pcie-frac",
     "0.00",
     "--spec-min-p",
@@ -44,7 +44,7 @@
   "cwd": "$INSTALL",
   "tokenizer": "$DATA\\packs\\sc117-swift-abliterated-iq3_xxs\\tokenizer",
   "model_name": "swift-1.5-abliterated-iq3_xxs",
-  "display_name": "AryaStrata Swift 1.5 Abliterated IQ3_XXS — 256K vision",
+  "display_name": "AryaStrata Swift 1.5 Abliterated IQ3_XXS â€” 256K vision",
   "log": "$INSTALL\\strata-swift-abliterated-iq3_xxs.log",
   "lib_dirs": [
     "$DATA\\engines\\strata-0.1.58",
