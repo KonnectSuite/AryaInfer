@@ -307,3 +307,19 @@ Rollback: restore the `.bak-0.1.54` configs and restart.
 Known follow-ups: `setup.py` still expects the prebuilt asset `strata-windows-x64.zip`, while v0.2.10 publishes
 `strata-engine-0.1.56-windows-x86_64-cuda-cuda13.tar.gz`, so a fresh setup needs the new asset naming; and the fork's
 engine source (0.1.45) still needs the source merge to the 0.1.56 commit `06698c674`.
+
+## Engine 0.1.58 (2026-11-07)
+
+The native Strata engine was updated to **0.1.58** from the v0.2.12 release (`strata-engine-0.1.58-windows-x86_64-cuda-cuda13.tar.gz`, build commit `8a42a9457db6`, SHA-256 `3311443b...`), installed side by side in `C:\AI\Strata-data\engines\strata-0.1.58` (0.1.56 kept for rollback).  The three native Flash-Next run configs (base, Swift 1.5 and Swift 1.5 abliterated) now point at it, vision included.
+
+Measured on this host after the update, base Flash-Next IQ3_XXS, 262144 context, DFlash2, temperature 0.3:
+
+| prompt tokens | prefill tok/s | decode tok/s |
+| ---: | ---: | ---: |
+| 19 | 52.6 | 86.4 |
+| 4,621 | 1,886.0 | 78.4 |
+| 16,121 | 1,336.9 | 74.4 |
+
+The same model on 0.1.56, at about 15K tokens, was seen at 52.8 tok/s decode, and its log shows prompt reads of 491-523 tok/s.  The v0.2.12 notes explain the single-card gain: the CPU/upload share for missed experts follows the measured CPU pool (ceiling 0.95 instead of 0.60), and a bare `--prefill auto` takes an 8192-token chunk here (the RAM guard keeps it below 16384).  Both matter on a 16 GB card that keeps most experts in system RAM.
+
+The Swift rows were not re-measured; they share the same engine and flags.  Rollback: point the three configs at `strata-0.1.56` and restart.  `--pcie-frac`, `--adapt-decay` and `--vram-reserve-mib` are still accepted by 0.1.58 even though the engine no longer lists them in `--help`.
