@@ -47,6 +47,7 @@
  },
  "reasoning_budget_tokens": 9600,
  "reasoning_loop_recovery": "recover",
+ "reasoning_close_retry": true,
  "reasoning_effort": "medium",
  "reasoning_budget_by_effort": {
   "off": 0,

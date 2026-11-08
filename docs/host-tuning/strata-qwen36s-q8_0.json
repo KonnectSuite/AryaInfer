@@ -48,6 +48,7 @@
  },
  "reasoning_loop_recovery": "recover",
  "display_name": "AryaStrata Qwen3.6 35B-A3B Q8_0 \u2014 256K vision",
+ "reasoning_close_retry": true,
  "reasoning_effort": "medium",
  "reasoning_budget_tokens": 8000,
  "reasoning_budget_by_effort": {

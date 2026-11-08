@@ -45,6 +45,7 @@
   "top_k": 20,
   "presence_penalty": 0.0
  },
+ "reasoning_close_retry": true,
  "reasoning_effort": "medium",
  "reasoning_budget_tokens": 9600,
  "reasoning_budget_by_effort": {

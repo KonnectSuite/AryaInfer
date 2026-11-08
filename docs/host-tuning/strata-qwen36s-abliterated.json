@@ -41,6 +41,7 @@
  },
  "reasoning_loop_recovery": "recover",
  "display_name": "AryaStrata Qwen3.6 35B-A3B Abliterated (Q4_K_M) - 256K vision",
+ "reasoning_close_retry": true,
  "reasoning_effort": "none",
  "reasoning_budget_tokens": 9600,
  "reasoning_budget_by_effort": {

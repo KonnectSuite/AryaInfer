@@ -64,6 +64,7 @@
  "fit_max_tokens": true,
  "switch_on_request": true,
  "env": {},
+ "reasoning_close_retry": true,
  "reasoning_effort": "medium",
  "reasoning_budget_tokens": 9600,
  "reasoning_loop_recovery": "recover",
