@@ -32,8 +32,9 @@ vendored into the Windows build (Apache-2.0), and the llama.cpp/ggml authors
 AryaInfer is configured for our i9-14900KF, RTX 4070 Ti SUPER 16 GB, 64 GB RAM,
 Windows 11 host. We build and benchmark changes against that setup, and replace
 documentation wording with our measured findings as results become available.
-Installed engines here: Strata 0.1.58 (native), PolyStrata 0.1.45-poly.3,
-the `aryainfer` build of 2026-11-03, and NInfer `rtx4080-port` `2469b57`.
+Installed engines here: Strata 0.1.58 (native), PolyStrata 0.1.45
+(`engine-poly`, src `7bc1d82f`), the `aryainfer` build of 2026-11-03, and NInfer
+`rtx4080-port` `2469b57`.
 
 Only measurements explicitly recorded as AryaInfer host results describe this
 machine. Inherited tables and demos describe their original machines. Keep their

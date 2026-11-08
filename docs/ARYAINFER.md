@@ -19,7 +19,7 @@ budget, tools, images, API, web app) is shared:
 | Backend | Binary here | Runs | Context |
 | --- | --- | --- | ---: |
 | Strata (native Qwen engine, upstream 0.1.58) | `C:\AI\Strata-data\engines\strata-0.1.58\strata.exe` | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5, Swift abliterated | 262,144 |
-| PolyStrata (`strata-poly`) | `engine-poly\strata-poly.exe` (0.1.45-poly.3) | Qwen3.6-35B-A3B UD-Q4, abliterated, Ornith 1.5, and the GGUF families | 262,144 |
+| PolyStrata (`strata-poly`) | `engine-poly\strata-poly.exe` (0.1.45, src `7bc1d82f`) | Qwen3.6-35B-A3B UD-Q4, abliterated, Ornith 1.5, and the GGUF families | 262,144 |
 | AryaInfer build (`aryainfer`) | `build-poly\aryainfer.exe` (2026-11-03) | Qwen3.8-27B AQ3, 27B Turbo IQ3_XXS, Qwen3.5-4B | 131,072 / 65,536 |
 | NInfer (ported) | `engine-ninfer\ninfer-engine.exe` (pinned `2469b57` + shim) | Qwen3.8-27B GSQ3 `.ninfer` | 131,072 |
 

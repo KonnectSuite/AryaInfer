@@ -123,10 +123,10 @@ takes a repeated 1,220-token turn from 1,845 ms to 33 ms (`reused 1219`), and a
 
 ### PolyStrata - Qwen3.6-35B-A3B
 
-| Model | Context | Prefill | Decode |
+| Model | Prompt (actual) | Prefill | Decode |
 | --- | ---: | ---: | ---: |
-| UD-Q4_K_XL | 131,031 actual | 1,404.3 tok/s | 73.8 tok/s |
-| Q8_0 | 131,031 actual | 1,404.5 tok/s | 52.2 tok/s |
+| UD-Q4_K_XL | 131,031 tokens | 1,404.3 tok/s | 73.8 tok/s |
+| Q8_0 | 131,031 tokens | 1,404.5 tok/s | 52.2 tok/s |
 
 Short-prompt decode was 151.2 (Q4) and 97.2 (Q8). Coding, image and recall
 results: [QWEN36_HOST_RESULTS.md](QWEN36_HOST_RESULTS.md).
