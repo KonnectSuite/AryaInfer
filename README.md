@@ -6,7 +6,7 @@ Local AI for coding, coding agents and image understanding, configured and bench
 
 Translations retain inherited guidance; current host results and validation status are maintained on this English page.
 
-AryaInfer is a fork of **[PolyStrata](https://github.com/VecSzn/PolyStrata)** by VecSzn,
+AryaInfer is a fork of **[PolyStrata](https://github.com/simplexai-labs/PolyStrata)** by VecSzn,
 which is a fork of **[the original Strata](https://github.com/Niko1221/Strata)** by
 Niko1221 and the Strata contributors. Their engines, tooling and research make this
 fork possible. See [credits](CREDITS.md) and the original [MIT license](LICENSE).
@@ -22,6 +22,44 @@ own network behavior.
 
 <p align="center"><a href="https://github.com/Niko1221/Strata/releases/download/v0.1.10/Pagoda.mp4"><img src="docs/media/pagoda-preview.webp" width="720" alt="Original Strata voxel pagoda garden demonstration"></a><br>
 <sub>Original Strata demonstration by Niko1221 and contributors: Qwen3.8-Flash-Next IQ3_S, RTX 5070, 128K context. This is an upstream example, not an AryaInfer host result. <a href="https://github.com/Niko1221/Strata/releases/download/v0.1.10/Pagoda.mp4">Watch the video</a>.</sub></p>
+
+## Headline: a 16 GB card against a cloud API
+
+On November 8, 2026 we gave the same 2,832-byte creative-coding prompt — a
+single self-contained HTML file rendering a Three.js voxel Satoru Gojo inside
+a spinning "Unlimited Void" domain, with sliders, three technique modes and a
+live analytics panel — to our local **Qwen3.8-Flash-Next Swift 1.5 IQ3_XXS**
+on this PC and to the **DeepSeek v4 Flash** cloud API. Both produced a file
+that opens and runs.
+
+<p align="center">
+  <img src="docs/media/benchmarks/gojo-swift-1.5-iq3_xxs.jpg" width="49%" alt="Swift 1.5 IQ3_XXS result: Hollow Purple mode, 11,414 voxels, 100% stability">
+  <img src="docs/media/benchmarks/gojo-deepseek-v4-flash.jpg" width="49%" alt="DeepSeek v4 Flash result: Lapse Blue mode, 120 FPS, 2,494 VX">
+</p>
+<p align="center"><sub>Left: AryaInfer Swift 1.5 IQ3_XXS, fully local — 11,414 voxels, 100% stability.
+Right: DeepSeek v4 Flash API — 120 FPS, 2,494 VX. Same prompt (identical hash), same morning, same viewport.</sub></p>
+
+The local run wrote **42,052 tokens in 14 minutes 13 seconds** at an average
+**49.3 tokens/s**, then opened its own output in a headless browser, found a
+runtime bug, fixed it and re-ran — at the cost of electricity, with nothing
+leaving the machine. The API run on the same harness took 23 minutes 32
+seconds and wrote **164,606 tokens** (116.5 tokens/s, ~4x the output) and
+produced the more polished layout; we say so plainly. Full numbers, artifacts
+and caveats: **[Gojo Voxel benchmark](docs/BENCHMARK_GOJO_SWIFT_VS_DEEPSEEK.md)**.
+
+## The interface
+
+The same server that ran that benchmark is the app: a chat page, a live
+resource monitor, a model roster spanning all four engines, and an about page
+that states the exact engine, context and cache a model is using.
+
+<table align="center"><tr>
+<td align="center"><img src="docs/media/ui/arya-infer-chat.jpg" width="390" alt="AryaInfer chat page with swift-1.5-iq3_xxs selected"><br><sub>Chat: <i>runs on this PC. Nothing leaves it.</i></sub></td>
+<td align="center"><img src="docs/media/ui/arya-infer-monitor.jpg" width="390" alt="AryaInfer monitor: decode speed, GPU load, VRAM, temperature, PCIe, power"><br><sub>Monitor: live decode, VRAM, experts cached, power, PCIe</sub></td>
+</tr><tr>
+<td align="center"><img src="docs/media/ui/arya-infer-models.jpg" width="390" alt="AryaInfer model roster dropdown across four engines"><br><sub>Roster: the model picker spans all four engines</sub></td>
+<td align="center"><img src="docs/media/ui/arya-infer-about.jpg" width="390" alt="AryaInfer about page: model, engine, context, KV cache, host specs"><br><sub>About: exact engine, context and cache per model</sub></td>
+</tr></table>
 
 ## Supported models
 
@@ -1103,7 +1141,7 @@ for comparison; it supplements the current guide rather than replacing it.
 ## Credits and license
 
 **AryaInfer â†’ PolyStrata â†’ original Strata.** This is a fork of
-[PolyStrata](https://github.com/VecSzn/PolyStrata) by VecSzn, itself a fork of
+[PolyStrata](https://github.com/simplexai-labs/PolyStrata) by VecSzn, itself a fork of
 [Strata](https://github.com/Niko1221/Strata) by Niko1221 and contributors.
 AryaInfer contributes host configuration, integration, benchmarking and
 documentation; it currently uses the upstream release engine without engine-code

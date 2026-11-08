@@ -1,0 +1,46 @@
+{
+  "run": "Gojo Voxel creative-coding test, AryaInfer side",
+  "date_local": "2026-11-08 05:00-05:14 America/New_York",
+  "model": "strata:swift-1.5-iq3_xxs",
+  "engine": "Strata v0.1.58, native Windows",
+  "preset": "arya-standard",
+  "context_window": 262144,
+  "agent_turns": 1,
+  "wall_seconds": 853.0,
+  "steps": 51,
+  "tool_calls_total": 59,
+  "tool_calls": {
+    "read": 3,
+    "write": 1,
+    "edit": 13,
+    "pwsh": 2,
+    "grep": 1,
+    "mcp__arya_browser__agent_browser_open": 1,
+    "mcp__arya_browser__agent_browser_screenshot": 8,
+    "mcp__arya_browser__agent_browser_eval": 13,
+    "mcp__arya_browser__agent_browser_wait_ms": 3,
+    "mcp__arya_browser__agent_browser_reload": 3,
+    "mcp__arya_browser__agent_browser_tab_list": 2,
+    "mcp__arya_browser__agent_browser_tab_new": 3,
+    "mcp__arya_browser__agent_browser_get_url": 1,
+    "mcp__arya_browser__agent_browser_scroll": 2,
+    "mcp__arya_browser__agent_browser_tab_close": 2,
+    "present": 1
+  },
+  "input_tokens_new": 85283,
+  "cache_read_tokens": 4093721,
+  "output_tokens": 42052,
+  "output_tokens_per_s_wall": 49.3,
+  "self_verification": {
+    "headless_chrome_run": true,
+    "screenshots_taken": 8,
+    "page_eval_calls": 13,
+    "console_errors_at_end": 0,
+    "domain_stability_pct": 100,
+    "voxel_count": 11414,
+    "bugs_found_and_fixed": [
+      "ReferenceError z (one)"
+    ]
+  },
+  "notes": "Single run. Requires network for Three.js CDN (jsDelivr with unpkg fallback) and WebGL. Raw session log not published (contains local file paths)."
+}

@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Satoru Gojo — Unlimited Void · Voxel Domain Benchmark</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#05010f; --panel:rgba(12,4,28,.78); --purple:#8a2be2; --violet:#b14bff;
+  --blue:#35c8ff; --crimson:#ff2d55; --text:#c9b8ff; --dim:#7a6ba8;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--void);color:var(--text);
+  font-family:'Rajdhani',system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+canvas#gl{position:fixed;inset:0;display:block;touch-action:none;cursor:grab}
+canvas#gl:active{cursor:grabbing}
+#ui{position:fixed;inset:0;pointer-events:none;z-index:5}
+#ui .vignette{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 55%,rgba(2,0,10,.85) 100%)}
+#ui .scan{position:absolute;inset:0;pointer-events:none;opacity:.10;
+  background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(120,80,255,.55) 2px 3px)}
+.panel{position:absolute;pointer-events:auto;
+  background:linear-gradient(160deg,rgba(22,8,46,.88),rgba(8,3,20,.88));
+  border:1px solid rgba(138,43,226,.55);border-radius:10px;padding:14px 16px;
+  box-shadow:0 0 22px rgba(138,43,226,.28),inset 0 0 26px rgba(53,200,255,.05);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.panel::before{content:'';position:absolute;inset:-1px;border-radius:11px;pointer-events:none;
+  background:linear-gradient(135deg,rgba(53,200,255,.55),transparent 30%,transparent 70%,rgba(255,45,85,.45));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;padding:1px}
+#hdr{top:16px;left:16px;max-width:330px;animation:rise .8s .1s both}
+#hdr .tag{font:700 10px 'Share Tech Mono',monospace;letter-spacing:.32em;color:var(--blue);
+  text-shadow:0 0 8px rgba(53,200,255,.8)}
+#hdr h1{font:900 26px/1.05 'Orbitron',sans-serif;margin-top:6px;color:#efe6ff;
+  text-shadow:0 0 14px rgba(138,43,226,.9),0 0 42px rgba(138,43,226,.5)}
+#hdr .sub{margin-top:6px;font:600 11px 'Share Tech Mono',monospace;letter-spacing:.14em;color:var(--dim)}
+#analytics{top:16px;right:16px;width:252px;animation:rise .8s .25s both}
+.a-label{font:700 10px 'Share Tech Mono',monospace;letter-spacing:.22em;color:var(--dim)}
+.a-val{font:700 26px 'Orbitron',sans-serif;margin:2px 0 2px}
+#stabilityVal{color:#7dffb0;text-shadow:0 0 12px rgba(125,255,176,.7)}
+#resVal{color:var(--violet);text-shadow:0 0 12px rgba(177,75,255,.7);font-size:22px}
+#spark{display:block;width:100%;height:38px;margin:4px 0 10px;
+  border:1px solid rgba(138,43,226,.3);border-radius:4px;background:rgba(0,0,0,.35)}
+.a-div{height:1px;margin:8px 0;background:linear-gradient(90deg,transparent,rgba(138,43,226,.7),transparent)}
+#controls{left:16px;bottom:16px;width:330px;animation:rise .8s .4s both}
+.ctl-top{display:flex;justify-content:space-between;align-items:baseline;margin-top:12px}
+.ctl-top b{font:700 11px 'Share Tech Mono',monospace;letter-spacing:.18em;color:var(--text)}
+.ctl-top span{font:700 13px 'Share Tech Mono',monospace;color:var(--blue)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;margin-top:8px;border-radius:2px;
+  background:linear-gradient(90deg,var(--purple),var(--blue));outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:3px;
+  transform:rotate(45deg);background:#0b0420;border:2px solid var(--blue);box-shadow:0 0 12px var(--blue)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:3px;background:#0b0420;
+  border:2px solid var(--blue);box-shadow:0 0 12px var(--blue)}
+.tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.tab{font:700 11px 'Share Tech Mono',monospace;letter-spacing:.12em;padding:9px 6px;border-radius:6px;
+  border:1px solid rgba(138,43,226,.45);background:rgba(10,4,24,.7);color:var(--dim);cursor:pointer;
+  transition:all .22s;text-align:center}
+.tab:hover{color:var(--text);border-color:rgba(138,43,226,.9)}
+.tab.active[data-mode=neutral]{color:#e8dcff;border-color:var(--violet);
+  box-shadow:0 0 14px rgba(177,75,255,.5),inset 0 0 12px rgba(177,75,255,.25)}
+.tab.active[data-mode=blue]{color:#bfefff;border-color:var(--blue);
+  box-shadow:0 0 16px rgba(53,200,255,.7),inset 0 0 12px rgba(53,200,255,.3)}
+.tab.active[data-mode=red]{color:#ffd0da;border-color:var(--crimson);
+  box-shadow:0 0 16px rgba(255,45,85,.7),inset 0 0 12px rgba(255,45,85,.3)}
+.tab.active[data-mode=purple]{color:#e3c8ff;border-color:#a56cff;
+  box-shadow:0 0 18px rgba(165,108,255,.85),inset 0 0 12px rgba(165,108,255,.35)}
+#hint{margin-top:11px;font:600 10px 'Share Tech Mono',monospace;letter-spacing:.1em;color:var(--dim);text-align:center}
+#banner{position:absolute;left:50%;top:17%;transform:translate(-50%,-10px);opacity:0;pointer-events:none;
+  font:900 34px 'Orbitron',sans-serif;letter-spacing:.18em;white-space:nowrap;transition:all .35s}
+#banner.show{opacity:1;transform:translate(-50%,0)}
+#splash{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:14px;background:radial-gradient(ellipse at center,#1a0838 0%,#05010f 62%);
+  transition:opacity 1s;cursor:pointer}
+#splash.hide{opacity:0;pointer-events:none}
+#splash .glyph{font:400 84px 'Share Tech Mono',monospace;color:#d9c4ff;text-shadow:0 0 30px #8a2be2,0 0 90px #8a2be2;
+  animation:pulse 2.2s ease-in-out infinite}
+#splash h2{font:900 30px 'Orbitron',sans-serif;letter-spacing:.3em;color:#efe6ff;
+  text-shadow:0 0 18px rgba(138,43,226,.9)}
+#splash p{font:600 12px 'Share Tech Mono',monospace;letter-spacing:.28em;color:var(--blue);
+  animation:blink 1.4s steps(2) infinite}
+@keyframes pulse{50%{text-shadow:0 0 50px #b14bff,0 0 130px #8a2be2}}
+@keyframes blink{50%{opacity:.35}}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@media (max-width:760px){
+  #hdr{max-width:46vw;padding:10px}#hdr h1{font-size:16px}
+  #analytics{width:200px;padding:10px}#stabilityVal{font-size:20px}
+  #controls{width:56vw;padding:10px}.tabs{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="ui">
+  <div class="scan"></div>
+  <div class="vignette"></div>
+  <header id="hdr" class="panel">
+    <div class="tag">DOMAIN EXPANSION // ACTIVE</div>
+    <h1>UNLIMITED VOID</h1>
+    <div class="sub">VOXEL SANCTION · SATORU GOJO · 六相</div>
+  </header>
+  <section id="analytics" class="panel">
+    <div class="a-label">DOMAIN STABILITY %</div>
+    <div class="a-val" id="stabilityVal">—</div>
+    <canvas id="spark" width="220" height="38"></canvas>
+    <div class="a-div"></div>
+    <div class="a-label">CURSED ENERGY RESONANCE</div>
+    <div class="a-val" id="resVal">—</div>
+    <div class="a-label" id="voxDetail">—</div>
+  </section>
+  <section id="controls" class="panel">
+    <div class="a-label">TECHNIQUE ACTIVATION</div>
+    <div class="tabs">
+      <button class="tab" data-mode="neutral">BASE DOMAIN</button>
+      <button class="tab" data-mode="blue">LAPSE : BLUE</button>
+      <button class="tab" data-mode="red">REVERSAL : RED</button>
+      <button class="tab active" data-mode="purple">HOLLOW PURPLE</button>
+    </div>
+    <div class="ctl-top"><b>CURSED ENERGY OUTPUT</b><span id="ceVal">45</span></div>
+    <input id="ceSlider" type="range" min="0" max="100" value="45">
+    <div class="ctl-top"><b>DOMAIN DENSITY</b><span id="ddVal">8000</span></div>
+    <input id="ddSlider" type="range" min="2000" max="25000" step="500" value="8000">
+    <div id="hint">DRAG ORBIT · SCROLL ZOOM · KEYS 1–4 CAST TECHNIQUE</div>
+  </section>
+  <div id="banner"></div>
+</div>
+<div id="splash">
+  <div class="glyph">∅</div>
+  <h2>DOMAIN EXPANSION</h2>
+  <p>UNLIMITED VOID — CLICK TO ENTER</p>
+</div>
+
+<script>
+window.addEventListener('error',function(e){
+  window.__err=(e.message||'')+' @'+(e.filename||'')+':'+(e.lineno||0)+' :: '+(((e.error&&e.error.stack)||'').split('\n').slice(0,4).join(' ~ '));
+});
+</script>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}
+</script>
+<script type="module">
+const $ = (s)=>document.querySelector(s);
+const bannerEl=$('#banner'), splashEl=$('#splash');
+
+function banner(text,color){
+  bannerEl.textContent=text; bannerEl.style.color=color;
+  bannerEl.style.textShadow='0 0 18px '+color+',0 0 60px '+color;
+  bannerEl.classList.add('show');
+  clearTimeout(banner._t); banner._t=setTimeout(()=>bannerEl.classList.remove('show'),1500);
+}
+function fatal(msg){
+  $('#hdr .sub').textContent='LOAD FAILURE';
+  bannerEl.textContent='∅ DOMAIN COLLAPSE';
+  bannerEl.style.color='#ff2d55';
+  bannerEl.style.textShadow='0 0 18px #ff2d55,0 0 60px #ff2d55';
+  bannerEl.style.top='45%'; bannerEl.classList.add('show');
+  splashEl.innerHTML='<div class="glyph" style="color:#ff2d55">∅</div><h2 style="color:#ff2d55;text-shadow:0 0 22px #ff2d55">DOMAIN COLLAPSE</h2><p style="color:#c9b8ff;animation:none">'+msg+'</p>';
+  splashEl.classList.remove('hide');
+}
+let THREE=null;
+try{ THREE=await import('three'); }
+catch(e1){ try{ THREE=await import('https://unpkg.com/three@0.160.0/build/three.module.js'); }
+  catch(e2){ try{ THREE=await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js'); }
+    catch(e3){ fatal('THREE.JS CDN UNREACHABLE — CHECK NETWORK'); throw e3; } } }
+
+/* ================= renderer / scene / camera ================= */
+const canvas=$('#gl');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.15;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x05010f);
+scene.fog=new THREE.Fog(0x05010f,90,320);
+
+const camera=new THREE.PerspectiveCamera(55,innerWidth/innerHeight,0.1,2000);
+let camYaw=0.55, camPitch=0.12, camDist=104, camDistT=104;
+const camTarget=new THREE.Vector3(0,2,0);
+
+scene.add(new THREE.AmbientLight(0x8f7bff,0.9));
+const keyLight=new THREE.DirectionalLight(0xffffff,1.15); keyLight.position.set(40,90,60); scene.add(keyLight);
+const blueLight=new THREE.PointLight(0x35c8ff,90,260); blueLight.position.set(-55,45,-40); scene.add(blueLight);
+const purpleLight=new THREE.PointLight(0x8a2be2,110,260); purpleLight.position.set(45,-30,50); scene.add(purpleLight);
+const statueLight=new THREE.PointLight(0xfff2e0,260,150); statueLight.position.set(14,26,26); scene.add(statueLight);
+const statueRim=new THREE.PointLight(0x6fd8ff,150,140); statueRim.position.set(-18,10,-22); scene.add(statueRim);
+
+const world=new THREE.Group(); scene.add(world);
+
+/* starfield */
+{
+  const N=1600, pos=new Float32Array(N*3);
+  for(let i=0;i<N;i++){
+    const th=Math.random()*Math.PI*2, ph=Math.acos(2*Math.random()-1), r=320+Math.random()*260;
+    pos[i*3]=r*Math.sin(ph)*Math.cos(th); pos[i*3+1]=r*Math.cos(ph); pos[i*3+2]=r*Math.sin(ph)*Math.sin(th);
+  }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  scene.add(new THREE.Points(g,new THREE.PointsMaterial({color:0x9db4ff,size:1.7,transparent:true,opacity:0.85,depthWrite:false,blending:THREE.AdditiveBlending,sizeAttenuation:true})));
+}
+
+/* ================= voxel colour palette ================= */
+const C={
+  navy:   new THREE.Color(0x242e52),
+  navyLt: new THREE.Color(0x33406e),
+  navyDk: new THREE.Color(0x141b33),
+  black:  new THREE.Color(0x07070d),
+  skin:   new THREE.Color(0xf3c9a4),
+  skinDk: new THREE.Color(0xd9a87f),
+  hair:   new THREE.Color(0xf2f4fa),
+  hairLt: new THREE.Color(0xffffff),
+  hairDk: new THREE.Color(0xcfd4e2),
+  mouth:  new THREE.Color(0x8c3a44),
+  stone:  new THREE.Color(0x241b3e),
+  stoneDk:new THREE.Color(0x161028),
+  runeB:  new THREE.Color(0x35c8ff),
+  runeP:  new THREE.Color(0xb14bff)
+};
+
+/* ============================================================
+   GOJO BLUEPRINT — procedural voxel figure, structured loops.
+   Model local space: +Z = front, +Y = up, X = left/right.
+   Feet at y=0, crown at y=64, spike tips ~y=68.
+   ============================================================ */
+function buildGojoVoxels(){
+  const V=[];
+  const add=(x,y,z,c)=>V.push([x,y,z,c]);
+
+  /* --- Boots & Legs: dark navy/black from base to waist line --- */
+  for(const sx of [-2,1]){
+    for(let y=0;y<=2;y++){                       // boots
+      for(let dx=0;dx<=1;dx++) for(let z=-1;z<=2;z++){
+        const c=(y===0||(dx===0&&z===2))?C.navyDk:C.navy;
+        add(sx+dx,y,z,c);
+      }
+    }
+    for(let y=3;y<=31;y++){                     // legs to waist
+      for(let dx=0;dx<=1;dx++) for(let z=0;z<=1;z++){
+        const c=(y%8===7||(sx===-2&&z===0&&y%4===0))?C.navyDk:C.navy;
+        add(sx+dx,y,z,c);
+      }
+    }
+  }
+  for(let y=32;y<=33;y++)                       // waist / hips closing the pelvis
+    for(let x=-2;x<=1;x++) for(let z=-1;z<=2;z++) add(x,y,z,(z===-1)?C.navyDk:C.navy);
+
+  /* --- Jujutsu High uniform: slim torso column + high stiff collar --- */
+  const halfW=(y)=> y<=38?2 : y<=43?3 : y<=47?3 : 2;   // waist -> chest -> shoulders -> yoke
+  for(let y=34;y<=49;y++){
+    const h=halfW(y);
+    for(let x=-h;x<=h-1;x++) for(let z=-1;z<=2;z++){
+      const c=(z===-1)?C.navyDk:(x===-h||x===h-1)?C.navyLt:C.navy;
+      add(x,y,z,c);
+    }
+  }
+  for(const sx of [-4,3]){                      // shoulder bridge into the arms
+    for(let z=0;z<=1;z++){ add(sx,49,z,C.navyLt); add(sx,50,z,C.navy); }
+  }
+  for(const sx of [-5,4]){                      // arms hanging at the sides
+    for(let y=38;y<=49;y++) for(let dx=0;dx<=1;dx++) for(let z=0;z<=1;z++)
+      add(sx+dx,y,z,(z===-1)?C.navyDk:C.navy);
+    for(let y=36;y<=37;y++)                     // hands below the sleeves
+      for(let dx=0;dx<=1;dx++) for(let z=0;z<=1;z++) add(sx+dx,y,z,C.skin);
+  }
+  for(let y=51;y<=53;y++){                      // signature high, stiff collar around the neck
+    for(let x=-2;x<=1;x++) for(let z=-1;z<=2;z++){
+      const neck=(x>=-1&&x<=0&&z>=0&&z<=1);
+      if(neck) continue;
+      add(x,y,z,((x===-2||x===1)&&(z===-1||z===2))?C.navyLt:C.navy);
+    }
+  }
+  for(let y=50;y<=52;y++)                       // neck (skin, inside the collar)
+    for(let x=-1;x<=0;x++) for(let z=0;z<=1;z++) add(x,y,z,y===52?C.skinDk:C.skin);
+
+  /* --- Head block: skin, blindfold band, spiky white hair --- */
+  for(let y=54;y<=62;y++)
+    for(let x=-2;x<=1;x++) for(let z=-1;z<=2;z++){
+      const front=(z===2), back=(z===-1);
+      let c=C.skin;
+      if(back) c=C.black;                                   // hair mass behind the head
+      else if(front&&y===55) c=C.mouth;                     // mouth line
+      else if(front&&y===56) c=C.skinDk;                    // shadow under the mouth
+      else if(front&&y===58) c=C.skinDk;                    // nose shadow
+      else if(front&&y===54) c=C.skinDk;                    // chin
+      add(x,y,z,c);
+    }
+  add(-1,57,3,C.skin); add(0,57,3,C.skin);                   // nose tip, one voxel forward
+  for(let y=59;y<=61;y++)                                     // blindfold: jet-black band, full wrap
+    for(let x=-2;x<=1;x++) for(let z=-1;z<=2;z++) add(x,y,z,C.black);
+  add(-1,60,-2,C.black); add(0,60,-2,C.black);               // blindfold knot at the back
+  add(-1,61,-2,C.black); add(0,61,-2,C.black);
+
+  for(let y=63;y<=64;y++)                                     // hair cap over the crown
+    for(let x=-3;x<=2;x++) for(let z=-2;z<=2;z++){
+      const d=Math.hypot(x+1.5,z-0.5);
+      if(d>3.6) continue;
+      add(x,y,z,(x===-3||x===2||z===-2)?C.hairDk:(y===64?C.hairLt:C.hair));
+    }
+  for(let y=59;y<=62;y++)                                     // hair mass down the back of the head
+    for(let x=-2;x<=1;x++) add(x,y,-2,C.black);
+
+  const h=(n)=>{ const s=Math.sin(n*127.1+311.7)*43758.5453; return s-Math.floor(s); };
+  for(let x=-3;x<=2;x++)                                      // crown spikes: up + outward
+    for(let z=-2;z<=2;z++){
+      const d=Math.hypot(x+1.5,z-0.5); if(d>3.4) continue;
+      const n=2+Math.floor(h(x*7+z*13)*4);
+      const ox=(x+1.5)*0.34, oz=(z-0.5)*0.34;
+      for(let k=0;k<n;k++)
+        add(Math.round(x+ox*k*0.6),65+k,Math.round(z+oz*k*0.6),k===n-1?C.hairLt:(k%2?C.hair:C.hairDk));
+    }
+  for(const sx of [-5,4])                                     // side spikes from temples / sides
+    for(let y=56;y<=62;y++)
+      for(let z=-1;z<=2;z++)
+        if(h(sx*3+y*11+z*5)>0.55) add(sx,y,z,h(sx*5+y*3+z*7)>0.5?C.hair:C.hairDk);
+  for(let x=-2;x<=1;x++)                                      // fringe over the brow
+    if(h(x*3+7)>0.35) add(x,63,2,h(x*11)>0.55?C.hairLt:C.hair);
+
+  return V;
+}
+
+/* ================= floating voxel platform ================= */
+function buildPlatformVoxels(){
+  const V=[];
+  const add=(x,y,z,c)=>V.push([x,y,z,c]);
+  for(let x=-15;x<=15;x++)
+    for(let z=-15;z<=15;z++){
+      const d=Math.hypot(x,z);
+      if(d<=14.6){
+        const edge=d>13.2;
+        add(x,-35,z,edge?C.runeP:((x+z)%3===0?C.stoneDk:C.stone));
+      }
+      if(d<=12.4) add(x,-36,z,C.stoneDk);
+      if(d<=10.2) add(x,-37,z,C.stone);
+      if(d<=8.0)  add(x,-38,z,C.stoneDk);
+      if(d<=5.8)  add(x,-39,z,C.stone);
+    }
+  for(let a=0;a<360;a+=5){                                   // glowing rim ring
+    const r=a*Math.PI/180;
+    add(Math.round(Math.cos(r)*13.9),-34,Math.round(Math.sin(r)*13.9),C.runeP);
+  }
+  for(let a=0;a<360;a+=7){                                   // rune circle under the statue
+    const r=a*Math.PI/180;
+    add(Math.round(Math.cos(r)*8.6),-34,Math.round(Math.sin(r)*8.6),C.runeB);
+  }
+  return V;
+}
+
+/* ================= concentric cosmic rings ================= */
+function buildRingVoxels(){
+  const V=[];
+  const specs=[{r:30,n:72,c1:0x35c8ff,c2:0x8a2be2,y:2},{r:46,n:104,c1:0xb14bff,c2:0x35c8ff,y:-4},{r:62,n:136,c1:0x8a2be2,c2:0xff2d55,y:6}];
+  for(const s of specs)
+    for(let i=0;i<s.n;i++){
+      const a=i/s.n*Math.PI*2;
+      const c=new THREE.Color(i%2?s.c1:s.c2);
+      V.push([Math.cos(a)*s.r,s.y+Math.sin(a*3)*1.6,Math.sin(a)*s.r,c]);
+    }
+  return V;
+}
+
+/* ================= infinite geometric wireframes ================= */
+const wireframes=[];
+function addWire(geo,r,color,spin,tilt){
+  const m=new THREE.LineSegments(new THREE.WireframeGeometry(geo),
+    new THREE.LineBasicMaterial({color,transparent:true,opacity:0.32,blending:THREE.AdditiveBlending,depthWrite:false}));
+  m.scale.setScalar(r); m.rotation.set(tilt,0,tilt*0.5);
+  world.add(m); wireframes.push({m,spin});
+}
+addWire(new THREE.IcosahedronGeometry(1,1),42,0x35c8ff, 0.12, 0.4);
+addWire(new THREE.OctahedronGeometry(1,0),   58,0xb14bff,-0.08, 1.1);
+addWire(new THREE.IcosahedronGeometry(1,0),  78,0x8a2be2, 0.05, 0.7);
+addWire(new THREE.TorusGeometry(1,0.12,8,32),50,0x35c8ff,-0.16, 1.4);
+addWire(new THREE.TorusGeometry(1,0.08,8,32),66,0xb14bff, 0.10,-0.6);
+
+/* ================= technique FX: shockwaves + void orb ================= */
+const shockwaves=[];
+for(let i=0;i<4;i++){
+  const mat=new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
+  const mesh=new THREE.Mesh(new THREE.TorusGeometry(1,0.05,6,64),mat);
+  mesh.rotation.x=Math.PI/2; mesh.visible=false; world.add(mesh);
+  shockwaves.push({mesh,mat,t:1e9,dur:1.4,r0:4,r1:96});
+}
+function fireShockwave(color){
+  const s=shockwaves.find(w=>w.t>=w.dur)||shockwaves[0];
+  s.t=0; s.mat.color.set(color); s.mat.opacity=0.9; s.mesh.visible=true;
+}
+const orbMat=new THREE.MeshBasicMaterial({color:0xa56cff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false});
+const orb=new THREE.Mesh(new THREE.SphereGeometry(1,24,16),orbMat); orb.scale.setScalar(3); world.add(orb);
+const orbRingMat=new THREE.MeshBasicMaterial({color:0xb14bff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
+const orbRing=new THREE.Mesh(new THREE.TorusGeometry(1,0.09,8,48),orbRingMat);
+orbRing.rotation.x=Math.PI/2.4; orbRing.scale.setScalar(5); world.add(orbRing);
+
+/* ================= instanced meshes ================= */
+const boxGeo=new THREE.BoxGeometry(1,1,1);
+const dummy=new THREE.Object3D();
+const statueVoxels=buildGojoVoxels();
+const platformVoxels=buildPlatformVoxels();
+const ringVoxels=buildRingVoxels();
+
+const statueGroup=new THREE.Group(); statueGroup.position.y=-34; world.add(statueGroup);
+const platformGroup=new THREE.Group(); world.add(platformGroup);
+
+const statueMesh=new THREE.InstancedMesh(boxGeo,new THREE.MeshStandardMaterial({roughness:0.62,metalness:0.08}),statueVoxels.length);
+statueGroup.add(statueMesh);
+for(let i=0;i<statueVoxels.length;i++){
+  const[x,y,z,c]=statueVoxels[i];
+  dummy.position.set(x+0.5,y+0.5,z+0.5); dummy.scale.setScalar(0.96); dummy.rotation.set(0,0,0);
+  dummy.updateMatrix(); statueMesh.setMatrixAt(i,dummy.matrix); statueMesh.setColorAt(i,c);
+}
+statueMesh.instanceMatrix.needsUpdate=true; statueMesh.instanceColor.needsUpdate=true;
+
+const platformMesh=new THREE.InstancedMesh(boxGeo,new THREE.MeshStandardMaterial({roughness:0.9,metalness:0.05}),platformVoxels.length);
+platformGroup.add(platformMesh);
+for(let i=0;i<platformVoxels.length;i++){
+  const[x,y,z,c]=platformVoxels[i];
+  dummy.position.set(x+0.5,y+0.5,z+0.5); dummy.scale.setScalar(0.94); dummy.rotation.set(0,0,0);
+  dummy.updateMatrix(); platformMesh.setMatrixAt(i,dummy.matrix); platformMesh.setColorAt(i,c);
+}
+platformMesh.instanceMatrix.needsUpdate=true; platformMesh.instanceColor.needsUpdate=true;
+
+const ringMesh=new THREE.InstancedMesh(boxGeo,new THREE.MeshBasicMaterial({transparent:true,opacity:0.95,blending:THREE.AdditiveBlending,depthWrite:false}),ringVoxels.length);
+ringMesh.frustumCulled=false; world.add(ringMesh);
+for(let i=0;i<ringVoxels.length;i++){
+  const[x,y,z,c]=ringVoxels[i];
+  dummy.position.set(x,y,z); dummy.scale.setScalar(0.72); dummy.rotation.set(0,0,0);
+  dummy.updateMatrix(); ringMesh.setMatrixAt(i,dummy.matrix); ringMesh.setColorAt(i,c);
+}
+ringMesh.instanceMatrix.needsUpdate=true; ringMesh.instanceColor.needsUpdate=true;
+
+/* ambient domain voxels — pre-allocated pool, count driven by the density slider */
+const MAXV=25000;
+const P={
+  hx:new Float32Array(MAXV), hy:new Float32Array(MAXV), hz:new Float32Array(MAXV),
+  x:new Float32Array(MAXV),  y:new Float32Array(MAXV),  z:new Float32Array(MAXV),
+  cr:new Float32Array(MAXV), cg:new Float32Array(MAXV), cb:new Float32Array(MAXV),
+  br:new Float32Array(MAXV), bg:new Float32Array(MAXV), bb:new Float32Array(MAXV),
+  r0:new Float32Array(MAXV), a0:new Float32Array(MAXV), y0:new Float32Array(MAXV),
+  w:new Float32Array(MAXV),  s:new Float32Array(MAXV),  ph:new Float32Array(MAXV)
+};
+const BASE=[[0x6a2bd0],[0x2a6bff],[0x22c8ff],[0x9a3bff],[0x384a9a],[0xd03bff]].map(a=>new THREE.Color(a[0]));
+for(let i=0;i<MAXV;i++){
+  const th=Math.random()*Math.PI*2, ph=Math.acos(2*Math.random()-1);
+  const r=38+Math.pow(Math.random(),0.72)*66;
+  const x=r*Math.sin(ph)*Math.cos(th), y=r*Math.cos(ph)*0.62, z=r*Math.sin(ph)*Math.sin(th);
+  P.hx[i]=x; P.hy[i]=y; P.hz[i]=z; P.x[i]=x; P.y[i]=y; P.z[i]=z;
+  P.r0[i]=Math.hypot(x,z); P.a0[i]=Math.atan2(z,x); P.y0[i]=y;
+  P.w[i]=1.4+Math.random()*1.8; P.s[i]=0.45+Math.random()*0.75; P.ph[i]=Math.random()*Math.PI*2;
+  const bc=BASE[i%BASE.length].clone().lerp(BASE[(i*7)%BASE.length],Math.random()*0.6);
+  P.br[i]=bc.r; P.bg[i]=bc.g; P.bb[i]=bc.b;
+  P.cr[i]=bc.r; P.cg[i]=bc.g; P.cb[i]=bc.b;
+}
+const ambGeo=new THREE.BoxGeometry(1,1,1);
+const ambMesh=new THREE.InstancedMesh(ambGeo,new THREE.MeshStandardMaterial({roughness:0.4,metalness:0.1}),MAXV);
+ambMesh.frustumCulled=false; world.add(ambMesh);
+const glowMesh=new THREE.InstancedMesh(new THREE.SphereGeometry(0.6,6,4),
+  new THREE.MeshBasicMaterial({transparent:true,opacity:0.42,blending:THREE.AdditiveBlending,depthWrite:false}),MAXV);
+glowMesh.frustumCulled=false; world.add(glowMesh);
+{ const w=new THREE.Color(1,1,1); for(let i=0;i<MAXV;i++) glowMesh.setColorAt(i,w); }
+glowMesh.instanceColor.needsUpdate=true;
+
+const scaleSlope=new THREE.Matrix4().makeScale(0.55,0.55,0.55);
+const glowM=new THREE.Matrix4();
+
+/* ================= state + UI ================= */
+let mode='purple', speed=0.45, count=8000;
+const ceSlider=$('#ceSlider'), ddSlider=$('#ddSlider'), ceVal=$('#ceVal'), ddVal=$('#ddVal');
+const stabilityEl=$('#stabilityVal'), resEl=$('#resVal'), detailEl=$('#voxDetail');
+const sparkCv=$('#spark'), sctx=sparkCv.getContext('2d');
+const tabs=[...document.querySelectorAll('.tab')];
+const BANNERS={neutral:'DOMAIN STABILISED',blue:'虚式「蒼」 LAPSE: BLUE',red:'術式「紅」 REVERSAL: RED',purple:'虚式「茈」 HOLLOW PURPLE'};
+const BANC={neutral:'#b14bff',blue:'#35c8ff',red:'#ff2d55',purple:'#a56cff'};
+
+function setMode(m,announce){
+  mode=m;
+  tabs.forEach(t=>t.classList.toggle('active',t.dataset.mode===m));
+  fireShockwave(BANC[m]);
+  if(announce) banner(BANNERS[m],BANC[m]);
+}
+tabs.forEach(t=>t.addEventListener('click',()=>setMode(t.dataset.mode,true)));
+addEventListener('keydown',(e)=>{
+  const k=e.key;
+  if(k==='1') setMode('neutral',true); else if(k==='2') setMode('blue',true);
+  else if(k==='3') setMode('red',true); else if(k==='4') setMode('purple',true);
+});
+ceSlider.addEventListener('input',()=>{ speed=+ceSlider.value/100; ceVal.textContent=ceSlider.value; });
+ddSlider.addEventListener('input',()=>{ count=+ddSlider.value; ddVal.textContent=ddSlider.value; });
+
+/* camera orbit controls: drag, wheel, pinch */
+let dragging=false,lx=0,ly=0,pinch=0;
+canvas.addEventListener('pointerdown',(e)=>{dragging=true;lx=e.clientX;ly=e.clientY;canvas.setPointerCapture(e.pointerId);});
+canvas.addEventListener('pointermove',(e)=>{
+  if(!dragging) return;
+  camYaw-=(e.clientX-lx)*0.006; camPitch+=(e.clientY-ly)*0.005;
+  camPitch=Math.max(-1.25,Math.min(1.35,camPitch)); lx=e.clientX; ly=e.clientY;
+});
+addEventListener('pointerup',()=>dragging=false);
+canvas.addEventListener('wheel',(e)=>{e.preventDefault();camDistT=Math.max(45,Math.min(340,camDistT*(1+e.deltaY*0.0011)));},{passive:false});
+canvas.addEventListener('touchstart',(e)=>{ if(e.touches.length===2){pinch=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);} },{passive:true});
+canvas.addEventListener('touchmove',(e)=>{
+  if(e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    if(pinch>0) camDistT=Math.max(45,Math.min(340,camDistT*(pinch/d))); pinch=d;
+  }
+},{passive:true});
+
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+/* ================= analytics ================= */
+let fps=60, lastT=performance.now(), acc=0, frames=0;
+const fpsHist=new Array(60).fill(60);
+function drawSpark(){
+  const w=sparkCv.width,h=sparkCv.height;
+  sctx.clearRect(0,0,w,h);
+  sctx.strokeStyle='rgba(138,43,226,.22)'; sctx.lineWidth=1;
+  sctx.beginPath(); sctx.moveTo(0,h/2); sctx.lineTo(w,h/2); sctx.stroke();
+  sctx.beginPath();
+  for(let i=0;i<fpsHist.length;i++){
+    const v=Math.min(1,fpsHist[i]/60), x=i/(fpsHist.length-1)*w, y=h-3-v*(h-6);
+    i?sctx.lineTo(x,y):sctx.moveTo(x,y);
+  }
+  sctx.strokeStyle='#35c8ff'; sctx.lineWidth=1.6;
+  sctx.shadowColor='#35c8ff'; sctx.shadowBlur=6; sctx.stroke(); sctx.shadowBlur=0;
+}
+
+/* ================= simulation + render loop ================= */
+const TGT={br:0,bg:0,bb:0};
+const tmpC=new THREE.Color();
+let simT=0, uiT=0, started=false;
+
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt=Math.min(0.05,(now-lastT)/1000); lastT=now;
+  frames++; acc+=dt; fps+=((dt>0?1/dt:60)-fps)*0.06;
+  simT+=dt; uiT+=dt;
+
+  world.rotation.y+=dt*speed*0.9;
+  camDist+=(camDistT-camDist)*Math.min(1,dt*7);
+  const cp=Math.cos(camPitch);
+  camera.position.set(camDist*cp*Math.sin(camYaw),camDist*Math.sin(camPitch)+2,camDist*cp*Math.cos(camYaw));
+  camera.lookAt(camTarget);
+
+  for(const w of wireframes){ w.m.rotation.y+=dt*w.spin; w.m.rotation.x+=dt*w.spin*0.35; }
+
+  /* shockwaves */
+  for(const s of shockwaves){
+    if(s.t<s.dur){
+      s.t+=dt; const p=s.t/s.dur;
+      s.mesh.scale.setScalar(s.r0+(s.r1-s.r0)*p);
+      s.mat.opacity=0.9*(1-p)*(1-p);
+      if(p>=1) s.mesh.visible=false;
+    }
+  }
+
+  /* void orb */
+  const orbOn=(mode!=='neutral');
+  const op=orbMat.opacity+((orbOn?(mode==='purple'?0.85:0.55):0)-orbMat.opacity)*Math.min(1,dt*5);
+  orbMat.opacity=op;
+  orbRingMat.opacity=op*(mode==='purple'?0.8:0.35);
+  const os=(mode==='purple'?4.6:2.8)+Math.sin(simT*(mode==='purple'?2.2:4))*(mode==='purple'?0.9:0.4);
+  orb.scale.setScalar(os);
+  orbRing.scale.setScalar(os*1.9);
+  orbRing.rotation.z+=dt*(mode==='purple'?2.4:0.8);
+  orbMat.color.set(mode==='blue'?0x35c8ff:mode==='red'?0xff2d55:0xa56cff);
+  orbRingMat.color.copy(orbMat.color);
+
+  /* ambient domain voxels */
+  const blueR=0.18, blueG=0.55, blueB=1.0;
+  const redR=1.0,  redG=0.13, redB=0.24;
+  const purR=0.62, purG=0.24, purB=1.0;
+  const k=Math.min(1,dt*4);
+  for(let i=0;i<count;i++){
+    let x=P.x[i], y=P.y[i], z=P.z[i];
+    const ph=P.ph[i], sc=P.s[i];
+    if(mode==='neutral'){
+      const tx=P.hx[i]+Math.sin(simT*0.35+ph)*2.2, ty=P.hy[i]+Math.sin(simT*0.5+ph*1.7)*1.8, tz=P.hz[i]+Math.cos(simT*0.3+ph)*2.2;
+      x+=(tx-x)*k; y+=(ty-y)*k; z+=(tz-z)*k;
+    } else if(mode==='blue'){
+      const r=Math.hypot(x,y,z)+1e-6;
+      const pull=(r>12)?(1-(12/r))*dt*2.4:0;
+      x-=x/r*pull; y-=y/r*pull; z-=z/r*pull;
+      x+=Math.cos(simT*1.4+ph)*0.035; y+=Math.sin(simT*1.2+ph*1.3)*0.035; z+=Math.sin(simT*1.5+ph)*0.035;
+      const rr=Math.hypot(x,y,z);
+      if(rr>150){ const s0=150/rr; x*=s0; y*=s0; z*=s0; }
+      if(rr<11){ const s0=11/rr; x*=s0; y*=s0; z*=s0; }
+    } else if(mode==='red'){
+      const r=Math.hypot(x,y,z)+1e-6;
+      const push=(1-(r/110))*dt*3.2+0.02*dt;
+      x+=x/r*push; y+=y/r*push; z+=z/r*push;
+      x+=Math.sin(simT*0.9+ph)*0.05; y+=Math.cos(simT*0.8+ph)*0.05; z+=Math.cos(simT*0.9+ph*1.2)*0.05;
+      const hx=P.hx[i], hy=P.hy[i], hz=P.hz[i];
+      x+=(hx-x)*dt*0.22; y+=(hy-y)*dt*0.22; z+=(hz-z)*dt*0.22;
+      const rr=Math.hypot(x,y,z);
+      if(rr<13){ const s0=13/rr; x*=s0; y*=s0; z*=s0; }
+      if(rr>170){ const s0=170/rr; x*=s0; y*=s0; z*=s0; }
+    } else {
+      let a=P.a0[i]+simT*P.w[i];
+      const targetR=40+P.r0[i]*0.45;
+      let rr=Math.hypot(x,z);
+      rr+=(targetR-rr)*Math.min(1,dt*1.3);
+      x=Math.cos(a)*rr; z=Math.sin(a)*rr;
+      const ty=P.y0[i]*Math.cos(simT*0.35)+Math.sin(simT*1.1+ph)*3.2;
+      y+=(ty-y)*Math.min(1,dt*1.6);
+      const rr3=Math.hypot(x,y,z);
+      if(rr3<10){ const s0=10/rr3; x*=s0; y*=s0; z*=s0; }
+    }
+    P.x[i]=x; P.y[i]=y; P.z[i]=z;
+
+    /* colour */
+    let tr,tg,tb;
+    if(mode==='blue'){
+      const fl=0.72+0.28*Math.sin(simT*7+ph*3);
+      tr=blueR*fl+0.25*Math.max(0,Math.sin(simT*5+ph*2));
+      tg=blueG*fl; tb=blueB*fl;
+    } else if(mode==='red'){
+      const fl=0.78+0.22*Math.sin(simT*4+ph*2);
+      tr=redR*fl; tg=redG*fl+0.12*Math.max(0,Math.sin(simT*3+ph)); tb=redB*fl;
+    } else if(mode==='purple'){
+      const swirl=0.72+0.28*Math.sin(P.a0[i]+simT*2+ph);
+      tr=purR*swirl; tg=purG*swirl*0.8; tb=purB*swirl;
+    } else { tr=P.br[i]; tg=P.bg[i]; tb=P.bb[i]; }
+    P.cr[i]+=(tr-P.cr[i])*k; P.cg[i]+=(tg-P.cg[i])*k; P.cb[i]+=(tb-P.cb[i])*k;
+
+    dummy.position.set(x,y,z); dummy.scale.setScalar(sc); dummy.rotation.set(0,0,0);
+    dummy.updateMatrix(); ambMesh.setMatrixAt(i,dummy.matrix);
+    tmpC.setRGB(P.cr[i],P.cg[i],P.cb[i]); ambMesh.setColorAt(i,tmpC);
+    glowM.fromArray(ambMesh.instanceMatrix.array,i*16).multiply(scaleSlope);
+    glowMesh.setMatrixAt(i,glowM);
+  }
+  ambMesh.count=count; glowMesh.count=count;
+  ambMesh.instanceMatrix.needsUpdate=true; ambMesh.instanceColor.needsUpdate=true;
+  glowMesh.instanceMatrix.needsUpdate=true;
+  const src=ambMesh.instanceColor.array, dst=glowMesh.instanceColor.array;
+  dst.set(src.subarray(0,count*3)); glowMesh.instanceColor.needsUpdate=true;
+
+  /* analytics */
+  if(uiT>0.25){
+    uiT=0;
+    const stab=Math.max(4,Math.min(100,Math.round(fps/60*100)));
+    stabilityEl.textContent=stab+' %';
+    stabilityEl.style.color=stab>82?'#7dffb0':stab>55?'#ffd166':'#ff2d55';
+    const total=statueVoxels.length+platformVoxels.length+ringVoxels.length+count;
+    resEl.textContent=total.toLocaleString()+' VOX';
+    detailEl.textContent='STATUE '+statueVoxels.length+' · PLATFORM '+platformVoxels.length+' · RINGS '+ringVoxels.length+' · VOID '+count;
+    fpsHist.push(fps); fpsHist.shift(); drawSpark();
+  }
+
+  renderer.render(scene,camera);
+
+  if(!started){
+    started=true;
+    setTimeout(()=>{ splashEl.classList.add('hide'); banner('DOMAIN EXPANSION : UNLIMITED VOID','#b14bff'); },900);
+  }
+}
+
+splashEl.addEventListener('click',()=>splashEl.classList.add('hide'));
+setMode('purple',false);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

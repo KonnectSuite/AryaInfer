@@ -1,0 +1,26 @@
+You are an expert Frontend Engineer and 3D Technical Artist specializing in procedural voxel generation.
+
+Your task is to write a single, completely self-contained HTML file (including all CSS and JavaScript) that runs a 3D performance benchmark. The benchmark must render an anatomically accurate, recognizable Voxel Statue of Satoru Gojo inside a spinning "Unlimited Void" domain.
+
+Requirements:
+1. Tech Stack: Use Three.js imported via a reliable public CDN. All logic must be fully coded out inside this single file.
+2. Anatomically Accurate Gojo Blueprint: Instead of generating random blocks, you must procedurally construct a detailed voxel figure of Satoru Gojo using distinct nested loops or structured coordinate matrices. The figure must clearly map the following details:
+   - The Boots/Legs: Dark navy/black voxels extending from the base up to the waist line.
+   - The Jujutsu High Uniform: A sharp, slim torso column of dark navy/black voxels featuring his signature high, stiff collar around the neck area.
+   - The Blindfold: A distinct horizontal band of jet-black voxels wrapping completely around the upper head block.
+   - The Hair: Spiky clusters of pure white or pale silver voxels layering outwards and upwards from the top and sides of the head block.
+   - The Skin: Pale peach/beige voxels forming the visible lower half of the face (jaw and mouth area below the blindfold) and hands.
+3. The Floating Domain: Place Gojo at the absolute center (0,0,0) of a floating voxel platform. Surrounding him, spawn concentric rings of cosmic particles and infinite geometric wireframe structures representing the "Unlimited Void". The entire world must rotate smoothly on its Y-axis.
+4. JJK Sorcery UI: Build a stylized cyber-occult overlay UI using deep purples, neon blues, and cursed crimson reds with glowing energy borders.
+5. Interactive UI Controls:
+   - "Cursed Energy Output" (Slider): Adjusts the rotation speed of the domain.
+   - "Domain Density" (Slider): Dynamically increases/decreases the total count of ambient background voxels.
+   - "Technique Activation" (Radio/Tab selectors):
+        * "Lapse: Blue": Shifts background voxels to electric blue and makes them gravitate tightly toward Gojo.
+        * "Reversal: Red": Shifts background voxels to deep crimson and pushes them violently away from Gojo.
+        * "Hollow Purple": Blends the particles into a swirling purple vortex orbiting the central Gojo statue.
+6. Jujutsu Analytics: A corner display tracking "Domain Stability %" (FPS) and "Cursed Energy Resonance" (Total Voxel Count).
+
+Code Quality Rules:
+- No placeholders, truncated multi-dimensional arrays, or "// add details here" comments.
+- The procedural loops drawing the Gojo figure must be completely written out so the file runs immediately upon opening.
