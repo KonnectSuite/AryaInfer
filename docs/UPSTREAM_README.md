@@ -1,4 +1,4 @@
-> Historical PolyStrata README from the fork point. These measurements belong to the upstream machines, not the AryaStrata host. Relative links are as in the original repository; see [the upstream repository](https://github.com/VecSzn/PolyStrata).
+> Historical PolyStrata README from the fork point. These measurements belong to the upstream machines, not the AryaStrata host. Relative links are as in the original repository; see [the upstream repository](https://github.com/simplexai-labs/PolyStrata).
 
 <h1 align="center">PolyStrata</h1>
 
@@ -348,7 +348,7 @@ The full list: [docs/INSTALL.md](../docs/INSTALL.md#what-you-need).
 
 The installer sets up everything else. It compiles the engine on your PC and offers to install what that needs
 (g++ and the CUDA toolkit). Not yet: AMD cards, two cards on Windows, three cards or more, pictures.
-A user runs it on Windows with one 24 GB card and 128 GB of RAM ([report](https://github.com/VecSzn/PolyStrata/issues/10)).
+A user runs it on Windows with one 24 GB card and 128 GB of RAM ([report](https://github.com/simplexai-labs/PolyStrata/issues/10)).
 
 The full list: [docs/GLM.md](../docs/GLM.md#what-you-need).
 
@@ -362,7 +362,7 @@ The full list: [docs/GLM.md](../docs/GLM.md#what-you-need).
 | **System** | Linux, and a current NVIDIA driver. |
 
 The installer sets up everything else, as it does for GLM 5.3 Flash. Not tried yet: AMD cards, two cards.
-It reads text only. A user runs it on Windows with one 24 GB card and 128 GB of RAM ([report](https://github.com/VecSzn/PolyStrata/issues/21)).
+It reads text only. A user runs it on Windows with one 24 GB card and 128 GB of RAM ([report](https://github.com/simplexai-labs/PolyStrata/issues/21)).
 
 The full list: [docs/DEEPSEEK.md](../docs/DEEPSEEK.md#what-you-need).
 
@@ -465,7 +465,7 @@ What each of the five needs and how it was checked: [docs/BACKENDS.md](../docs/B
 Do you use an AI coding assistant (Claude Code, Cursor, Codex, GitHub Copilot, ...)? Paste this into it:
 
 ```text
-Set up PolyStrata on this PC for me: https://github.com/VecSzn/PolyStrata - follow docs/AI_SETUP.md in that repository.
+Set up PolyStrata on this PC for me: https://github.com/simplexai-labs/PolyStrata - follow docs/AI_SETUP.md in that repository.
 ```
 
 It checks your graphics card, RAM and disk and picks the model that fits. Then it installs and starts it and tells
@@ -474,7 +474,7 @@ you how to connect your apps. AI tools can also install, start and stop PolyStra
 
 ### Or do it yourself
 
-[Download PolyStrata](https://github.com/VecSzn/PolyStrata/archive/refs/heads/main.zip) and unzip it (or `git clone` it).
+[Download PolyStrata](https://github.com/simplexai-labs/PolyStrata/archive/refs/heads/main.zip) and unzip it (or `git clone` it).
 **Windows:** double-click **`START-HERE.bat`**. **Linux:** run **`./setup.sh`** in the PolyStrata folder.
 
 **Mac (Apple Silicon, M1 to M5, macOS 15 or newer):** install Apple's Command Line Tools once
@@ -718,7 +718,7 @@ Restart PolyStrata (`START-HERE.bat` or `./setup.sh`) after the change. To undo,
 - **It says port 8080 is already in use.** PolyStrata is already running. Look for its window.
 
 More problems and their fixes: [docs/TROUBLESHOOTING.md](../docs/TROUBLESHOOTING.md). Still stuck? Open an
-[issue](https://github.com/VecSzn/PolyStrata/issues) and attach `strata-<model>.log` from the PolyStrata folder. Found a
+[issue](https://github.com/simplexai-labs/PolyStrata/issues) and attach `strata-<model>.log` from the PolyStrata folder. Found a
 security problem? Report it privately: [SECURITY.md](../SECURITY.md).
 
 ## How does it work?

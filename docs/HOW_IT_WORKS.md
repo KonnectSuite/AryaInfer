@@ -1,4 +1,4 @@
-> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # How does AryaInfer work?
 
@@ -82,7 +82,7 @@ The [details](DETAILS.md#how-it-works) explain every part and its numbers, and t
 
 ## Credits
 
-- AryaInfer is a fork of [PolyStrata](https://github.com/VecSzn/PolyStrata), which is a fork of [original Strata](https://github.com/Niko1221/Strata) by Niko1221 and its contributors. The Qwen
+- AryaInfer is a fork of [PolyStrata](https://github.com/simplexai-labs/PolyStrata), which is a fork of [original Strata](https://github.com/Niko1221/Strata) by Niko1221 and its contributors. The Qwen
   engine, the installer, the server and the web app are that project's work. AryaInfer inherits the engine from PolyStrata for GLM 5.3
   Flash ([GLM.md](GLM.md)), whose file is from
   [neuralll](https://huggingface.co/neuralll/GLM-5.3-Flash-GSQ-RCO-3.0bit-Q4Kattn-GGUF).

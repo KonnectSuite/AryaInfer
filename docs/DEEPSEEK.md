@@ -1,4 +1,4 @@
-> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # DeepSeek V4 Flash (`strata-poly`)
 
@@ -6,7 +6,7 @@
 `deepseek4`, read from Unsloth's GGUF. The server, the web app and the API are the ones the README describes.
 
 It is early. This project has run it on one machine, with Linux and one NVIDIA card; a user runs it on Windows
-with a 24 GB card and 128 GB of RAM ([issue 21](https://github.com/VecSzn/PolyStrata/issues/21)).
+with a 24 GB card and 128 GB of RAM ([issue 21](https://github.com/simplexai-labs/PolyStrata/issues/21)).
 
 ## What it was measured on
 
@@ -118,7 +118,7 @@ The engine and its options are GLM's ([GLM.md](GLM.md#how-it-uses-the-card)). Wh
 ## What is missing
 
 - Other sizes in setup: of those in Unsloth's repository it offers only UD-IQ2_XXS. A user with 128 GB of RAM ran
-  two more ([issue 21](https://github.com/VecSzn/PolyStrata/issues/21)).
+  two more ([issue 21](https://github.com/simplexai-labs/PolyStrata/issues/21)).
   UD-IQ3_XXS (104 GB) wrote at 27 to 31 tokens/s and read 512K tokens 4.6% slower than UD-IQ2_XXS.
   UD-IQ4_XS (137 GB) is larger than that RAM: the rest is read from the disk as it is needed, and it wrote at 2 to
   3.4 tokens/s with 0.1.44.1-poly.6. llama.cpp b11706 with the experts on the CPU wrote at 8.6 with the same
@@ -128,7 +128,7 @@ The engine and its options are GLM's ([GLM.md](GLM.md#how-it-uses-the-card)). Wh
 - Guessing ahead with a draft model. The repository has one for this model (`dspark`, 11 GB), which the engine does
   not run yet. Guesses still come from text the conversation repeats.
 - Windows, by this project: setup asks before it installs it there. A user ran UD-IQ2_XXS on Windows 10 with an
-  RTX 5090 D v2 (24 GB) and 128 GB of RAM on the release's ready-made engine ([issue 21](https://github.com/VecSzn/PolyStrata/issues/21)): 29 to 36
+  RTX 5090 D v2 (24 GB) and 128 GB of RAM on the release's ready-made engine ([issue 21](https://github.com/simplexai-labs/PolyStrata/issues/21)): 29 to 36
   tokens/s after prompts of up to 10K tokens, 10K tokens read at 688 to 805. With the context set to 262,144,
   524,288 and 1,048,576 in the run config, one request each of 251,866, 503,920 and 1,008,128 tokens was read at
   393, 247 and 138 tokens/s, and the three facts planted in each were found.

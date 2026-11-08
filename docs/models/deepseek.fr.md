@@ -1,4 +1,4 @@
-> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](../ARYAINFER.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](../ARYAINFER.md).
 
 # DeepSeek V4 Flash
 
@@ -36,7 +36,7 @@ un contexte de 512K, en 32 minutes, et les deux fois les trois faits cachés ded
 
 L'installeur s'occupe de tout le reste, comme pour GLM 5.3 Flash. Pas encore essayé : les cartes AMD, deux
 cartes. Il ne lit que du texte.
-Un utilisateur le fait tourner sous Windows avec une carte de 24 Go et 128 Go de RAM ([rapport](https://github.com/VecSzn/PolyStrata/issues/21)).
+Un utilisateur le fait tourner sous Windows avec une carte de 24 Go et 128 Go de RAM ([rapport](https://github.com/simplexai-labs/PolyStrata/issues/21)).
 
 La liste complète : [docs/DEEPSEEK.md](../DEEPSEEK.md#what-you-need) (en anglais).
 

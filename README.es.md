@@ -1,4 +1,4 @@
-> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](docs/ARYAINFER.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](docs/ARYAINFER.md).
 
 <h1 align="center">AryaInfer</h1>
 
@@ -355,7 +355,7 @@ La lista completa: [docs/INSTALL.md](docs/INSTALL.md#what-you-need).
 
 El instalador se encarga de todo lo demás. Compila el motor en tu PC y ofrece instalar lo que haga falta para eso
 (g++ y el CUDA Toolkit). Todavía no: tarjetas AMD, dos tarjetas en Windows, tres tarjetas o más, imágenes.
-Un usuario lo ejecuta en Windows con una tarjeta de 24 GB y 128 GB de RAM ([informe](https://github.com/VecSzn/PolyStrata/issues/10)).
+Un usuario lo ejecuta en Windows con una tarjeta de 24 GB y 128 GB de RAM ([informe](https://github.com/simplexai-labs/PolyStrata/issues/10)).
 
 La lista completa: [docs/GLM.md](docs/GLM.md#what-you-need) (en inglés).
 
@@ -370,7 +370,7 @@ La lista completa: [docs/GLM.md](docs/GLM.md#what-you-need) (en inglés).
 
 El instalador se encarga de todo lo demás, como con GLM 5.3 Flash. Aún sin probar: tarjetas AMD, dos
 tarjetas. Solo lee texto.
-Un usuario lo ejecuta en Windows con una tarjeta de 24 GB y 128 GB de RAM ([informe](https://github.com/VecSzn/PolyStrata/issues/21)).
+Un usuario lo ejecuta en Windows con una tarjeta de 24 GB y 128 GB de RAM ([informe](https://github.com/simplexai-labs/PolyStrata/issues/21)).
 
 La lista completa: [docs/DEEPSEEK.md](docs/DEEPSEEK.md#what-you-need) (en inglés).
 

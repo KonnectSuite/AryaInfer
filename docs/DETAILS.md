@@ -1,4 +1,4 @@
-> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # AryaInfer - the details
 
@@ -2172,7 +2172,7 @@ two cuBLAS products and a softmax over scores in memory. Under the q8_0 cache (`
 dequantized to fp16 in the attention's existing score scratch; an fp16 cache is read where it lies. No VRAM is added.
 The server logs `STRATA_FATTN: prompt attention through llama.cpp's flash-attention kernel`. Decode, Turing, HIP and
 other models keep the old path, and so does `STRATA_FATTN=0`. It was opt-in (`STRATA_FATTN=1`) until two cards beside
-the one below showed the same gain ([issue 107](https://github.com/VecSzn/PolyStrata/issues/107) and the measurement at
+the one below showed the same gain ([issue 107](https://github.com/simplexai-labs/PolyStrata/issues/107) and the measurement at
 the end of the next section).
 
 **Measured** on an RTX 3070 8 GB (PCIe 3.0 x16; Ryzen 5 2600X, 32 GB DDR4-3200; Cyber-Tiel-Coder 35B-A3B
@@ -2222,7 +2222,7 @@ the median of two runs:
 
 Every run at 32K and 100K answered the hidden code. With the fixed flags of a regression run the greedy answers of
 both and of neither were the same 128 tokens at 32K and parted at token 85 at 100K. The RTX 4060 Laptop of
-[issue 107](https://github.com/VecSzn/PolyStrata/issues/107) at 118K: 1.62x reading, 1.60x writing.
+[issue 107](https://github.com/simplexai-labs/PolyStrata/issues/107) at 118K: 1.62x reading, 1.60x writing.
 
 ---
 

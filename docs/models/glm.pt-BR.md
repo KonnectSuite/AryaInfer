@@ -1,4 +1,4 @@
-> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](../ARYAINFER.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](../ARYAINFER.md).
 
 # GLM 5.3 Flash
 
@@ -37,7 +37,7 @@ ele escreve mais devagar. O que foi medido e como: [docs/GLM.md](../GLM.md#what-
 
 O instalador cuida de todo o resto. Ele compila o motor no seu PC e oferece instalar o que falta para isso
 (g++ e o CUDA Toolkit). Ainda não: placas AMD, duas placas no Windows, três placas ou mais, imagens.
-Um usuário roda no Windows com uma placa de 24 GB e 128 GB de RAM ([relato](https://github.com/VecSzn/PolyStrata/issues/10)).
+Um usuário roda no Windows com uma placa de 24 GB e 128 GB de RAM ([relato](https://github.com/simplexai-labs/PolyStrata/issues/10)).
 
 A lista completa: [docs/GLM.md](../GLM.md#what-you-need) (em inglês).
 

@@ -1,7 +1,7 @@
 # Credits and project lineage
 
 AryaInfer, maintained in [KonnectSuite/AryaInfer](https://github.com/KonnectSuite/AryaInfer),
-is a fork of [PolyStrata](https://github.com/VecSzn/PolyStrata) by VecSzn.
+is a fork of [PolyStrata](https://github.com/simplexai-labs/PolyStrata) by VecSzn.
 PolyStrata is a fork of [the original Strata](https://github.com/Niko1221/Strata)
 by Niko1221 and the Strata contributors.
 

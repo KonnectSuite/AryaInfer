@@ -1,4 +1,4 @@
-> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # GLM 5.3 Flash (`strata-poly`)
 
@@ -7,7 +7,7 @@ Qwen3.8-Flash-Next as before. The server, the web app and the API are the same f
 engine it starts.
 
 It is early. This project has built and run it on one machine, with Linux and one NVIDIA card, and on two RTX
-3080s; a user runs it on Windows with a 24 GB card and 128 GB of RAM ([issue 10](https://github.com/VecSzn/PolyStrata/issues/10)).
+3080s; a user runs it on Windows with a 24 GB card and 128 GB of RAM ([issue 10](https://github.com/simplexai-labs/PolyStrata/issues/10)).
 
 ## What it was measured on
 
@@ -308,7 +308,7 @@ three formats run within run-to-run scatter of each other (prompt 984.0 / 941.8 
 - A ready-made `strata-poly` off Windows, or for a driver older than CUDA 13's: setup compiles it there.
 - GLM on Windows, by this project: no PC with the RAM for it was at hand, and setup asks before it installs it
   there. A user ran 3.0BIT on Windows 10 with an RTX 5090 D v2 (24 GB) and 128 GB of RAM
-  ([issue 10](https://github.com/VecSzn/PolyStrata/issues/10)): 1,483 experts in VRAM, 26 to 30 tokens/s after
+  ([issue 10](https://github.com/simplexai-labs/PolyStrata/issues/10)): 1,483 experts in VRAM, 26 to 30 tokens/s after
   a short prompt, 10K tokens read at 375 to 395. The context set to 1,048,576 in the run config loaded and
   answered, and one request of 557K tokens was read at 286 tokens/s with the three facts planted in it found.
   With 0.1.44.1-poly.5 a request of 1,002,452 tokens was read in 45.7 minutes (66.3 with poly.2), the three

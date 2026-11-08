@@ -1,4 +1,4 @@
-> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # Several requests at once (batch slots)
 
@@ -55,7 +55,7 @@ together, and says for each how many tokens came out the same. To compare token 
 fixed and leave guesses and the tail skip out: `--expert-swaps 0 --cpu-share 0 --window 1 --tail-skip 0`. The
 check gives the attention caches their VRAM at load (`--kv-whole`): otherwise the sequences growing together take
 VRAM from the expert cache, an expert that moves to the CPU rounds differently, and long prompts part for that
-reason alone ([issue 55](https://github.com/VecSzn/PolyStrata/issues/55)). On the
+reason alone ([issue 55](https://github.com/simplexai-labs/PolyStrata/issues/55)). On the
 laptop every token matched for Qwen3.6, Gemma 4 and LFM2.5 with 2 to 4 sequences and prompts of 19 to 3,000 tokens,
 and on the RTX 5090 for Qwen3.6, MiniCPM-V, LFM2.5, DeepSeek V4 Flash and GLM 5.3 Flash with 3 sequences after
 prompts of 64 and 3,000 tokens, and for Flint after prompts of 15 and 3,000 tokens, with every expert on the card

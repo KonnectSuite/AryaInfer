@@ -8,12 +8,12 @@ Both engines report the numeric version `0.1.45`. The release suffix, full sourc
 
 | Release | Source commit | Windows engine |
 | --- | --- | --- |
-| [v0.1.45-poly.2](https://github.com/VecSzn/PolyStrata/releases/tag/v0.1.45-poly.2) | [`974552f562aecb3e86cdd2679e76e4515b52b9d2`](https://github.com/VecSzn/PolyStrata/tree/974552f562aecb3e86cdd2679e76e4515b52b9d2) | Official CUDA 13.0 release binary |
-| [v0.1.45-poly.3](https://github.com/VecSzn/PolyStrata/releases/tag/v0.1.45-poly.3) | [`f096adb0c2739b6348a5c69f94dfb09737c4b044`](https://github.com/VecSzn/PolyStrata/tree/f096adb0c2739b6348a5c69f94dfb09737c4b044) | Official CUDA 13.0 release binary |
+| [v0.1.45-poly.2](https://github.com/simplexai-labs/PolyStrata/releases/tag/v0.1.45-poly.2) | [`974552f562aecb3e86cdd2679e76e4515b52b9d2`](https://github.com/simplexai-labs/PolyStrata/tree/974552f562aecb3e86cdd2679e76e4515b52b9d2) | Official CUDA 13.0 release binary |
+| [v0.1.45-poly.3](https://github.com/simplexai-labs/PolyStrata/releases/tag/v0.1.45-poly.3) | [`f096adb0c2739b6348a5c69f94dfb09737c4b044`](https://github.com/simplexai-labs/PolyStrata/tree/f096adb0c2739b6348a5c69f94dfb09737c4b044) | Official CUDA 13.0 release binary |
 
 Engine SHA-256 values and client identity are in [software.json](software.json). Every run has a supplementary `provenance.json` with its release, commit and binary hash. Original missing `strata_commit` fields remain missing in the tool output.
 
-Official client: [`tools/strata_bench.py` at poly.3](https://github.com/VecSzn/PolyStrata/blob/f096adb0c2739b6348a5c69f94dfb09737c4b044/tools/strata_bench.py), SHA-256 `bd65126bed1f8e5ff3648f5d65c230ea7566219a443272115c1d622735d02be5`. The archived poly.2 client has the same hash. No benchmark-code changes.
+Official client: [`tools/strata_bench.py` at poly.3](https://github.com/simplexai-labs/PolyStrata/blob/f096adb0c2739b6348a5c69f94dfb09737c4b044/tools/strata_bench.py), SHA-256 `bd65126bed1f8e5ff3648f5d65c230ea7566219a443272115c1d622735d02be5`. The archived poly.2 client has the same hash. No benchmark-code changes.
 
 ## Hardware and method
 

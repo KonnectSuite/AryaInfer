@@ -1,6 +1,6 @@
 # Flint 40B-A2.5B UD-Q4_K_XL at 262,144 tokens on the AryaStrata host
 
-Measured October 23, 2026 (America/New_York). AryaStrata is a fork of [PolyStrata](https://github.com/VecSzn/PolyStrata),
+Measured October 23, 2026 (America/New_York). AryaStrata is a fork of [PolyStrata](https://github.com/simplexai-labs/PolyStrata),
 a fork of [Niko1221's original Strata](https://github.com/Niko1221/Strata). These are measurements on our own host,
 using the ready-made upstream `strata-poly` engine 0.1.45 (poly.3); no custom engine build or engine-code speedup is
 claimed.

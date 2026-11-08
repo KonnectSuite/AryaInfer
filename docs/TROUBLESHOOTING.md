@@ -1,4 +1,4 @@
-> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](ARYAINFER.md).
 
 # Something went wrong?
 
@@ -20,7 +20,7 @@ Run `START-HERE.bat` (Linux: `./setup.sh`) again. It continues where it stopped.
 **"blk.N.ffn_gate_exps.weight and blk.N.ffn_up_exps.weight have different types, which this engine does not run".**
 The file quantizes each expert's gate and up in two different formats, as IsValorum's APEX-I NanoPlus files do.
 Engines before 0.1.45-poly.6 refused such files; run `UPDATE.bat` (Linux: `./update.sh`) and it loads
-([issue 103](https://github.com/VecSzn/PolyStrata/issues/103)).
+([issue 103](https://github.com/simplexai-labs/PolyStrata/issues/103)).
 
 **It says the NVIDIA driver is too old.**
 Update it (NVIDIA App or [nvidia.com/drivers](https://www.nvidia.com/drivers)), restart the PC, and run

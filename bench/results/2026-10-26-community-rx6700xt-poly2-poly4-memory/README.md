@@ -1,6 +1,6 @@
 # RX 6700 XT 12 GB: poly.2 / poly.4 and memory availability
 
-Measured on **2026-10-25 and 2026-10-26**. Twenty-eight official `tools/strata_bench.py` suites compare **v0.1.45-poly.2** with **v0.1.45-poly.4**, at 28 and 52 GiB inference-container limits on the same upgraded 64 GB machine. All use a 65,536-token configured window. This is a dated follow-up to [the October 19 report](../2026-10-19-community-rx6700xt-polystrata/README.md), merged in [PR #52](https://github.com/VecSzn/PolyStrata/pull/52); the earlier measurements are preserved.
+Measured on **2026-10-25 and 2026-10-26**. Twenty-eight official `tools/strata_bench.py` suites compare **v0.1.45-poly.2** with **v0.1.45-poly.4**, at 28 and 52 GiB inference-container limits on the same upgraded 64 GB machine. All use a 65,536-token configured window. This is a dated follow-up to [the October 19 report](../2026-10-19-community-rx6700xt-polystrata/README.md), merged in [PR #52](https://github.com/simplexai-labs/PolyStrata/pull/52); the earlier measurements are preserved.
 
 ## Exact tested versions
 
@@ -8,8 +8,8 @@ Both local HIP binaries report numeric engine version `0.1.45`; the release tag,
 
 | Release | Source commit | Native gfx1031 engine SHA-256 |
 | --- | --- | --- |
-| [v0.1.45-poly.2](https://github.com/VecSzn/PolyStrata/releases/tag/v0.1.45-poly.2) | `974552f562aecb3e86cdd2679e76e4515b52b9d2` | `5cecdf2d8354ae704e456914c8d453d3497dfa8200b52e6c0f61802d52912aca` |
-| [v0.1.45-poly.4](https://github.com/VecSzn/PolyStrata/releases/tag/v0.1.45-poly.4) | `145493e66580c80bba09b0130f667a2b1789da69` | `372c6ed707d302c470b864a8fc24ff2a3e462f94cb33c0956c20205a95ef9785` |
+| [v0.1.45-poly.2](https://github.com/simplexai-labs/PolyStrata/releases/tag/v0.1.45-poly.2) | `974552f562aecb3e86cdd2679e76e4515b52b9d2` | `5cecdf2d8354ae704e456914c8d453d3497dfa8200b52e6c0f61802d52912aca` |
+| [v0.1.45-poly.4](https://github.com/simplexai-labs/PolyStrata/releases/tag/v0.1.45-poly.4) | `145493e66580c80bba09b0130f667a2b1789da69` | `372c6ed707d302c470b864a8fc24ff2a3e462f94cb33c0956c20205a95ef9785` |
 
 ROCm userspace is **7.13.0a20260515**; llama.cpp/ggml dependency is pinned to `3cf03257f219afbe7334045ff7c6a06ac68c627d`. Both builds reuse the same compiler/libraries. See [software.json](software.json) and [BUILD.txt](BUILD.txt). No ready-made CUDA binary or architecture override was used.
 

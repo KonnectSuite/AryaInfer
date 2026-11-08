@@ -1,7 +1,7 @@
 # AryaAI development connections and thinking controls
 
 Checked October 18, 2026 on the AryaInfer host. AryaInfer is a fork of
-[PolyStrata](https://github.com/VecSzn/PolyStrata), itself a fork of
+[PolyStrata](https://github.com/simplexai-labs/PolyStrata), itself a fork of
 [Niko1221's original Strata](https://github.com/Niko1221/Strata).
 
 ## Connection cleanup

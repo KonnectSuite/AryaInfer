@@ -1,6 +1,6 @@
 # Qwen3.8 Flash Next IQ3_XXS on the AryaStrata host
 
-Measured October 17, 2026 (America/New_York). AryaStrata is a fork of [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221â€™s original Strata](https://github.com/Niko1221/Strata). These are measurements on our own host, using upstream release engine 0.1.45; no custom engine build or engine-code speedup is claimed.
+Measured October 17, 2026 (America/New_York). AryaStrata is a fork of [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221â€™s original Strata](https://github.com/Niko1221/Strata). These are measurements on our own host, using upstream release engine 0.1.45; no custom engine build or engine-code speedup is claimed.
 
 ## Host and model
 

@@ -17,7 +17,7 @@ in the same roster.
 | Backend | Binary | Source | Models on this host | Context | Vision |
 | --- | --- | --- | --- | ---: | --- |
 | **Strata** (native Qwen engine) | `strata.exe` 0.1.58 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5, Swift 1.5 abliterated | 262,144, int8 KV | `strata-vision.exe` + mmproj, GPU |
-| **PolyStrata** (`strata-poly`) | `engine-poly\strata-poly.exe` | `src/poly`, from [VecSzn/PolyStrata](https://github.com/VecSzn/PolyStrata) | Qwen3.6-35B-A3B UD-Q4_K_XL and abliterated, Ornith 1.5 APEX, and the GGUF families in [BACKENDS.md](BACKENDS.md) | 262,144, q8_0 KV | `strata-vision.exe` + mmproj, GPU |
+| **PolyStrata** (`strata-poly`) | `engine-poly\strata-poly.exe` | `src/poly`, from [VecSzn/PolyStrata](https://github.com/simplexai-labs/PolyStrata) | Qwen3.6-35B-A3B UD-Q4_K_XL and abliterated, Ornith 1.5 APEX, and the GGUF families in [BACKENDS.md](BACKENDS.md) | 262,144, q8_0 KV | `strata-vision.exe` + mmproj, GPU |
 | **AryaInfer** (fork build) | `C:\AI\Strata-data\engines\arya-infer\aryainfer.exe` (repo build: `build-poly\aryainfer.exe`) | `src/poly` fork target, CUDA `sm_89`; AQ3 kernels in `src/poly/prefill_f16.cu` | Qwen3.8-27B AQ3 (GSQ 3-bit), Qwen3.8-27B Turbo IQ3_XXS, Qwen3.5-4B Q4_K_M | 131,072 (27B), 65,536 (4B), q4_0 KV | `strata-vision.exe` + mmproj, CPU |
 | **NInfer** (ported) | `engine-ninfer\ninfer-engine.exe` | [roofkid/ninfer-4080](https://github.com/roofkid/ninfer-4080) at `rtx4080-port` commit `2469b57`, plus `engine-ninfer/shim/main.cpp` | Qwen3.8-27B GSQ3 `.ninfer` | 131,072, rk4v4-e8 KV | external `.sve` embeddings from `strata-vision.exe`, CPU |
 
@@ -138,7 +138,7 @@ license; see [CREDITS.md](../CREDITS.md) and `LICENSE`.
 
 - **Strata** - [Niko1221](https://github.com/Niko1221/Strata) and the Strata
   contributors: the Qwen engine, server, installer, web app and paper.
-- **PolyStrata** - [VecSzn](https://github.com/VecSzn/PolyStrata) and its
+- **PolyStrata** - [VecSzn](https://github.com/simplexai-labs/PolyStrata) and its
   contributors: the `strata-poly` MoE engine, GLM 5.3 Flash, DeepSeek V4 Flash,
   the model integrations and the roster measurements.
 - **NInfer** - [roofkid](https://github.com/roofkid/ninfer-4080): the

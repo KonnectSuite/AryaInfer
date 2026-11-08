@@ -1,4 +1,4 @@
-> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/VecSzn/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](docs/ARYAINFER.md).
+> **AryaInfer documentation:** forked from [PolyStrata](https://github.com/simplexai-labs/PolyStrata), a fork of [Niko1221’s original Strata](https://github.com/Niko1221/Strata). Measurements and hardware claims on this page are inherited upstream results unless explicitly marked as measured on the AryaInfer host. See [host findings](docs/ARYAINFER.md).
 
 <h1 align="center">AryaInfer</h1>
 
@@ -355,7 +355,7 @@ A lista completa: [docs/INSTALL.md](docs/INSTALL.md#what-you-need).
 
 O instalador cuida de todo o resto. Ele compila o motor no seu PC e oferece instalar o que falta para isso
 (g++ e o CUDA Toolkit). Ainda não: placas AMD, duas placas no Windows, três placas ou mais, imagens.
-Um usuário roda no Windows com uma placa de 24 GB e 128 GB de RAM ([relato](https://github.com/VecSzn/PolyStrata/issues/10)).
+Um usuário roda no Windows com uma placa de 24 GB e 128 GB de RAM ([relato](https://github.com/simplexai-labs/PolyStrata/issues/10)).
 
 A lista completa: [docs/GLM.md](docs/GLM.md#what-you-need) (em inglês).
 
@@ -369,7 +369,7 @@ A lista completa: [docs/GLM.md](docs/GLM.md#what-you-need) (em inglês).
 | **Sistema** | Linux e um driver NVIDIA atual. |
 
 O instalador cuida de todo o resto, como no GLM 5.3 Flash. Ainda não testado: placas AMD, duas placas. Ele só
-lê texto. Um usuário roda no Windows com uma placa de 24 GB e 128 GB de RAM ([relato](https://github.com/VecSzn/PolyStrata/issues/21)).
+lê texto. Um usuário roda no Windows com uma placa de 24 GB e 128 GB de RAM ([relato](https://github.com/simplexai-labs/PolyStrata/issues/21)).
 
 A lista completa: [docs/DEEPSEEK.md](docs/DEEPSEEK.md#what-you-need) (em inglês).
 

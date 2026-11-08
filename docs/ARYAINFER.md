@@ -1,6 +1,6 @@
 # AryaInfer
 
-AryaInfer is KonnectSuite's fork of [PolyStrata](https://github.com/VecSzn/PolyStrata),
+AryaInfer is KonnectSuite's fork of [PolyStrata](https://github.com/simplexai-labs/PolyStrata),
 which is a fork of [Niko1221's original Strata](https://github.com/Niko1221/Strata).
 See [credits](../CREDITS.md). This fork will
 track configuration and changes against measurements on our own hardware.
