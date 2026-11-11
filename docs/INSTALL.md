@@ -2,13 +2,16 @@
 
 # Installing AryaInfer
 
-Everything about installing, starting, updating and configuring AryaInfer, on Windows and Linux, with an NVIDIA or an
-AMD graphics card. The short version is in the [README](../README.md#install); an AI coding assistant can do all of
-this for you with [AI_SETUP.md](AI_SETUP.md).
+Everything about installing, starting, updating, configuring and **building** AryaInfer, on Windows and Linux, with an
+NVIDIA or an AMD graphics card. The short version is in the [README](../README.md#install); an AI coding assistant can
+do all of this for you with [AI_SETUP.md](AI_SETUP.md). Which models AryaInfer runs, and which engine runs each one:
+the [supported models](../README.md#supported-models) table in the README and the installed roster in
+[ENGINES.md](ENGINES.md#choosing-a-model-not-an-engine).
 
 > **On this page:** [What you need](#what-you-need) · [Windows](#windows) · [Linux](#linux) ·
 > [AMD cards](#amd-cards) · [Several cards](#two-or-three-cards) · [Docker](#docker-linux) ·
-> [Older CPUs](#older-cpus-experimental) · [Updating](#updating) · [Where things are stored](#where-things-are-stored) ·
+> [Build from source](#building-from-source) · [Older CPUs](#older-cpus-experimental) · [Updating](#updating) ·
+> [Where things are stored](#where-things-are-stored) ·
 > [Setup's questions](#setups-questions) · [Tuning](#tuning-for-your-pc) · [All options](#options-without-questions)
 
 ## What you need
@@ -149,6 +152,49 @@ The same idea, in a container (NVIDIA cards).
    Stopping: the engine releases its page-locked RAM (tens of GB) on SIGTERM, which takes longer than
    Docker's default 10 s; give it time, or `docker stop` kills it (exit 137):
    `docker run --stop-timeout 60 ...`, `docker stop -t 60 <name>`, or `stop_grace_period: 60s` in Compose.
+
+## Building from source
+
+Setup normally downloads a ready-made engine (NVIDIA RTX 20/30/40/50, on Windows and Linux) and compiles one only when
+none fits your PC - an AMD card on Linux always compiles one, and so does a Mac. To compile it yourself - a card the
+ready-made engine has no code for, sources you changed, or your own build options - run setup with **`--build`**:
+`START-HERE.bat --build` (Linux: `./setup.sh --build`). It installs the build tools it needs (asks first), compiles the
+engine into `engine/` and the image encoder with it, and does everything else exactly as above. A compiled engine is
+compiled again after a `git pull` that touched its sources (a minute or two for the changed files).
+
+The engine is one CMake project, `CMakeLists.txt`, with one target per backend in this repository
+([ENGINES.md](ENGINES.md#the-four-backends); which model each one runs: [BACKENDS.md](BACKENDS.md#what-runs)).
+These are the commands setup itself runs:
+
+```
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DSTRATA_ENABLE_CUDA=ON -DSTRATA_BUILD_TESTS=OFF -DSTRATA_Q6K_EXPERTS=ON -DSTRATA_MMQ_KQUANTS=ON \
+      -DCMAKE_CUDA_ARCHITECTURES=89
+cmake --build build --target strata        # the Qwen3.8-Flash-Next engine
+cmake --build build --target strata-poly   # the GGUF engine: GLM, DeepSeek, Qwen3.6, Ornith, Clover, Gemma 4, Tiel, MiniCPM-V, LFM2.5, Flint, Kolibri
+cmake --build build --target aryainfer     # the same src/poly tree with this fork's AQ3 kernels
+```
+
+- `-DCMAKE_CUDA_ARCHITECTURES` is your card's compute capability: 80 (A-series), 86 (RTX 30), 89 (RTX 40), 120 (RTX 50).
+  Several at once: `-DCMAKE_CUDA_ARCHITECTURES="86;89;120"`.
+- **Windows:** the build needs the Visual Studio 2019 or 2022 C++ build tools (workload *Desktop development with C++*)
+  and the CUDA Toolkit, and it has to run inside their environment (`vcvars64.bat`); setup finds both and installs
+  them when you let it. **Linux:** a C++ compiler (`sudo apt install build-essential git`) and a CUDA Toolkit - 13 by
+  default, 12.x for a Pascal or Volta card ([OLDER_GPUS.md](OLDER_GPUS.md)). CMake and Ninja come from pip
+  (`.venv/Scripts/python.exe -m pip install cmake ninja`, or `bin/python` on Linux).
+- `STRATA_PORTABLE=ON` builds for other PCs (AVX2 baseline, static MSVC runtime). `STRATA_BUILD_TESTS=ON` adds the
+  test executables; `ctest --test-dir build` runs them.
+- The image encoder is a separate target: `cmake -S tools/vision -B build-vision -G Ninja` and
+  `cmake --build build-vision --target strata-vision`.
+- The engine binary goes wherever your run config's `"exe"` points; setup looks in `engine/`
+  (`engine-poly/` for `strata-poly`).
+
+Every other platform and card family has its own build page, with the toolchain and the flags that family needs -
+they are not covered here: [AMD (HIP)](AMD_HIP.md), [Apple Silicon Mac](MAC.md), [Intel Arc (SYCL)](INTEL_ARC.md),
+[Ryzen AI Max / Strix Halo](STRIX_HALO.md), [Radeon 780M / 760M](RADEON_780M.md), [Pascal and Volta](OLDER_GPUS.md),
+[V100](NVIDIA_V100.md), [older CPUs](#older-cpus-experimental), and the `strata-poly` build without setup in
+[GLM.md](GLM.md#without-setup). The fourth backend, NInfer, is not built by setup and not a target of this CMake
+project: it is a pinned upstream port with this fork's patches and a shim - [NINFER.md](NINFER.md#patches).
 
 ## Older CPUs (experimental)
 

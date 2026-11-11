@@ -678,7 +678,7 @@ and starts it. Next time, `./setup.sh` starts it right away. Which size fits you
 
 The installer finds your card and sets up the right engine for it. It asks you a few questions:
 
-- which model and which size,
+- which model and which size (the [supported models](#supported-models) table says what each one is),
 - how much context (how much text the model keeps in mind),
 - whether it should read pictures (GLM 5.3 Flash, DeepSeek V4 Flash, LFM2.5, Flint, Clover and Kolibri 1 read none).
 
@@ -696,6 +696,10 @@ All twelve are in the installer's list of models. `./setup.sh --family glm`, `de
 **Next time**, run `START-HERE.bat` (or `./setup.sh`) again. It starts right away and downloads nothing twice. Close
 its window to stop the model. `UPDATE.bat` (`./update.sh`) updates AryaInfer without starting it. Updating, Docker,
 several cards, where the files go and every option: [docs/INSTALL.md](docs/INSTALL.md).
+
+**Building the engine yourself** instead of using the ready-made one - a card it has no code for, sources you changed,
+or your own build options: `START-HERE.bat --build` (`./setup.sh --build`). The CMake targets and flags for each
+backend, and the build page for your platform: [docs/INSTALL.md#building-from-source](docs/INSTALL.md#building-from-source).
 
 **Is it fast on your PC?** Run `BENCH.bat` (`./bench.sh`): about 5-10 minutes, it measures chat, 4K/16K prompts and an agent-style session with your own settings and writes a report to share ([how](docs/COMMUNITY_BENCHMARKS.md#run-the-benchmark)).
 
@@ -1120,7 +1124,8 @@ Every part and its numbers: [docs/BACKENDS.md](docs/BACKENDS.md#how-a-backend-wo
 | This PC, migration and selected Qwen settings | [Host setup and findings](docs/ARYAINFER.md) |
 | AryaAI development connection and output/context budget | [DSH integration](docs/ARYAAI_DSH.md) |
 | Model quantizations, variants and fit | [Models](docs/MODELS.md) · [Quantizations](docs/QUANTS.md) |
-| Setup, updates, storage paths and Docker | [Installation](docs/INSTALL.md) · [Assistant setup](docs/AI_SETUP.md) |
+| Which models and which engine runs them | [Supported models](#supported-models) · [Engines](docs/ENGINES.md#choosing-a-model-not-an-engine) |
+| Setup, updates, storage paths, Docker and building from source | [Installation](docs/INSTALL.md) · [Build from source](docs/INSTALL.md#building-from-source) · [Assistant setup](docs/AI_SETUP.md) |
 | Engine internals, API and configuration | [Technical details](docs/DETAILS.md) · [Architecture](docs/HOW_IT_WORKS.md) |
 | Reproducing and contributing results | [Benchmark guide](docs/COMMUNITY_BENCHMARKS.md) |
 | Common problems and project background | [Troubleshooting](docs/TROUBLESHOOTING.md) · [FAQ](docs/FAQ.md) |

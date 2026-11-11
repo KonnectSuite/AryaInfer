@@ -91,6 +91,8 @@ By the PC's RAM (ask the user whether they mainly want it for code - then the Co
 
 `--family swift` (Swift 1.5, a fine-tune that thinks shorter; sizes Q2_0, IQ2_XS, IQ3_XXS) is the alternative to
 `qwen`. With `--yes` and no `--model`, setup picks the recommended size for the RAM itself. More: [MODELS.md](MODELS.md).
+Every model AryaInfer runs and which engine runs it: the [supported models](../README.md#supported-models) table and
+[ENGINES.md](ENGINES.md#choosing-a-model-not-an-engine).
 
 `--family glm` (GLM 5.3 Flash) is another model with its own engine, and experimental: Linux, one NVIDIA card with
 32 GB, 96 GB of RAM or more, a 114 GB download, no images. Take it only when the user asks for it, and read
@@ -174,7 +176,8 @@ Notes:
   --list-devices`; if that does not list the card, the driver is the problem (tell the user to update AMD Software).
   One card per model and no images on Windows for now. It is new: ask the user to report how it runs (docs/AMD_HIP.md).
 - **NVIDIA with no ready-made engine for the card:** setup offers to install build tools and compile (20-40 minutes);
-  `--yes` accepts.
+  `--yes` accepts. To compile it even when a ready-made engine exists (changed sources, your own options): pass
+  `--build` - [INSTALL.md#building-from-source](INSTALL.md#building-from-source).
 
 ## 5. While it downloads, tell the user
 
