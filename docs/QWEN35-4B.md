@@ -90,8 +90,8 @@ Two ways to live with the card:
 
 The engine line in `strata-qwen35-4b.json` uses `aryainfer.exe` (the same engine that serves
 Qwen3.8 27B) because `engine-poly\strata-poly.exe` refuses `--kv q4_0` for a dense `qwen35`
-model; `STRATA_GDN_MMA=1` and the `strata-0.1.54` lib directory mirror the Qwen3.8 27B config,
-and the vision encoder is the `strata-0.1.54` build with `gpu: false`.
+model; `STRATA_GDN_MMA=1` and the `strata-0.1.59` lib directory mirror the Qwen3.8 27B config,
+and the vision encoder is the `strata-0.1.59` build with `gpu: false`.
 
 ## The ComfyUI side
 

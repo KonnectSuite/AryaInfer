@@ -361,3 +361,11 @@ tokens is a smoke check, not a measurement of the engine's speed: the 262144-con
 0.1.58 and have not been repeated on 0.1.59.  `--pcie-frac`, `--adapt-decay` and `--vram-reserve-mib` are still
 accepted by 0.1.59 although its `--help` does not list them; `--fit-max-tokens` is a server flag, not an engine
 one.
+
+All four backends now take their vision encoder from the same folder.  The aryainfer and ninfer run configs (27B
+AQ3, 27B Turbo IQ3_XXS, Qwen3.5-4B) had been reading `strata-vision.exe` from `strata-0.1.54`; they now read it
+from `strata-0.1.59`.  Measured before switching, 27B mmproj, one screenshot, CPU (`gpu: false`): 0.1.54 and
+0.1.59 both reported `READY 5120` and `OK 1024` and wrote byte-identical embeddings (20,971,540 bytes, the same
+SHA-256), so the `.sve` files NInfer reads are unchanged and nothing downstream can tell the builds apart.  The
+same encoder also loaded the other two mmproj files here (5120 and 2560 wide) and encoded the same image in 6-9 s
+each.
