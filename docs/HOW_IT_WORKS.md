@@ -60,7 +60,7 @@ AryaInfer is not tied to one inference engine. The same server, chat page, API,
 tools and settings serve four backends, and the model you pick decides which one
 runs:
 
-- **Strata** (`strata.exe`, upstream 0.1.58): the native Qwen engine for
+- **Strata** (`strata.exe`, upstream 0.1.59): the native Qwen engine for
   Flash-Next, Swift 1.5 and the 262K MoE profiles.
 - **PolyStrata** (`strata-poly`): the GGUF engine for Qwen3.6-35B-A3B, Ornith,
   GLM 5.3 Flash, DeepSeek V4 Flash and the other families in

@@ -4,7 +4,7 @@
 
 ## Measured on the AryaInfer host, October 17, 2026
 
-> The native engine has since moved to **0.1.58** (November 7, 2026) and the roster
+> The native engine has since moved to **0.1.59** (November 13, 2026) and the roster
 > to ten profiles on four backends. Current tables: [ENGINES.md](ENGINES.md).
 > The numbers below are the October 0.1.45 record and are kept as such.
 
@@ -15,9 +15,9 @@ actually running on this machine are:
 
 | Profile | Backend | Context |
 | --- | --- | ---: |
-| Qwen3.8 Flash Next IQ3_XXS | Strata 0.1.58 | 262,144 |
-| Swift 1.5 IQ3_XXS | Strata 0.1.58 | 262,144 |
-| Swift 1.5 Abliterated IQ3_XXS | Strata 0.1.58 | 262,144 |
+| Qwen3.8 Flash Next IQ3_XXS | Strata 0.1.59 | 262,144 |
+| Swift 1.5 IQ3_XXS | Strata 0.1.59 | 262,144 |
+| Swift 1.5 Abliterated IQ3_XXS | Strata 0.1.59 | 262,144 |
 | Qwen3.8-27B AQ3 | AryaInfer | 131,072 |
 | Qwen3.8-27B Turbo IQ3_XXS | AryaInfer | 131,072 |
 | Qwen3.8-27B GSQ3 `.ninfer` | NInfer | 131,072 |

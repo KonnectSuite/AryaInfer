@@ -302,9 +302,9 @@ source integrations are not standalone installed inference engines.
 ## Engine 0.1.56 and DFlash2 (2026-11-02)
 
 The native Strata engine was updated to **0.1.56** from the v0.2.10 release, installed side by side in
-`C:\AI\Strata-data\engines\strata-0.1.56` (0.1.54 kept for rollback).  The three native Flash-Next run configs
-(base, Swift 1.5 and Swift 1.5 abliterated) point at 0.1.56 and keep a `.bak-0.1.54` copy.  DFlash2 is on for them
-with `--draft dflash2 --draft-model C:\AI\Strata-data\models\dflash2-flash-next\Qwen3.8-Flash-Next.dflash2.pack`,
+`C:\AI\Strata-data\engines\strata-0.1.56` (0.1.54 kept for rollback at the time; both folders were deleted on
+2026-11-13, see Engine 0.1.59).  The three native Flash-Next run configs (base, Swift 1.5 and Swift 1.5
+abliterated) pointed at 0.1.56 then.  DFlash2 is on for them with `--draft dflash2 --draft-model C:\AI\Strata-data\models\dflash2-flash-next\Qwen3.8-Flash-Next.dflash2.pack`,
 a pack built by `tools/dflash2_pack.py` from `incoai/Qwen3.8-Flash-Next-DFlash2` (Q8_0, 81 tensors, 760 MiB).  The
 engine reports a 106,299-token draft head (178.4 MiB) and the drafter at 992 MiB of VRAM, windows up to 6 tokens and
 no MTP layer.
@@ -320,15 +320,15 @@ Within noise at that length: the update's value here is the 0.1.56 fix list (too
 Responses routes, the sampling-penalty window, parked conversations, the dequantizer NaN fix), not decode.  A
 longer-context A/B has not been run.
 
-Rollback: restore the `.bak-0.1.54` configs and restart.
-
 Known follow-ups: `setup.py` still expects the prebuilt asset `strata-windows-x64.zip`, while v0.2.10 publishes
 `strata-engine-0.1.56-windows-x86_64-cuda-cuda13.tar.gz`, so a fresh setup needs the new asset naming; and the fork's
 engine source (0.1.45) still needs the source merge to the 0.1.56 commit `06698c674`.
 
 ## Engine 0.1.58 (2026-11-07)
 
-The native Strata engine was updated to **0.1.58** from the v0.2.12 release (`strata-engine-0.1.58-windows-x86_64-cuda-cuda13.tar.gz`, build commit `8a42a9457db6`, SHA-256 `3311443b...`), installed side by side in `C:\AI\Strata-data\engines\strata-0.1.58` (0.1.56 kept for rollback).  The three native Flash-Next run configs (base, Swift 1.5 and Swift 1.5 abliterated) now point at it, vision included.
+The native Strata engine was updated to **0.1.58** from the v0.2.12 release (`strata-engine-0.1.58-windows-x86_64-cuda-cuda13.tar.gz`, build commit `8a42a9457db6`, SHA-256 `3311443b...`), installed side by side in `C:\AI\Strata-data\engines\strata-0.1.58` (0.1.56 kept for rollback at the time; both since deleted, see Engine 0.1.59).
+The three native Flash-Next run configs (base, Swift 1.5 and Swift 1.5 abliterated) point at it, vision
+included.
 
 Measured on this host after the update, base Flash-Next IQ3_XXS, 262144 context, DFlash2, temperature 0.3:
 
@@ -340,7 +340,7 @@ Measured on this host after the update, base Flash-Next IQ3_XXS, 262144 context,
 
 The same model on 0.1.56, at about 15K tokens, was seen at 52.8 tok/s decode, and its log shows prompt reads of 491-523 tok/s.  The v0.2.12 notes explain the single-card gain: the CPU/upload share for missed experts follows the measured CPU pool (ceiling 0.95 instead of 0.60), and a bare `--prefill auto` takes an 8192-token chunk here (the RAM guard keeps it below 16384).  Both matter on a 16 GB card that keeps most experts in system RAM.
 
-The Swift rows were not re-measured; they share the same engine and flags.  Rollback: point the three configs at `strata-0.1.56` and restart.  `--pcie-frac`, `--adapt-decay` and `--vram-reserve-mib` are still accepted by 0.1.58 even though the engine no longer lists them in `--help`.
+The Swift rows were not re-measured; they share the same engine and flags.  `--pcie-frac`, `--adapt-decay` and `--vram-reserve-mib` are still accepted by 0.1.58 even though the engine no longer lists them in `--help`.
 
 ## Engine 0.1.59 (2026-11-13)
 
@@ -348,8 +348,8 @@ The native Strata engine is now **0.1.59**, the engine in the v0.2.13 release
 (`strata-engine-0.1.59-windows-x86_64-cuda-cuda13.tar.gz`, 630,783,433 bytes, build commit `712fec6b4297`,
 SHA-256 `3f071a7ccbbf3dcdefed8bff777896d8dd0b580417a078154a7d2c2402ec4158` - the hash in the release's
 `SHA256SUMS.txt`).  It is unpacked in `C:\AI\Strata-data\engines\strata-0.1.59` with its own `cublas` DLLs, and
-the three native Flash-Next run configs (base, Swift 1.5 and Swift 1.5 abliterated) point at it.  0.1.58 stays
-for rollback; both are plain folders, so switching back is one line in a run config.
+the three native Flash-Next run configs (base, Swift 1.5 and Swift 1.5 abliterated) point at it.  0.1.59 is the only native engine left here: the 0.1.54, 0.1.56 and 0.1.58 folders were
+deleted on 2026-11-13.
 
 This is a drop-in engine swap, not a source merge: the engine is a separate binary speaking the same protocol, so
 `src/` here stays at PolyStrata's Strata 0.1.45 base and the other three backends are untouched.
@@ -368,5 +368,5 @@ from `strata-0.1.59`.  Measured before switching, 27B mmproj, one screenshot, CP
 0.1.59 both reported `READY 5120` and `OK 1024` and wrote byte-identical embeddings (20,971,540 bytes, the same
 SHA-256), so the `.sve` files NInfer reads are unchanged and nothing downstream can tell the builds apart.  The
 same encoder also loaded the other two mmproj files here (5120 and 2560 wide) and encoded the same image in 6-9 s
-each.  The `strata-0.1.54` folder was then deleted (0.88 GiB); `strata-0.1.56` and `strata-0.1.58` remain for
-rollback of the native engine.
+each.  The `strata-0.1.54` folder was then deleted (0.88 GiB), and so were `strata-0.1.56` and `strata-0.1.58`
+(0.90 and 0.91 GiB): `strata-0.1.59` is the only native engine on this host.

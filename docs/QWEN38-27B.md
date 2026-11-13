@@ -674,7 +674,7 @@ engine, so the same numbers as strata-poly within run-to-run noise (8K standalon
 
 `aryainfer` (poly) does not run it: the model is a `qwen4exp` family, and the poly engine answers "a 'qwen4exp' model,
 which this engine does not run", whatever the cache format (q8_0 is qwen35moe/kolibri1's, int8/int8k are Gemma 4's).
-Flash Next runs on the native Strata engine (`strata.exe` 0.1.56, its pack and PLE, dflash2 draft, int8 cache).  On
+Flash Next runs on the native Strata engine (`strata.exe` 0.1.59, its pack and PLE, dflash2 draft, int8 cache).  On
 this host, through the server, a 14,019-token prompt read at 1,578.4 tok/s and wrote 33 tokens at 64.0 tok/s (17 of
 19 drafts), with the expert cache at 69.7% and 15,509 MiB of VRAM used - the engine warned it had 487 MiB free at the
 start of the request (below its 1,024 MiB floor), which is the spill state to watch.
