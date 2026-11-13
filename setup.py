@@ -94,6 +94,8 @@ HF_REVISIONS = {
     "maternion/Clover-35B-A3B-Preview-GGUF": "2077d69015d943d8a82fa80bf39b36cf080cd520",                 # 2026-10-28
     "IsValorum/Clover-35B-A3B-Preview-APEX-I-NanoPlus-V2.1-GGUF": "d22b8db8efc6dfe15df84264e2fae26fafe530bb",  # 2026-10-28
     "Diffuspace/Clover-35B-A3B-Preview": "4b0402b65e523d0183a14c431955438714cb16ff",                     # 2026-10-28
+    "unsloth/Ornith-1.5-122B-GGUF": "3842d003341507c216295c6f28dfcd30349925c6",                          # 2026-10-20
+    "ornith-ai/Ornith-1.5-122B": "dfa07bab90e90746ffbfc0b0cba3126eb9265de2",                              # 2026-10-20
 }
 
 
@@ -836,6 +838,64 @@ FAMILIES = {
                            (28513556672, "159ce7d2fe4aab95233096ad007c23d86d99dd6c4a20d3f7c31e990d09aa71b7"),
                            "mmproj-model-f16.gguf":
                            (1119575840, "bff3b688e14c300eca273092c37c50a0ddfcc2054e079af1a0480edeed5d20f1")}},
+    "ornith122": {"title": "Ornith 1.5 122B", "by": "ornith-ai; quantized by Unsloth",
+                  "about": "on the strata-poly engine: one NVIDIA card, Linux or Windows; a 60 GB file, ~47 GB of RAM beside a 24 GB card; 5 sizes, images",
+                  "hf": hf("unsloth/Ornith-1.5-122B-GGUF"), "file": "Ornith-1.5-122B-{q}.gguf",
+                  "shards": 1, "tag": "ornith122-", "name": "ornith-1.5-122b", "engine": "poly",
+                  "vision": True, "experimental": True, "windows": True, "ran_on_gb": 16,
+                  "row_bytes": 26624, "mmproj_hf": hf("unsloth/Ornith-1.5-122B-GGUF"),
+                  "mmproj": "mmproj-F16.gguf", "vision_gb": 0.9, "vision_vram_gb": 1.6,
+                  "models": {"UD-Q3_K_XL": {"about": "3-bit i-quant experts, 4-bit where they write: the daily choice",
+                                            "download_gb": 59.8, "ram_gb": 47, "arena_gb": 53.3,
+                                            "vram_beside_gb": 8.5, "shards": 3,
+                                            "file": "UD-Q3_K_XL/Ornith-1.5-122B-UD-Q3_K_XL-0000{i}-of-00003.gguf",
+                                            "draft": "own"},
+                             "UD-Q2_K_XL": {"about": "2-bit i-quant experts (Unsloth Dynamic): the least RAM",
+                                            "download_gb": 44.5, "ram_gb": 32, "arena_gb": 38.5,
+                                            "vram_beside_gb": 8.5, "shards": 1,
+                                            "file": "Ornith-1.5-122B-UD-Q2_K_XL.gguf",
+                                            "draft": "own"},
+                             "UD-IQ3_XXS": {"about": "2- and 3-bit i-quant experts: less RAM than UD-Q3_K_XL",
+                                            "download_gb": 49.5, "ram_gb": 37, "arena_gb": 43.2,
+                                            "vram_beside_gb": 8.5, "shards": 1,
+                                            "file": "Ornith-1.5-122B-UD-IQ3_XXS.gguf",
+                                            "draft": "own"},
+                             "UD-Q4_K_XL": {"about": "4-bit experts (Unsloth Dynamic), 5- and 6-bit where they write",
+                                            "download_gb": 79.7, "ram_gb": 66, "arena_gb": 73.0,
+                                            "vram_beside_gb": 8.5, "shards": 3,
+                                            "file": "UD-Q4_K_XL/Ornith-1.5-122B-UD-Q4_K_XL-0000{i}-of-00003.gguf",
+                                            "draft": "own"},
+                             "Q8_0": {"about": "8-bit throughout: the closest to the model as trained",
+                                      "download_gb": 132.6, "ram_gb": 119, "arena_gb": 125.8,
+                                      "vram_beside_gb": 8.5, "shards": 4,
+                                      "file": "Q8_0/Ornith-1.5-122B-Q8_0-0000{i}-of-00004.gguf",
+                                      "draft": "own"}},
+                  "sha256": {"Ornith-1.5-122B-UD-Q3_K_XL-00001-of-00003.gguf":
+                             (10942929, "d8a23c487741fdac7026e10013fa8e320502cf01048a2333b2db8ba2a9f74fe5"),
+                             "Ornith-1.5-122B-UD-Q3_K_XL-00002-of-00003.gguf":
+                             (49791670080, "95f76e67ffc49e2b0b4a4dfe5c42269b4b275ecf9e3696f599f3eeac92180323"),
+                             "Ornith-1.5-122B-UD-Q3_K_XL-00003-of-00003.gguf":
+                             (9958641536, "1c4b52bbb1d45a21b5b7927429a5c80f264c688f2d14ed50ba0b6da0260d4028"),
+                             "Ornith-1.5-122B-UD-Q2_K_XL.gguf":
+                             (44533952768, "93fb32cfb1c31b34df426b4a41d961bdaffcddbbd217d850262136cf3689ba66"),
+                             "Ornith-1.5-122B-UD-IQ3_XXS.gguf":
+                             (49515667712, "027a9a480e8bcc6079fcf834e368467a169953561fb4b98dc9528d6185c8a438"),
+                             "Ornith-1.5-122B-UD-Q4_K_XL-00001-of-00003.gguf":
+                             (10942929, "7159d31a6a6ce5528500b490880383844c3c9b21fcdaad94e66c9e65233ff359"),
+                             "Ornith-1.5-122B-UD-Q4_K_XL-00002-of-00003.gguf":
+                             (49971099680, "e66952128394bb4c75554c7e10a12a8b63dd1c7f049d876a02885a946e30c1c3"),
+                             "Ornith-1.5-122B-UD-Q4_K_XL-00003-of-00003.gguf":
+                             (29731729056, "21325ec18a9e3210eeffada0fc327a25a79171918f1d04f8f0a06b61866ac9ba"),
+                             "Ornith-1.5-122B-Q8_0-00001-of-00004.gguf":
+                             (10942929, "e9dbc5401757506c6bbb04dba3bf65decc6435aaf0733f1e95cc58a9332166fc"),
+                             "Ornith-1.5-122B-Q8_0-00002-of-00004.gguf":
+                             (49855668288, "c1ea340f63c932895417f7c2e7c4967b4b56f3e5a3f981242d0482c662aae2b8"),
+                             "Ornith-1.5-122B-Q8_0-00003-of-00004.gguf":
+                             (49903347168, "644c26a3d8cab405186ef545e4071b433a23c2a359e45434c822d9c48884eb4c"),
+                             "Ornith-1.5-122B-Q8_0-00004-of-00004.gguf":
+                             (32785752352, "43bdc1b0cb764b5531d320816fb6004245256a414bfd55f1fdb69e3db42eaa57"),
+                             "mmproj-F16.gguf":
+                             (908724544, "39db176176a904b101f5173a4f03e785990f9279f94ab373c4fd629ae7011817")}},
 }
 MMPROJ = "mmproj-Qwen3.8-Flash-Next-BF16.gguf"
 # Qwen3.6-35B-A3B (GGUF architecture qwen35moe), Unsloth's GGUFs with the MTP block: a family with an engine path of its
@@ -3240,6 +3300,8 @@ _WIN_AMD_DID = {0x744C: "gfx1100", 0x7448: "gfx1100", 0x745E: "gfx1100",        
                 0x7550: "gfx1201", 0x7551: "gfx1201",                               # RX 9070 / 9070 XT, AI PRO R9700
                 0x73BF: "gfx1030", 0x73AF: "gfx1030", 0x73A5: "gfx1030",            # RX 6800 / 6800 XT / 6900 XT / 6950 XT
                 0x73DF: "gfx1031",                                                  # RX 6700 XT / 6750 XT / 6800M (#881)
+                0x73FF: "gfx1032", 0x73EF: "gfx1032",                               # RX 6600 / 6600 XT, RX 6650 XT (issue 121)
+                0x731F: "gfx1010",                                                  # RX 5600 XT / 5700 / 5700 XT (Navi 10)
                 **AMD_IGPU_PCI}                                                     # Ryzen APUs: 0x1586 = Strix Halo (gfx1151)
 _WIN_AMD_NAME = ((re.compile(r"\b80[456]0S\b", re.I), "gfx1151"),                   # Radeon 8060S / 8050S / 8040S
                  (re.compile(r"\b8[89]0M\b", re.I), "gfx1150"),                     # Radeon 890M / 880M
@@ -3250,7 +3312,9 @@ _WIN_AMD_NAME = ((re.compile(r"\b80[456]0S\b", re.I), "gfx1151"),               
                  (re.compile(r"RX\s*7900|W7900|W7800", re.I), "gfx1100"),
                  (re.compile(r"RX\s*7800|RX\s*7700(?!\s*S)|W7700", re.I), "gfx1101"),
                  (re.compile(r"RX\s*7600|W7600|W7500", re.I), "gfx1102"),
-                 (re.compile(r"RX\s*6800(?!\s*[MS])|RX\s*6900|RX\s*6950|W6800", re.I), "gfx1030"))
+                 (re.compile(r"RX\s*6800(?!\s*[MS])|RX\s*6900|RX\s*6950|W6800", re.I), "gfx1030"),
+                 (re.compile(r"RX\s*66[05]0", re.I), "gfx1032"),
+                 (re.compile(r"RX\s*5[67]00|W5700", re.I), "gfx1010"))             # RDNA1 Navi 10; the RX 5500 is gfx1012
 _DISPLAY_CLASS = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
 
 
@@ -3735,7 +3799,10 @@ def hipblaslt_table(arch, lib_dirs, ver=None):
 def build_engine_hip(gpu, llama, vision="none") -> Path:
     """Compile the HIP engine for this AMD GPU into engine/ (again only when its source changed: a `git pull`).
     gpu["archs"]: every architecture it needs code for (the cards of a layer split), else gpu["arch"].  vision "cpu"
-    (#304): the image encoder too, for the CPU (there is no HIP encoder build yet)."""
+    (#304): the image encoder too, for the CPU (there is no HIP encoder build yet).  Windows: AMD's TheRock wheels in
+    .rocm-win and MSVC's build tools, as the strata-poly Windows build (build_engine_hip_win)."""
+    if WIN:
+        return build_engine_hip_win(gpu, llama)
     eng = ROOT / "engine"
     eng.mkdir(exist_ok=True)
     stamp = eng / "BUILD.json"
@@ -3788,6 +3855,64 @@ def build_engine_hip(gpu, llama, vision="none") -> Path:
     return eng
 
 
+def build_engine_hip_win(gpu, llama) -> Path:
+    """Compile the HIP engine for this AMD GPU on Windows into engine/ (again only when its source changed: a
+    `git pull`).  ROCm comes from AMD's TheRock Windows wheels in .rocm-win (rocm_win_root), MSVC's headers, linker
+    and runtime from the Visual Studio C++ build tools, and ROCm's clang compiles the host code too (CMake refuses to
+    mix it with cl.exe: tools/hip/build_windows.bat).  The DLLs and kernels it loads are .rocm-win's own, which the
+    config's lib_dirs points at (the ready-made zip keeps a copy of the DLLs it needs instead).  There is no HIP image
+    encoder: images stay off."""
+    eng = ROOT / "engine"
+    eng.mkdir(exist_ok=True)
+    stamp = eng / "BUILD.json"
+    meta = json.loads(stamp.read_text(encoding="utf-8")) if stamp.exists() else {}
+    src = source_hash(ENGINE_SOURCES)
+    archs = sorted(set(gpu.get("archs") or [gpu["arch"]]))
+    engine_ok = meta.get("backend") == "hip" and meta.get("source") == "local-hip" and (eng / EXE).exists() and \
+        meta.get("src") == src and set(archs) <= set(meta.get("archs", [])) and not stale_binary(eng / EXE)
+    if engine_ok:
+        ok("engine already built for this PC")
+        return eng
+    vcvars = find_vcvars()
+    if vcvars is None:
+        fail("the Visual Studio C++ build tools were not found",
+             "install them (Visual Studio 2019 or 2022, workload 'Desktop development with C++') and run setup again")
+    root, _ = rocm_win_root(archs)
+    rocm = str(root).replace("\\", "/")
+    bitcode = f"{rocm}/lib/llvm/amdgcn/bitcode"
+    os.environ.update({"HIP_PLATFORM": "amd", "HIP_PATH": str(root), "ROCM_PATH": str(root)})
+    os.environ["PATH"] = os.pathsep.join([str(root / "bin"), str(root / "lib" / "llvm" / "bin"),
+                                          os.environ.get("PATH", "")])
+    say("  The engine's source changed: compiling it again (only what changed, a few minutes) ..."
+        if meta.get("backend") == "hip" and (eng / EXE).exists()
+        else f"  Compiling the AryaInfer engine for your AMD GPU ({', '.join(archs)}; 10-20 minutes, once) ...")
+    bdir = ROOT / "build-hip-win"
+    cmake_build(ROOT, bdir, ["strata", "strata-device"],
+                ["-DSTRATA_ENABLE_HIP=ON", "-DSTRATA_ENABLE_CUDA=OFF", "-DSTRATA_BUILD_TESTS=OFF",
+                 "-DSTRATA_PREFILL_MMQ=ON", "-DSTRATA_NATIVE_EXPERTS=ON",
+                 "-DSTRATA_PORTABLE=OFF",
+                 "-DCMAKE_HIP_ARCHITECTURES=" + ";".join(archs),
+                 f"-DCMAKE_C_COMPILER={rocm}/lib/llvm/bin/clang.exe",
+                 f"-DCMAKE_CXX_COMPILER={rocm}/lib/llvm/bin/clang++.exe",
+                 f"-DCMAKE_HIP_COMPILER={rocm}/lib/llvm/bin/clang++.exe",
+                 f"-DCMAKE_HIP_COMPILER_ROCM_ROOT={rocm}", f"-DCMAKE_PREFIX_PATH={rocm}",
+                 f"-DCMAKE_HIP_FLAGS=--rocm-path={rocm} --rocm-device-lib-path={bitcode}",
+                 f"-DSTRATA_GGML_DIR={llama}"], vcvars, "build-strata-hip-win.bat")
+    if stale_binary(bdir / EXE):                       # #2054: no stamp for a binary of another source
+        fail(f"the engine build finished without a new engine ({EXE} is version "
+             f"{binary_engine_version(bdir / EXE)}, this source is {source_version()}): "
+             "the installed engine is left as it was", "delete the folder build-hip-win and run this again")
+    for name in (EXE, "strata-device.exe"):
+        shutil.copy2(bdir / name, eng / name)
+    meta = {"source": "local-hip", "backend": "hip", "platform": "windows-x64", "version": source_version(),
+            "archs": archs, "rocm": ROCM_WIN_VERSION, "hipblaslt_version": hipblaslt_version([str(root / "bin")]),
+            "vision": "none", "lib_dirs": [str(root / "bin")], "src": src}
+    stamp.write_text(json.dumps(meta, indent=1))
+    hip_runtime_beside_exe(eng)                        # #468 #461: before System32's amdhip64_7.dll
+    ok(f"engine compiled: {eng / EXE}")
+    return eng
+
+
 def hip_vision(asked) -> str:
     """The image encoder with the AMD backend (--vision): the CPU one when asked for (#304); a HIP (GPU) encoder build
     is a later step, so `yes`/`gpu` leave images off, as before, and say how to get them."""
@@ -3795,8 +3920,8 @@ def hip_vision(asked) -> str:
         warn("the AMD backend has no GPU image encoder yet: images off"
              + ("" if WIN else " (--vision cpu reads them on the CPU)"))
     if asked == "cpu" and WIN:
-        warn("images on the CPU with an AMD card are Linux-only for now (the ready-made Windows AMD engine has no "
-             "image encoder): images off")
+        warn("images on the CPU with an AMD card are Linux-only for now (the Windows AMD engine has no image "
+             "encoder): images off")
         return "none"
     return "cpu" if asked == "cpu" else "none"
 
@@ -4382,21 +4507,23 @@ def update_installed_engine(url_base, toolkit=None) -> None:
         return
     meta_text = info.read_text(encoding="utf-8")
     meta = json.loads(meta_text)
-    if meta.get("backend") == "hip" and WIN:           # AMD on Windows: the ready-made HIP engine, when older
-        ver = tuple(int(x) for x in str(meta.get("version", "0")).split(".")[:4] if x.isdigit())
-        if meta.get("source") == "prebuilt" and ver < WIN_HIP_MIN_ENGINE:
-            try:
-                g = next((x for x in amd_gpus() if amd_problem(x) is None), None)
-                if g is None:
-                    raise RuntimeError("no supported AMD GPU found")
-                say(f"  Updating the ready-made AMD engine ({meta.get('version')} -> "
-                    f"{'.'.join(map(str, WIN_HIP_MIN_ENGINE))} or newer) ...")
-                if get_prebuilt_hip(url_base, g, updating=True) is None:
-                    raise RuntimeError("not published yet")
-            except (Exception, SystemExit) as e:
-                warn(f"could not update the AMD engine{'' if isinstance(e, SystemExit) else f' ({e})'}: "
-                     "starting the installed one")
-        return
+    if meta.get("backend") == "hip" and WIN:
+        if meta.get("source") != "local-hip":          # AMD on Windows: the ready-made HIP engine, when older
+            ver = tuple(int(x) for x in str(meta.get("version", "0")).split(".")[:4] if x.isdigit())
+            if meta.get("source") == "prebuilt" and ver < WIN_HIP_MIN_ENGINE:
+                try:
+                    g = next((x for x in amd_gpus() if amd_problem(x) is None), None)
+                    if g is None:
+                        raise RuntimeError("no supported AMD GPU found")
+                    say(f"  Updating the ready-made AMD engine ({meta.get('version')} -> "
+                        f"{'.'.join(map(str, WIN_HIP_MIN_ENGINE))} or newer) ...")
+                    if get_prebuilt_hip(url_base, g, updating=True) is None:
+                        raise RuntimeError("not published yet")
+                except (Exception, SystemExit) as e:
+                    warn(f"could not update the AMD engine{'' if isinstance(e, SystemExit) else f' ({e})'}: "
+                         "starting the installed one")
+            return
+        # one compiled here (--build): compiled again when its source changed, as on Linux below
     if meta.get("backend") == "hip":                   # AMD: compiled here, again when its source changed
         if meta.get("src") != source_hash(ENGINE_SOURCES) or stale_binary(eng / EXE):
             try:
@@ -4406,7 +4533,7 @@ def update_installed_engine(url_base, toolkit=None) -> None:
                     raise RuntimeError("no supported AMD GPU found")
                 # every architecture it was built for (a layer split across two families keeps both)
                 build_engine_hip({**g, "archs": [x for x in meta.get("archs", []) if x in AMD_ARCHS] or [g["arch"]]},
-                                 get_llama_cpp(vision=True), meta.get("vision") or "none")
+                                 get_llama_cpp(vision=not WIN), meta.get("vision") or "none")  # no Windows HIP image encoder
             except (Exception, SystemExit) as e:
                 warn(f"could not compile the updated engine{'' if isinstance(e, SystemExit) else f' ({e})'}: "
                      "starting the installed one")
@@ -4616,13 +4743,17 @@ def cached_compiler(bdir, defs):
 
 
 def cmake_build(src, bdir, target, defs, vcvars, bat_name):
+    """`target`: one CMake target, or a list of them (one `--target` each: the Windows HIP engine builds `strata` and
+    `strata-device` together, as tools/hip/build_windows.bat does)."""
     note_upstream()
     cmake, ninja = find_tool("cmake"), find_tool("ninja")
     if cmake is None or ninja is None:
         fail("cmake / ninja not found after installing them", "run: .venv python -m pip install cmake ninja")
+    targets = [target] if isinstance(target, str) else list(target)
     conf = [cmake, "-G", "Ninja", f"-DCMAKE_MAKE_PROGRAM={ninja}", "-S", str(src), "-B", str(bdir),
             "-DCMAKE_BUILD_TYPE=Release", *cached_compiler(bdir, defs)]
-    build = [cmake, "--build", str(bdir), "--target", target, "-j", str(max(2, (os.cpu_count() or 4) // 2))]
+    build = [cmake, "--build", str(bdir), *[x for t in targets for x in ("--target", t)],
+             "-j", str(max(2, (os.cpu_count() or 4) // 2))]
     # A failed build is tried once more: CUDA 13.0's ptxas now and then fails to parse a PTX file it just wrote, and
     # the same command then gets past it (issue #45); a second attempt only compiles what is still missing.
     if WIN:
@@ -5397,6 +5528,9 @@ def choices_from_config(cfg_path: Path) -> dict:
     family = next((f for f, d in FAMILIES.items() if d["tag"] and tag.startswith(d["tag"])), "qwen")
     model = (tag[len(FAMILIES[family]["tag"]):] if tag.startswith(FAMILIES[family]["tag"]) else tag).upper()
     sizes = FAMILIES[family].get("models", MODELS)     # a family's own sizes, where it has them
+    # Some published quant names are lowercase (MiniCPM-V's mix_q3gud_im).
+    # Match the filename case-insensitively, then return the catalog's canonical key.
+    model = next((m for m in sizes if m.casefold() == model.casefold()), model)
     if model not in sizes:                             # (sizes have no dash except UD-Q4_K_XL: the old rule)
         model = tag.split("-")[-1].upper()
     a = cfg.get("args", [])
@@ -5470,14 +5604,14 @@ _UPSTREAM_NOTED = False
 
 
 def upstream_pin() -> str:
-    """The Strata and PolyStrata sources this tree builds, from upstream.json, which the merge that brought
+    """The Strata and AryaInfer sources this tree builds, from upstream.json, which the merge that brought
     them in writes.  A build compiles the checkout and fetches nothing, so this is what tells a build made
     from a freshly merged tree from one made from a tree that is months behind."""
     try:
         pin = json.loads((ROOT / "upstream.json").read_text(encoding="utf-8"))
         strata, poly = pin["strata"], pin["polystrata"]
         return (f"Strata {strata['tag']} ({strata['commit'][:8]}) + "
-                f"PolyStrata {poly['tag']} ({poly['commit'][:8]})")
+                f"AryaInfer {poly['tag']} ({poly['commit'][:8]})")
     except (OSError, ValueError, KeyError, TypeError):
         return f"Strata {source_version()} (upstream.json missing or unreadable)"
 
@@ -6567,9 +6701,9 @@ def build_engine_poly(gpu, yes, llama, vision="none", toolkit=13) -> Path:
 
 def build_engine_poly_hip(gpu, llama) -> Path:
     """Compile strata-poly for this AMD GPU into engine-poly/ (again only when its source changed: a `git pull`).
-    Windows: AMD's TheRock Windows wheels in .rocm-win (build_engine_poly_hip_win).  Linux: ROCm from rocm_root: a
-    system ROCm 7 or AMD's TheRock wheels in .venv, as for the main engine's HIP build.  There is no ready-made AMD
-    engine and no HIP image encoder: images stay off."""
+    Windows: AMD's TheRock Windows wheels in .rocm-win (build_engine_poly_hip_win).
+    Linux: ROCm from rocm_root: a system ROCm 7 or AMD's TheRock wheels in .venv, as for the main engine's HIP
+    build.  There is no ready-made AMD engine and no HIP image encoder: images stay off."""
     if WIN:
         return build_engine_poly_hip_win(gpu, llama)
     eng = ROOT / ENGINE_POLY_DIR
@@ -6981,7 +7115,8 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
         fail(f"{title} has no {a.model} model file", "choose one of: " + ", ".join(names))
     vram = gpu["vram_gb"]
     if multi:   # each card has its layers' dense weights; its own scratch and staging buffer cost ~2 GB a card more
-        vram = sum(gpu_info(i)["vram_gb"] for i in multi) - 2.0 * (len(multi) - 1)
+        cards = {g["index"]: g for g in (amd_gpus() if hip else gpus())}
+        vram = sum(cards[i]["vram_gb"] for i in multi) - 2.0 * (len(multi) - 1)
     model = a.model or poly_default(sizes, ram, vram)
     if not a.model and len(names) > 1:
         say()
@@ -7083,7 +7218,8 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
     # one file, or the numbered files of a split GGUF: the engine is given the first and finds the others by name
     models_dir = Path(a.gguf_dir) if a.gguf_dir else Path(a.models_dir) / tag
     shards = (_sg if _sg
-              else [models_dir / model_file(fam, model, i) for i in range(1, model_shards(fam, model) + 1)])
+              else gguf_dir_shards(models_dir, fam, model) if a.gguf_dir else
+              [models_dir / model_file(fam, model, i) for i in range(1, model_shards(fam, model) + 1)])
     absent = [s.name for s in shards if not s.exists()]
     if a.gguf_dir and absent:
         fail(f"{models_dir} has no {absent[0]}",
@@ -7151,7 +7287,8 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
             if s.exists() and done(s):
                 ok(f"{s.name} already downloaded")
                 continue
-            download(d.get("hf", fam["hf"]) + s.name, s)
+            rel = s.relative_to(models_dir).as_posix() if s.is_relative_to(models_dir) else s.name
+            download(d.get("hf", fam["hf"]) + rel, s)
     check_shards(shards)
     # a size from another repository can ship a draft model or an image encoder of the family's file names
     sha = {**fam["sha256"], **d.get("sha256", {})}
@@ -7229,7 +7366,7 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
     if not multi and poly_batch(fam, d, vram, ctx):
         args += ["--prompt-batch", "2048"]
         ok("prompts are read 2,048 tokens at a time (--prompt-batch in the config)")
-    # The engine's own count is every logical CPU.  On a hybrid CPU that is the slowest: an efficiency core runs
+    # The engine's own count is 70% of the logical CPUs.  A hybrid CPU gets one of setup's: an efficiency core runs
     # an expert at half the speed, and a layer waits for its slowest part (hybrid_pool_workers()).
     cores = cpu_cores()
     threads = hybrid_pool_workers(cores)
@@ -7336,19 +7473,32 @@ def sycl_setup(argv) -> int:
     return subprocess.call([sys.executable, str(script), *rest])
 
 
+def hip_build_here(gpu) -> bool:
+    """Windows: whether engine/ holds the HIP engine compiled here (--build) for this card.  Then setup keeps that
+    build - compiling it again when its source changed - instead of downloading the ready-made one over it."""
+    try:
+        meta = json.loads((ROOT / "engine" / "BUILD.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return meta.get("backend") == "hip" and meta.get("source") == "local-hip" and \
+        gpu.get("arch") in meta.get("archs", [])
+
+
 def engine_step(a, gpu, hip, amd, cuda_tk, vision):
     """Step 4: llama.cpp's sources and the engine (ready-made, or compiled here).  Returns (llama, engine folder, its
     BUILD.json, its library folders, the GPU (AMD on Windows: as the engine sees it), the image-encoder choice)."""
     llama = get_llama_cpp()
     ok(f"llama.cpp {LLAMA_CPP_COMMIT[:7]} (gguf-py, ggml, mtmd)")
-    if hip and WIN:                                    # AMD on Windows: the ready-made HIP engine (no compiler)
-        eng = None if a.build else get_prebuilt_hip(a.prebuilt, gpu)
-        if eng is None:
-            fail("no ready-made AMD engine for this AryaStrata version" + (" (--build)" if a.build else ""),
-                 "compiling it on Windows: tools\\hip\\build_windows.bat makes strata-windows-x64-hip.zip, then run "
-                 "START-HERE.bat --backend hip --prebuilt <its dist folder> (docs/AMD_HIP.md)")
-        gpu = hip_card(eng, gpu, amd)
-        a.gpu = gpu["index"] if gpu["count"] > 1 else a.gpu
+    if hip and WIN:                                    # AMD on Windows: the ready-made HIP engine, or one built here
+        if a.build or hip_build_here(gpu):
+            eng = None                                 # compiled below (build_engine_hip_win; again when stale)
+        else:
+            eng = get_prebuilt_hip(a.prebuilt, gpu)
+            if eng is None:
+                fail("no ready-made AMD engine for this AryaInfer version",
+                     "compile it on this PC: START-HERE.bat --backend hip --build (Visual Studio 2022 Build Tools "
+                     "with the C++ workload, git; docs/AMD_HIP.md), or run tools\\hip\\build_windows.bat and start "
+                     "setup with --prebuilt <its dist folder>")
     else:
         eng = None if a.build or hip else get_prebuilt(a.prebuilt, gpu, vision, **({"toolkit": 12} if cuda_tk == 12
                                                                                     else {}))
@@ -7360,7 +7510,11 @@ def engine_step(a, gpu, hip, amd, cuda_tk, vision):
         else:
             vision = prebuilt_vision(json.loads((eng / "BUILD.json").read_text(encoding="utf-8")), gpu, vision)
     if eng is None:
-        eng = build_engine_hip(gpu, llama, vision) if hip else build_engine(gpu, vision, a.yes, llama, toolkit=cuda_tk)
+        eng = build_engine_hip(gpu, llama, vision) if hip else \
+            build_engine(gpu, vision, a.yes, llama, toolkit=cuda_tk)
+    if hip and WIN:                                    # the card as the installed engine numbers it (#325)
+        gpu = hip_card(eng, gpu, amd)
+        a.gpu = gpu["index"] if gpu["count"] > 1 else a.gpu
     meta = json.loads((eng / "BUILD.json").read_text(encoding="utf-8"))
     if hip and WIN:                                    # the ready-made engine's rocm/bin, first on the engine's PATH
         lib_dirs = [str(d) for d in hip_lib_dirs(eng)]
@@ -7419,8 +7573,8 @@ def own_path_vision(a, fam: dict, gpu: dict, hip: bool) -> str:
         if asked == "gpu":
             say("  The AMD backend has no GPU image encoder yet: the encoder runs on the CPU.")
         if WIN:
-            warn("images on the CPU with an AMD card are Linux-only for now (the ready-made Windows AMD engine has no "
-                 "image encoder): images off")
+            warn("images on the CPU with an AMD card are Linux-only for now (the Windows AMD engine has no image "
+                 "encoder): images off")
             return "none"
         return "cpu"
     if asked == "yes":
@@ -7841,7 +7995,7 @@ def main() -> int:
                          "DeepSeek V4 Flash, lfm25 = LFM2.5-24B-A2B, flint = Flint 40B-A2.5B, qwen36 = "
                          "Qwen3.6-35B-A3B on strata-poly, clover = Clover-35B-A3B-Preview, ornith = "
                          "Ornith 1.5, gemma4 = Gemma 4 26B-A4B, tiel = Tiel Coder 35B-A3B, minicpmv = MiniCPM-V 4.7 "
-                         "35B-A3B (docs/BACKENDS.md), qwen36-strata = Qwen3.6-35B-A3B on the Strata project's "
+                         "35B-A3B, ornith122 = Ornith 1.5 122B (docs/BACKENDS.md), qwen36-strata = Qwen3.6-35B-A3B on the Strata project's "
                          "own engine (UD-Q4_K_XL and up, 32 GB of RAM or more; pictures with --vision, several "
                          "requests at once with --parallel; docs/QWEN36.md)")
     ap.add_argument("--model", choices=list(dict.fromkeys(
@@ -8252,7 +8406,7 @@ def main() -> int:
              "CPU's share of the experts runs on ggml-cpu's kernels, a few times slower than on an AVX2 CPU. "
              "See \"Older CPUs\" in docs/INSTALL.md")
         if hip and WIN:
-            fail("the older-CPU engine is compiled from source, and setup compiles the AMD engine on Linux only",
+            fail("the older-CPU engine is not compiled on Windows for an AMD card",
                  "use Linux for an AMD card on this CPU, or an NVIDIA card")
         a.build = True
     if a.check:

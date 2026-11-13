@@ -41,6 +41,7 @@ td.log
 /strata-*.warm-start
 /build-strata.bat
 /build-strata-cuda12.bat
+/build-strata-hip-win.bat
 /build-cuda12/
 /.strata-mcp/
 
@@ -61,6 +62,7 @@ build-vision-cuda12.bat
 /dist/
 *.done
 /third_party/*.zip
+/third_party/metal-cpp/
 
 # IDEs
 /local-data/
