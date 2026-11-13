@@ -4616,6 +4616,7 @@ def cached_compiler(bdir, defs):
 
 
 def cmake_build(src, bdir, target, defs, vcvars, bat_name):
+    note_upstream()
     cmake, ninja = find_tool("cmake"), find_tool("ninja")
     if cmake is None or ninja is None:
         fail("cmake / ninja not found after installing them", "run: .venv python -m pip install cmake ninja")
@@ -5463,6 +5464,32 @@ def source_version() -> str:
     """The engine version the source tree builds (CMakeLists.txt's project version)."""
     m = re.search(r"project\(strata VERSION ([\d.]+)", (ROOT / "CMakeLists.txt").read_text(encoding="utf-8"))
     return m.group(1) if m else "0"
+
+
+_UPSTREAM_NOTED = False
+
+
+def upstream_pin() -> str:
+    """The Strata and PolyStrata sources this tree builds, from upstream.json, which the merge that brought
+    them in writes.  A build compiles the checkout and fetches nothing, so this is what tells a build made
+    from a freshly merged tree from one made from a tree that is months behind."""
+    try:
+        pin = json.loads((ROOT / "upstream.json").read_text(encoding="utf-8"))
+        strata, poly = pin["strata"], pin["polystrata"]
+        return (f"Strata {strata['tag']} ({strata['commit'][:8]}) + "
+                f"PolyStrata {poly['tag']} ({poly['commit'][:8]})")
+    except (OSError, ValueError, KeyError, TypeError):
+        return f"Strata {source_version()} (upstream.json missing or unreadable)"
+
+
+def note_upstream() -> None:
+    """One line before the first compile of a run: which engine sources it compiles, and the command that
+    says whether upstream has released since.  Printed once, however many targets the run builds."""
+    global _UPSTREAM_NOTED
+    if _UPSTREAM_NOTED:
+        return
+    _UPSTREAM_NOTED = True
+    say(f"  engine source: {upstream_pin()} - tools/upstream_status.py --check lists upstream's newer releases")
 
 
 def binary_engine_version(exe) -> str | None:

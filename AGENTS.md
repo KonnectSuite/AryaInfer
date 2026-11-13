@@ -44,6 +44,10 @@ offers the same steps as tools.
 - Text taken from the Strata project names that project. After merging from it,
   `python tools/polystrata_names.py` checks current AryaInfer branding in code files, and
   `python tools/aryainfer_names.py --check` the docs; each one's first lines say what it leaves alone.
+- `src/` and `src/poly/` are a merged snapshot of Strata and PolyStrata, not a checkout that follows upstream:
+  `upstream.json` records the release each came from, setup prints that line before a build, and
+  `python tools/upstream_status.py --check` exits 1 while either project has released since. A merge brings
+  the sources and the pin in one commit.
 - Setup's own tests run without a GPU or downloads: `python tools/test_setup_<name>.py` (for example
   `tools/test_setup_amd.py`, `tools/test_setup_choices.py`).
 - Keep the docs' style: plain words, measured numbers with what they were measured on, no claims without a

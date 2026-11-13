@@ -162,6 +162,13 @@ ready-made engine has no code for, sources you changed, or your own build option
 engine into `engine/` and the image encoder with it, and does everything else exactly as above. A compiled engine is
 compiled again after a `git pull` that touched its sources (a minute or two for the changed files).
 
+A build compiles the sources in this checkout and downloads nothing, so the engine it compiles is as new as the last
+merge of Strata and PolyStrata into this repository. `upstream.json` records that merge - each project's release, tag
+and commit - and setup prints it before the first compile of a run:
+`engine source: Strata v0.1.45 (477ac13c) + PolyStrata 0.1.45-poly.6 (818f5deb)`. `python tools/upstream_status.py
+--check` compares the pin with both projects' newest release and exits 1 while either is ahead; the merge and the
+`upstream.json` update belong in the same commit.
+
 The engine is one CMake project, `CMakeLists.txt`, with one target per backend in this repository
 ([ENGINES.md](ENGINES.md#the-four-backends); which model each one runs: [BACKENDS.md](BACKENDS.md#what-runs)).
 These are the commands setup itself runs:

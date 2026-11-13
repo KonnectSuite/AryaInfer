@@ -1,0 +1,15 @@
+{
+  "$comment": "The upstream projects whose sources this checkout builds. setup.py --build compiles src/ (Strata's engine) and src/poly (PolyStrata) from this tree, so a build is only as new as the last merge into it: write that merge here, in the same commit. tools/upstream_status.py --check reads both projects' release feeds and says what they have released since. A merge moves the tag and the commit together; the paths are what the merge brought in, kept apart from this fork's own code (the AQ3 kernels and the aryainfer target live in src/poly too).",
+  "strata": {
+    "repo": "Niko1221/Strata",
+    "tag": "v0.1.45",
+    "commit": "477ac13cbe8e582c20484871ce459d20d82df09d",
+    "paths": ["src", "include/strata", "serve", "cmake", "CMakeLists.txt"]
+  },
+  "polystrata": {
+    "repo": "simplexai-labs/PolyStrata",
+    "tag": "0.1.45-poly.6",
+    "commit": "818f5debc944ddf0ca67fb9e9745c648a89e407f",
+    "paths": ["src/poly"]
+  }
+}
