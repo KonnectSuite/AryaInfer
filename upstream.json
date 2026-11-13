@@ -8,8 +8,8 @@
   },
   "polystrata": {
     "repo": "simplexai-labs/PolyStrata",
-    "tag": "0.1.45-poly.6",
-    "commit": "818f5debc944ddf0ca67fb9e9745c648a89e407f",
+    "tag": "0.1.45-poly.9",
+    "commit": "83a7a33272413bf87b8d2742dc557c165e2cb2d2",
     "paths": ["src/poly"]
   }
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-r"""Report which Strata and PolyStrata sources this tree builds, and what upstream has released since.
+r"""Report which Strata and AryaInfer sources this tree builds, and what upstream has released since.
 
-setup.py --build compiles src/ (Strata's engine) and src/poly (PolyStrata) from this checkout, not from
+setup.py --build compiles src/ (Strata's engine) and src/poly (AryaInfer) from this checkout, not from
 upstream, so a build is only as new as the last merge into this repository.  upstream.json records that
 merge; this tool reads it and, with --check, compares it with each project's newest release.  A pin that
 is behind means the engine setup compiles here is older than the one upstream ships - the merge, not a

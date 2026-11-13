@@ -1,6 +1,7 @@
 // src/poly/engine.cpp - see the header.  What every architecture shares: the files, the weights' way to VRAM, the
 // routed experts (the cache, the CPU, a prompt batch), the sequence's state, and the calls that feed tokens.
 #include "engine.hpp"
+#include "stage_copy.hpp"
 
 #include "deepseek4.hpp"
 #include "gemma4.hpp"
@@ -13,7 +14,12 @@
 #include "runtime.hpp"
 #include "strata/poly/kernels.hpp"
 #include "strata/poly/prefill_f16.hpp"
+#if defined(STRATA_GPU_METAL)
+#include "strata/core/conversation_memory.hpp"
+#include "strata/gpu/metal.hpp"
+#endif
 #include "strata/kernels/native_mmvq.hpp"
+#include "strata/platform/memory.hpp"
 
 #include "ggml.h"
 
@@ -30,6 +36,7 @@
 #include <cstring>
 #include <exception>
 #include <filesystem>
+#include <immintrin.h>
 #include <new>
 #include <numeric>
 #include <stdexcept>
@@ -38,6 +45,9 @@
 
 #ifdef __linux__
 #include <sched.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/resource.h>
 #include <unistd.h>
 #endif
 #ifdef _WIN32
@@ -45,10 +55,26 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <psapi.h>
+#endif
+#if defined(__APPLE__)
+#include <sys/mman.h>
 #endif
 
 namespace strata::poly {
 namespace {
+
+void drop_file_pages(const void* p, size_t n) {
+#if defined(__APPLE__)
+    constexpr uintptr_t kPage = 16384;
+    const uintptr_t a = ((uintptr_t) p + kPage - 1) & ~(kPage - 1);
+    const uintptr_t b = ((uintptr_t) p + n) & ~(kPage - 1);
+    if (b > a) (void) msync((void*) a, b - a, MS_INVALIDATE);
+#else
+    (void) p;
+    (void) n;
+#endif
+}
 
 // A launch's tiles are as wide as the most rows one of its matrices has, up to 128, and every matrix in it
 // computes whole tiles.  So a prompt batch's cached experts go by how many rows they have (moe_rows()): a launch
@@ -56,6 +82,7 @@ namespace {
 // widths saved less work than their launches cost.
 constexpr int kTile[] = {32, 128};
 constexpr int kClasses = (int) (sizeof(kTile) / sizeof(kTile[0])) + 1;
+constexpr int kMaxStagedTiles = 8;   // the most size classes STRATA_POLY_STAGED_TILES makes of the staged experts
 
 int tile_class(int rows) {
     int c = 0;
@@ -64,7 +91,8 @@ int tile_class(int rows) {
 }
 
 // A container's CPU quota is not in the affinity mask: a 25-CPU pod on a 208-thread host shows 208.
-int usable_cpus() {
+// `quota` is set when there is one.
+int usable_cpus(bool* quota_set = nullptr) {
     long long n = (long long) std::thread::hardware_concurrency();
 #ifdef __linux__
     cpu_set_t set;
@@ -81,9 +109,26 @@ int usable_cpus() {
             std::fclose(p);
         }
     }
-    if (quota > 0 && period > 0) n = std::min(n, std::max(1LL, quota / period));
+    if (quota > 0 && period > 0) {
+        n = std::min(n, std::max(1LL, quota / period));
+        if (quota_set) *quota_set = true;
+    }
+#else
+    (void) quota_set;
 #endif
     return (int) std::max(n, 1LL);
+}
+
+// The CPU threads when --threads names none: 70% of the usable CPUs, so that the PC's other programs keep the
+// rest.  With a thread for every CPU the CPU was 90 to 94% busy while an answer was written, on 16 cores of a
+// Xeon beside a card held to 8 GB; 22 threads of 32 left it 66% busy, wrote as fast, and 19 to 23% faster
+// beside another program's load on 8 CPUs, since a layer waits for its slowest thread and a thread that has to
+// share its CPU is the slowest.  A container with a CPU quota keeps them all: that is a server with no desktop
+// to leave CPU to, and GLM 5.3 Flash's CPU experts there take 15 ms a token with 18 threads where 12.8 with 24.
+int default_threads() {
+    bool quota = false;
+    const int n = usable_cpus(&quota);
+    return quota ? n : std::max(1, (n * 7 + 5) / 10);
 }
 
 // On a machine with several NUMA nodes the file cache's pages are on the node whose CPU read them first, and the
@@ -191,10 +236,17 @@ void read_cached(const std::vector<std::pair<const uint8_t*, size_t>>& spans, co
 }
 #endif
 
+// A byte of every page of a span of the mapped files, read: its pages come into this process.
+void touch_pages(const uint8_t* p, size_t n) {
+    volatile uint8_t seen = 0;
+    for (size_t at = 0; at < n; at += 4096) seen = (uint8_t) (seen + p[at]);
+    if (n > 0) seen = (uint8_t) (seen + p[n - 1]);   // its last page, when it starts in one
+}
+
 // The mapped file's pages come into this process's page table as they are first read, a fault every few pages,
 // and an expert read through those faults arrives at half the speed: 21.0 against 11.0 ms a token for GLM 5.3
 // Flash's CPU experts on the two-socket Xeon, while every expert a token meets is new to the process.  So one
-// thread reads a byte of every page of the experts, once, beside whatever the engine is doing: the 100 GiB of a
+// thread reads a byte of every page of the CPU's experts, once, beside whatever the engine is doing: the 100 GiB of a
 // model that the file cache holds take it 4 s.  What the cache does not hold is read from the disk here, not
 // while a token waits.
 //
@@ -211,14 +263,125 @@ void map_pages(const std::vector<std::pair<const uint8_t*, size_t>>& spans, cons
 #else
     (void) model;
 #endif
-    constexpr size_t kPage = 4096, kLook = size_t(1) << 24;   // `quit` is looked at every 16 MiB
-    volatile uint8_t seen = 0;
-    for (const auto& s : spans) {
-        for (size_t at = 0; at < s.second; at += kPage) {
-            if (at % kLook == 0 && quit.load(std::memory_order_relaxed)) return;
-            seen = (uint8_t) (seen + s.first[at]);
+    constexpr size_t kLook = size_t(1) << 24;   // `quit` is looked at every 16 MiB
+    for (const auto& s : spans)
+        for (size_t at = 0; at < s.second; at += kLook) {
+            if (quit.load(std::memory_order_relaxed)) return;
+            touch_pages(s.first + at, std::min(kLook, s.second - at));
         }
-        if (s.second > 0) seen = (uint8_t) (seen + s.first[s.second - 1]);   // its last page, when it starts in one
+}
+
+// The whole pages of a span of the mapped files leave this process's memory, for what the card has a copy of and
+// the CPU does not read.  The file cache keeps them (the standby list on Windows, the page cache on Linux): the
+// machine counts them as available and takes them for whatever needs memory, and a read that comes after finds
+// them there without the disk.  After a 32K prompt on the laptop the engine held all 15.9 GiB of Qwen3.6's file,
+// 4.2 GiB of it dense weights and experts the card had; with those dropped, the 11.7 GiB of experts the CPU reads.
+size_t page_bytes() {
+    static const size_t page = [] {
+#ifdef _WIN32
+        SYSTEM_INFO si;
+        GetSystemInfo(&si);
+        return (size_t) si.dwPageSize;
+#else
+        return (size_t) sysconf(_SC_PAGESIZE);
+#endif
+    }();
+    return page;
+}
+
+void drop_pages(const uint8_t* p, size_t n) {
+    const size_t page = page_bytes();
+    const uintptr_t a = ((uintptr_t) p + page - 1) / page * page, b = ((uintptr_t) p + n) / page * page;
+    if (!p || b <= a) return;
+#ifdef _WIN32
+    VirtualUnlock((void*) a, b - a);   // pages that are not locked leave the working set (and it returns FALSE)
+#else
+    madvise((void*) a, b - a, MADV_DONTNEED);   // a private mapping that is never written reads the file again
+#endif
+}
+
+// Options::lock_experts: a span's pages locked into RAM, where the file cache cannot hand them to another program,
+// reading in the ones it had already dropped; false when the system refuses (Linux past `ulimit -l`, Windows past
+// the working-set minimum lock_outside() raised).  Unlocking takes the span's whole pages only: one it shares with
+// a neighbour stays as the neighbour has it.
+bool lock_pages(const uint8_t* p, size_t n, bool lock) {
+    if (lock) {
+#ifdef _WIN32
+        return VirtualLock((void*) p, n) != 0;
+#else
+        return mlock(p, n) == 0;
+#endif
+    }
+    const size_t page = page_bytes();
+    const uintptr_t a = ((uintptr_t) p + page - 1) / page * page, b = ((uintptr_t) p + n) / page * page;
+    if (b <= a) return true;
+#ifdef _WIN32
+    return VirtualUnlock((void*) a, b - a) != 0;
+#else
+    return munlock((void*) a, b - a) == 0;
+#endif
+}
+
+// cuBLAS's libraries: loaded at start, they stayed in the working set after that (135 MiB on the laptop, 68 MiB
+// under Linux), though a request runs little of them.  Their pages leave it as drop_pages()'s do, and what a
+// request runs comes back from the file cache.  Not the engine's own image: under Linux its code went to the disk
+// with MADV_PAGEOUT and came back from it on the next request, 4 ms of a short prompt's 85.
+void drop_images() {
+#ifdef _WIN32
+    const HANDLE self = GetCurrentProcess();
+    HMODULE mods[1024];
+    DWORD got = 0;
+    if (!EnumProcessModules(self, mods, sizeof mods, &got)) return;
+    for (DWORD i = 0; i < std::min<DWORD>(got / sizeof(HMODULE), 1024); ++i) {
+        char name[MAX_PATH];
+        if (!GetModuleBaseNameA(self, mods[i], name, sizeof name) || _strnicmp(name, "cublas", 6) != 0) continue;
+        MODULEINFO mi{};
+        if (!GetModuleInformation(self, mods[i], &mi, sizeof mi)) continue;
+        const uint8_t* p = (const uint8_t*) mi.lpBaseOfDll;
+        const uint8_t* end = p + mi.SizeOfImage;
+        MEMORY_BASIC_INFORMATION r;
+        while (p < end && VirtualQuery(p, &r, sizeof r) == sizeof r) {   // one call a region: they differ in rights
+            if (r.State == MEM_COMMIT) VirtualUnlock(r.BaseAddress, r.RegionSize);
+            p = (const uint8_t*) r.BaseAddress + r.RegionSize;
+        }
+    }
+#else
+    // Their code only: it is never written, so MADV_DONTNEED leaves it in the file cache.  Their other read-only
+    // pages may be relocated private copies, which MADV_DONTNEED would throw away.
+    FILE* f = std::fopen("/proc/self/maps", "r");
+    if (!f) return;
+    char line[4352];
+    while (std::fgets(line, sizeof line, f)) {
+        unsigned long a = 0, b = 0;
+        char rights[8] = {};
+        if (std::sscanf(line, "%lx-%lx %7s", &a, &b, rights) == 3 && std::strcmp(rights, "r-xp") == 0 &&
+            std::strstr(line, "/libcublas"))
+            madvise((void*) a, b - a, MADV_DONTNEED);
+    }
+    std::fclose(f);
+#endif
+}
+
+// Experts [e0, e1) of L in the mapped file, to f(start, bytes): their gates and ups (one span where the file keeps
+// an expert's two in one tensor), and their downs.
+template <class F> void expert_bytes(const Layer& L, int e0, int e1, F&& f) {
+    const size_t n = (size_t) (e1 - e0);
+    f(L.exp_gate + (size_t) e0 * L.gu_stride, n * L.gu_stride);
+    if (L.gu_stride == L.gu_bytes) f(L.exp_up + (size_t) e0 * L.u_stride, n * L.u_stride);
+    f(L.exp_down + (size_t) e0 * L.d_bytes, n * L.d_bytes);
+}
+
+// expert_bytes() of each run of L's experts that take() takes, a run of neighbours in one call
+template <class P, class F> void expert_runs(const Layer& L, int n_expert, P&& take, F&& f) {
+    for (int e = 0; e < n_expert;) {
+        if (!take(e)) {
+            ++e;
+            continue;
+        }
+        int g = e + 1;
+        while (g < n_expert && take(g)) ++g;
+        expert_bytes(L, e, g, f);
+        e = g;
     }
 }
 
@@ -375,9 +538,64 @@ int default_reserve_mib(size_t total_b, bool ram_tight) {
     return (int) std::clamp<size_t>(total_b >> 25, 256, 768);
 }
 
-// The RAM the machine has free for the model's file, or 0 when it cannot tell.
+#ifdef __linux__
+// A cgroup's memory limit is not in /proc/meminfo: a container, or a systemd scope, with one shows the host's RAM.
+// The room under the tightest limit on the way to the root: each limit less what its group holds that the kernel
+// cannot drop (its file pages it can).  SIZE_MAX when no group has a limit.
+size_t cgroup_room() {
+    std::string path;
+    if (FILE* f = std::fopen("/proc/self/cgroup", "r")) {
+        char line[512];
+        while (std::fgets(line, sizeof(line), f))
+            if (std::strncmp(line, "0::", 3) == 0) {
+                path = line + 3;
+                break;
+            }
+        std::fclose(f);
+    }
+    while (!path.empty() && path.back() == '\n') path.pop_back();
+    if (path.empty() || path[0] != '/') return SIZE_MAX;   // cgroup v1 only
+    size_t room = SIZE_MAX;
+    for (;;) {
+        const std::string dir = "/sys/fs/cgroup" + (path == "/" ? std::string() : path);
+        unsigned long long max = 0, cur = 0, file = 0;
+        bool limited = false;   // "max" when there is no limit
+        if (FILE* f = std::fopen((dir + "/memory.max").c_str(), "r")) {
+            limited = std::fscanf(f, "%llu", &max) == 1;
+            std::fclose(f);
+        }
+        if (limited) {
+            if (FILE* f = std::fopen((dir + "/memory.current").c_str(), "r")) {
+                if (std::fscanf(f, "%llu", &cur) != 1) cur = 0;
+                std::fclose(f);
+            }
+            if (FILE* f = std::fopen((dir + "/memory.stat").c_str(), "r")) {
+                char key[64];
+                unsigned long long v = 0;
+                while (std::fscanf(f, "%63s %llu", key, &v) == 2)
+                    if (std::strcmp(key, "file") == 0) {
+                        file = v;
+                        break;
+                    }
+                std::fclose(f);
+            }
+            const unsigned long long held = cur > file ? cur - file : 0;
+            room = std::min(room, max > held ? (size_t) (max - held) : 0);
+        }
+        if (path == "/") break;
+        const size_t cut = path.find_last_of('/');
+        path = cut == 0 ? "/" : path.substr(0, cut);
+    }
+    return room;
+}
+#endif
+
+// The RAM the machine has free for the model's file, or 0 when it cannot tell: under a cgroup's limit, what that
+// leaves if it is less.
 size_t ram_available() {
-#ifdef _WIN32
+#if defined(STRATA_GPU_METAL)
+    return strata::core::available_host_bytes().value_or(0);
+#elif defined(_WIN32)
     MEMORYSTATUSEX st{};
     st.dwLength = sizeof(st);
     return GlobalMemoryStatusEx(&st) ? (size_t) st.ullAvailPhys : 0;
@@ -389,7 +607,11 @@ size_t ram_available() {
             if (std::sscanf(line, "MemAvailable: %zu kB", &kb) == 1) break;
         std::fclose(f);
     }
+#ifdef __linux__
+    return std::min(kb << 10, cgroup_room());
+#else
     return kb << 10;
+#endif
 #endif
 }
 
@@ -402,8 +624,12 @@ struct Engine::Swap {
     std::atomic<int> at{kFree};
     int il = 0, e = 0;
     uint8_t* slot = nullptr;       // where it goes in VRAM: the slot of the expert it replaces
-    uint8_t* pinned = nullptr;
+    bool adds = false;             // the slot was empty (grow_cache()): the cache holds one more
     cudaEvent_t done = nullptr;    // marks its upload
+    int32_t from = -1;             // the pool_ slot it is copied from, held (pool_pin_) until it has arrived
+    bool mapped = true;            // else read from the files
+    int64_t takes = -1;            // the expert (layer * n_expert + expert) given its place in kept_, or -1
+    int64_t gets = -1;             // the expert given `from` once it has arrived, or -1
 };
 
 Engine::Engine() = default;
@@ -413,6 +639,12 @@ Engine::~Engine() {
     OnCard here(device_, split_);
     map_quit_.store(true);
     if (mapper_.joinable()) mapper_.join();
+    {
+        std::lock_guard<std::mutex> l(pool_m_);
+        pool_quit_ = true;
+    }
+    pool_cv_.notify_all();
+    for (std::thread& t : pool_threads_) t.join();
     if (follower_.joinable()) {
         {
             std::lock_guard<std::mutex> l(swap_m_);
@@ -427,6 +659,11 @@ Engine::~Engine() {
     if (st_) cudaStreamSynchronize(cs(st_));
     workers_.reset();
     mmq_.reset();
+#if defined(STRATA_GPU_METAL)
+    // Metal recordings retain their resources. Retire them before releasing the allocation owners.
+    for (void* g : graphs_) cudaGraphExecDestroy((cudaGraphExec_t) g);
+    graphs_.clear();
+#endif
     for (void* p : dev_allocs_) cudaFree(p);
     for (Kv& k : kv_) vmm_free(k);
     for (Seq& q : seqs_) {
@@ -437,8 +674,12 @@ Engine::~Engine() {
     }
     vmm_free(arena_);
     vmm_free(stage_map_);
+    for (unsigned long long h : vpool_) cuMemRelease(h);   // the pool goes back to the card with the engine
+    vpool_.clear();
     for (void* p : host_allocs_) cudaFreeHost(p);
     for (void* e : {ev_stage_[0], ev_stage_[1], ev_ahead_, ev_free_, ev_in_[0], ev_in_[1], ev_out_[0], ev_out_[1], ev_hr_})
+        if (e) cudaEventDestroy((cudaEvent_t) e);
+    for (void* e : swap_pin_ev_)
         if (e) cudaEventDestroy((cudaEvent_t) e);
     for (void* e : ev_row_)
         if (e) cudaEventDestroy((cudaEvent_t) e);
@@ -480,6 +721,13 @@ void* Engine::hmalloc(size_t bytes, const char* what) {
     ck(e, why.c_str());
     host_allocs_.push_back(p);
     return p;
+}
+
+// What hmalloc() gave, given back.  Null is nothing.
+void Engine::hfree(void* p) {
+    if (!p) return;
+    host_allocs_.erase(std::find(host_allocs_.begin(), host_allocs_.end(), p));
+    ck(cudaFreeHost(p), "freeing pinned memory");
 }
 
 // A write into VRAM and a run of zeros in it, both on st_.
@@ -529,14 +777,75 @@ void Engine::mind_memory() {
 
 void Engine::vmm_reserve(Mapped& m, size_t bytes) {
     CUdeviceptr p = 0;
-    m.reserved = up_to(std::max<size_t>(bytes, 1), grain_);
+    m.reserved = up_to(std::max<size_t>(bytes, 1), pool_on_ ? pg_ : grain_);   // a whole number of pool handles
     cu_ck(cuMemAddressReserve(&p, m.reserved, 0, 0, 0), "reserving addresses for VRAM");
     m.base = p;
 }
 
+// The pool: `bytes` of VRAM as handles of pg_ bytes, kept until the engine ends.  Creating a handle takes its VRAM
+// (measured on Windows HIP: the card's free figure drops at the create, before anything is mapped), so what is
+// claimed here is the engine's from now on.  The card may have less: the pool is what it could give.
+void Engine::vpool_claim(size_t bytes) {
+    CUmemAllocationProp prop = {};
+    prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
+    prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
+    prop.location.id = device_;
+    vpool_.reserve(vpool_.size() + bytes / pg_ + 1);
+    for (size_t got = 0; got + pg_ <= bytes; got += pg_) {
+        CUmemGenericAllocationHandle h = 0;
+        if (cuMemCreate(&h, pg_, &prop, 0) != CUDA_SUCCESS) {
+            (void) cudaGetLastError();
+            break;
+        }
+        vpool_.push_back(h);
+    }
+}
+
+// The pool sized by what the OS lets this process have, where the OS says (Windows: the video memory budget).  The
+// budget is not a constant: it fell from 7,383 to 6,975 MiB on an 8 GB card while this engine claimed 3.6 GiB, and a
+// process that is over it has memory moved out to system RAM (150 MiB over: 2.4 GB moved, decode at 6 tokens/s).  So
+// handles are created a step at a time and the budget and the usage are read again before each step, until what is
+// left under the budget is `margin`: the room for what the engine allocates after the pool (recorded launches, library
+// work space) and the desktop's growth.  False when there is no budget to read (elsewhere than Windows): the caller
+// sizes the pool from the card's free VRAM.
+bool Engine::vpool_claim_to_budget(size_t margin, size_t limit, size_t& claimed) {
+    claimed = 0;
+    cudaDeviceProp p{};
+    uint64_t budget = 0, usage = 0;
+    std::string why;
+    if (cudaGetDeviceProperties(&p, device_) != cudaSuccess) {
+        (void) cudaGetLastError();
+        return false;
+    }
+    if (!strata::platform::gpu_local_memory_budget(p.luid, budget, usage, why)) return false;
+    const size_t step = size_t(256) << 20;
+    for (;;) {
+        if (!strata::platform::gpu_local_memory_budget(p.luid, budget, usage, why)) break;
+        const uint64_t keep = (uint64_t) margin + pg_;
+        if (budget <= usage + keep || vpool_bytes() + pg_ > limit) break;   // at the budget, or all the model can use
+        const size_t room = std::min<uint64_t>({budget - usage - margin, step, limit - vpool_bytes()});
+        const size_t before = vpool_.size();
+        vpool_claim(room);
+        claimed += (vpool_.size() - before) * pg_;
+        if (vpool_.size() - before < room / pg_) break;   // the card had no more
+    }
+    return true;
+}
+
+// What the attention caches take for one step of their growth (cover() maps kKvGrow rows at a time, in handles of the
+// pool's size): the room the pool keeps for the next one.
+size_t Engine::kv_step_bytes() const {
+    size_t b = 0;
+    for (const Kv& k : kv_) b += up_to((size_t) ((kKvGrow + k.per - 1) / k.per) * k.bytes, pg_);
+    return b;
+}
+
 // VRAM for the first `bytes` of m, in pieces of at most `piece` bytes.  Throws std::runtime_error.
 void Engine::vmm_map(Mapped& m, size_t bytes, size_t piece, const char* what) {
-    bytes = std::min(up_to(bytes, grain_), m.reserved);
+    // With the pool a piece is one of its handles and comes from it, never from the card; a map it cannot serve
+    // throws as a card that has no more VRAM does
+    if (pool_on_) piece = pg_;
+    bytes = std::min(up_to(bytes, pool_on_ ? pg_ : grain_), m.reserved);
     CUmemAllocationProp prop = {};
     prop.type = CU_MEM_ALLOCATION_TYPE_PINNED;
     prop.location.type = CU_MEM_LOCATION_TYPE_DEVICE;
@@ -548,25 +857,44 @@ void Engine::vmm_map(Mapped& m, size_t bytes, size_t piece, const char* what) {
     while (m.mapped < bytes) {
         const size_t n = std::min(bytes - m.mapped, piece);
         CUmemGenericAllocationHandle h = 0;
-        if (cuMemCreate(&h, n, &prop, 0) != CUDA_SUCCESS)
+        // A handle of the pool when it has one.  Before fill_expert_cache() claims the pool, or in a model that has no
+        // expert cache to claim it, a map with the pool empty still creates its handle, of the pool's size, and the
+        // handle joins the pool when it is unmapped; once the pool is claimed an empty one means the card has no more.
+        if (pool_on_ && !vpool_.empty()) {
+            h = vpool_.back();
+            vpool_.pop_back();
+        } else if (pool_on_ && pool_claimed_) {
             throw std::runtime_error("no VRAM for " + std::string(what) + " (" + std::to_string(n >> 20) +
                                      " MiB more)");
+        } else if (cuMemCreate(&h, n, &prop, 0) != CUDA_SUCCESS) {
+            throw std::runtime_error("no VRAM for " + std::string(what) + " (" + std::to_string(n >> 20) +
+                                     " MiB more)");
+        }
         const CUdeviceptr at = m.base + m.mapped;
         const CUresult mapped = cuMemMap(at, n, 0, h, 0);
-        if (mapped != CUDA_SUCCESS) cuMemRelease(h);
+        if (mapped != CUDA_SUCCESS) {
+            if (pool_on_) vpool_.push_back(h);
+            else cuMemRelease(h);
+        }
         cu_ck(mapped, "mapping VRAM");
         m.pieces.emplace_back(h, n);
         m.mapped += n;
         const CUresult acc = cuMemSetAccess(at, n, &access, 1);
         if (acc != CUDA_SUCCESS) {   // HIP hands out the physical pages here, not at create: the card may not have
             cuMemUnmap(at, n);       // them even though the addresses do.  Leave m as it was and say no.
-            cuMemRelease(h);
+            if (pool_on_) vpool_.push_back(h);
+            else cuMemRelease(h);
             m.pieces.pop_back();
             m.mapped -= n;
             (void) cudaGetLastError();   // HIP's failed SetAccess leaves a sticky error: do not let it escape with the throw
             throw std::runtime_error("no VRAM for " + std::string(what) + " (" + std::to_string(n >> 20) +
                                      " MiB more)");
         }
+        // A handle the pool kept holds what its last map left in it, expert bytes or old rows, where a created one
+        // comes zeroed from the system.  Rows nothing has written yet are read by the kernels' tiles (the causal mask
+        // does not stop a NaN from them), so a piece is zeroed as it is mapped.  Not the staging buffer: its uploads
+        // run on another stream, and everything it holds is written before it is read.
+        if (pool_on_ && &m != &stage_map_) zero_vram((void*) at, n);
     }
 }
 
@@ -578,8 +906,10 @@ void Engine::vmm_unmap(Mapped& m, size_t bytes) {
         m.mapped -= n;
         m.pieces.pop_back();
         cu_ck(cuMemUnmap(m.base + m.mapped, n), "unmapping VRAM");
-        cu_ck(cuMemRelease(h), "unmapping VRAM");
+        if (pool_on_) vpool_.push_back(h);   // kept: the next map of any region takes it
+        else cu_ck(cuMemRelease(h), "unmapping VRAM");
     }
+    if (pool_on_) return;   // nothing went back to the card, so there are no addresses to free for it either
 #ifdef STRATA_VMM_RELEASE_WITH_ADDRESSES
     // On ROCm the released pieces stay the process's while their addresses are reserved (an RX 9070 XT: 320 MiB
     // unmapped and released, 32 MiB more free; the addresses freed, all of it).  The kept pieces leave their
@@ -643,9 +973,192 @@ void Engine::vmm_free(Mapped& m) {
     m.base = 0;
 }
 
+#if defined(STRATA_GPU_METAL)
+namespace {
+constexpr size_t kMetalHostReserve = size_t(4) << 30;
+constexpr size_t kMetalGrowthMargin = size_t(512) << 20;
+constexpr size_t kMetalRefillCushion = size_t(256) << 20;
+}
+
+std::optional<uint64_t> Engine::metal_host_available() const {
+    return strata::core::available_host_bytes();
+}
+
+size_t Engine::metal_host_headroom() {
+    const auto memory = metal_host_available();
+    if (memory) return *memory > kMetalHostReserve ? size_t(*memory - kMetalHostReserve) : 0;
+    if (!metal_host_warning_) {
+        std::fprintf(stderr, "strata-poly: host memory is unavailable; balanced Metal uses the Metal budget only\n");
+        metal_host_warning_ = true;
+    }
+    return SIZE_MAX;
+}
+
+void Engine::metal_sync_memory() {
+    settle_swaps();
+    for (void* s : {st_, up_, rs_, swap_st_})
+        if (s) ck(cudaStreamSynchronize(cs(s)), "moving Metal allocations");
+}
+
+void Engine::metal_invalidate_graphs() {
+    // Graphs own resources as well as raw argument pointers. Clear every sequence's recordings before
+    // retiring an allocation; otherwise a parked sequence can replay old pointers or keep that memory alive.
+    for (void* g : graphs_) ck(cudaGraphExecDestroy((cudaGraphExec_t) g), "invalidating Metal graphs");
+    graphs_.clear();
+    for (Layer& l : layers_) {
+        l.heads.clear(); l.shared.clear(); l.tail.clear(); l.card_moe.clear(); l.rows_heads.clear();
+        l.card = -1;
+    }
+    passes_.clear();
+    tail_ = nullptr;
+    for (Seq& q : seqs_) {
+        q.heads.clear(); q.passes.clear(); q.tail = nullptr;
+    }
+    recorded_ = false;
+    // Force the next GPU-routed call to upload fresh expert addresses, including indirect dependencies.
+    h_slots_.clear();
+    if (d_slots_) {
+        const void* empty = nullptr;
+        ck(gpu::metal::register_indirect(d_slots_, &empty, 0), "clearing expert dependencies");
+    }
+}
+
+void Engine::metal_resize_cache(size_t limit) {
+    if (freeze_experts_) throw std::runtime_error("balanced Metal cannot resize a frozen expert cache");
+    const size_t previous_limit = metal_cache_limit_;
+    const int previous_reserve = opt_.vram_reserve_mib;
+    metal_cache_limit_ = limit;
+    try {
+        resize_card_cache(previous_reserve);
+    } catch (...) {
+        metal_cache_limit_ = previous_limit;
+        opt_.vram_reserve_mib = previous_reserve;
+        throw;
+    }
+    metal_cache_limit_ = previous_limit;
+    opt_.vram_reserve_mib = previous_reserve;
+}
+
+bool Engine::metal_mind_memory() {
+    if (!opt_.gpu_experts || n_moe_ == 0 || freeze_experts_) return false;
+    size_t free_b = 0, total_b = 0;
+    ck(cudaMemGetInfo(&free_b, &total_b), "balanced Metal budget");
+    const size_t reserve = size_t(std::max(reserve_mib_, 256)) << 20;
+    const size_t held = metal_cache_bytes_;
+    const size_t available = free_b > SIZE_MAX - held ? SIZE_MAX : free_b + held;
+    size_t target = available > reserve ? available - reserve : 0;
+    const auto host = metal_host_available();
+    if (host) {
+        const size_t host_total = *host > SIZE_MAX - held ? SIZE_MAX : size_t(*host) + held;
+        target = std::min(target, host_total > kMetalHostReserve ? host_total - kMetalHostReserve : 0);
+    } else {
+        (void) metal_host_headroom(); // issue the one-time fallback diagnostic
+    }
+    if (target < held) {
+        metal_growth_samples_ = 0;
+        metal_resize_cache(target);
+        return metal_cache_bytes_ != held;
+    }
+    // A refill leaves its own cushion. Require a useful net increase before rereading the whole cache.
+    if (all_cached() || target - held < kMetalGrowthMargin + kMetalRefillCushion ||
+        (host && *host < kMetalHostReserve + kMetalGrowthMargin)) {
+        metal_growth_samples_ = 0;
+        return false;
+    }
+    if (++metal_growth_samples_ < 2) return false;
+    metal_growth_samples_ = 0;
+    metal_resize_cache(target);
+    return metal_cache_bytes_ != held;
+}
+
+void Engine::metal_cover(int64_t end) {
+    if (end < 0 || end > opt_.max_context) throw std::runtime_error("the context is full");
+    if (end <= kv_rows_) { kv_reach_ = std::max(kv_reach_, end); return; }
+    const int64_t rows = kv_rows_for(end);
+    struct Replacement { size_t index, capacity; void* p; };
+    std::vector<Replacement> next;
+    size_t peak = 0;
+    for (size_t i = 0; i < bufs_.size(); ++i) {
+        const Buf& b = bufs_[i];
+        if (!b.per) continue;
+        const size_t capacity = size_t((rows + b.per - 1) / b.per) * b.bytes;
+        if (capacity <= b.capacity) continue;
+        if (capacity > SIZE_MAX - peak) throw std::runtime_error("Metal attention cache size overflow");
+        peak += capacity; // old buffers stay alive until every replacement has been copied and rebound
+        next.push_back({i, capacity, nullptr});
+    }
+    if (next.empty()) { kv_rows_ = rows; kv_reach_ = std::max(kv_reach_, end); return; }
+    metal_sync_memory();
+    const auto headroom = [&] {
+        size_t free_b = 0, total_b = 0;
+        ck(cudaMemGetInfo(&free_b, &total_b), "growing Metal attention cache");
+        const size_t reserve = size_t(std::max(reserve_mib_, 256)) << 20;
+        return std::min(free_b > reserve ? free_b - reserve : 0, metal_host_headroom());
+    };
+    size_t room = headroom();
+    bool reduced = false;
+    if (room < peak && exp_) {
+        if (freeze_experts_)
+            throw std::runtime_error("balanced Metal KV growth needs memory held by frozen experts; reduce context or unfreeze the cache");
+        const size_t cut = peak - room;
+        metal_resize_cache(metal_cache_bytes_ > cut ? metal_cache_bytes_ - cut : 0);
+        reduced = true;
+        room = headroom();
+    }
+    if (room < peak)
+        throw std::runtime_error("not enough unified memory to grow the Metal attention cache; existing rows are preserved");
+    const auto release = [&](void* p) {
+        if (!p) return;
+        const auto it = std::find(dev_allocs_.begin(), dev_allocs_.end(), p);
+        if (it != dev_allocs_.end()) dev_allocs_.erase(it);
+        ck(cudaFree(p), "retiring a Metal attention cache");
+    };
+    const std::vector<Buf> old = bufs_;
+    try {
+        for (Replacement& r : next) {
+            r.p = dmalloc(r.capacity, "growing the attention cache");
+            // Preserve the entire old capacity: speculative draft rows can extend beyond pos_.
+            ck(cudaMemcpyAsync(r.p, old[r.index].p, old[r.index].capacity, cudaMemcpyDeviceToDevice, cs(st_)),
+               "copying the attention cache");
+        }
+        ck(cudaStreamSynchronize(cs(st_)), "copying the attention cache");
+        metal_invalidate_graphs();
+        for (const Replacement& r : next) { bufs_[r.index].p = r.p; bufs_[r.index].capacity = r.capacity; }
+        again_ = 0;
+        alloc_caches();
+        again_ = SIZE_MAX;
+    } catch (...) {
+        // Rebind the old addresses before freeing replacements, including on an architecture rebind failure.
+        bufs_ = old;
+        again_ = 0;
+        try { alloc_caches(); } catch (...) { again_ = SIZE_MAX; std::terminate(); }
+        again_ = SIZE_MAX;
+        (void) cudaStreamSynchronize(cs(st_));
+        for (const Replacement& r : next) release(r.p);
+        throw;
+    }
+    for (const Replacement& r : next) release(old[r.index].p);
+    kv_rows_ = rows;
+    kv_reach_ = std::max(kv_reach_, end);
+    if (reduced && !freeze_experts_) {
+        // Refill only after the old KV buffers have gone; failure must not invalidate committed rows.
+        try { metal_resize_cache(SIZE_MAX); }
+        catch (const std::exception& e) { std::fprintf(stderr, "strata-poly: Metal expert cache remains reduced: %s\n", e.what()); }
+    }
+}
+#endif
+
 void* Engine::kv_alloc(size_t bytes, int per) {
     if (again_ != SIZE_MAX) return bufs_.at(again_++).p;
     const size_t all = (size_t) ((opt_.max_context + per - 1) / per) * bytes;
+#if defined(STRATA_GPU_METAL)
+    if (opt_.metal_balanced && opt_.kv_grow) {
+        const size_t capacity = (size_t) ((kv_rows_for(1) + per - 1) / per) * bytes;
+        void* p = dmalloc(capacity, "the initial attention cache");
+        bufs_.push_back({p, bytes, per, capacity});
+        return p;
+    }
+#endif
     void* p = nullptr;
     if (!vmm_ || !opt_.kv_grow) {
         p = dmalloc(all, "the attention cache");
@@ -658,6 +1171,9 @@ void* Engine::kv_alloc(size_t bytes, int per) {
         p = (void*) kv_.back().base;
     }
     bufs_.push_back({p, bytes, per});
+#if defined(STRATA_GPU_METAL)
+    bufs_.back().capacity = all;
+#endif
     return p;
 }
 
@@ -665,6 +1181,9 @@ void* Engine::seq_alloc(size_t bytes, const char* what) {
     if (again_ != SIZE_MAX) return bufs_.at(again_++).p;
     void* p = dmalloc(bytes, what);
     bufs_.push_back({p, bytes, 0});
+#if defined(STRATA_GPU_METAL)
+    bufs_.back().capacity = bytes;
+#endif
     return p;
 }
 
@@ -767,17 +1286,28 @@ void Engine::copy_seq(int from, int to) {
 // reserve stays for what is recorded later.  A quarter of the reserve stays free whatever else took VRAM since
 // (mind_vram()).
 void Engine::cover(int64_t end) {
+#if defined(STRATA_GPU_METAL)
+    if (opt_.metal_balanced && opt_.kv_grow) {
+        metal_cover(end);
+        return;
+    }
+#endif
     kv_reach_ = std::max(kv_reach_, end);
     if (kv_.empty() || end <= kv_rows_) return;
     const int64_t rows = kv_rows_for(end);
     const auto size = [rows](const Kv& k) { return (size_t) ((rows + k.per - 1) / k.per) * k.bytes; };
     size_t more = 0, held = arena_.mapped + other_rows();
     for (const Kv& k : kv_) {
-        const size_t want = std::min(up_to(size(k), grain_), k.reserved);
+        const size_t want = std::min(up_to(size(k), pool_on_ ? pg_ : grain_), k.reserved);
         if (want > k.mapped) more += want - k.mapped;   // trim_card_kv() leaves a piece it cuts through
         held += k.mapped;
     }
-    if (exp_) {
+    if (exp_ && pool_on_) {
+        // What the rows need beyond what the pool holds comes out of the expert cache, which gives its pieces to the
+        // pool (shrink_cache()); nothing is asked of the card.  With the cache gone and the pool still short, the
+        // maps below throw: the context does not fit the VRAM this engine has.
+        if (more > vpool_bytes()) shrink_cache(more - vpool_bytes());
+    } else if (exp_) {
         size_t free_b = 0, total_b = 0;
         ck(cudaMemGetInfo(&free_b, &total_b), "cudaMemGetInfo");
         const size_t quarter = (size_t(std::max(reserve_mib_, 0)) << 20) / 4;
@@ -846,6 +1376,7 @@ void Engine::shrink_cache(size_t bytes) {
     size_t cut = arena_.mapped;
     for (size_t i = arena_.pieces.size(); i > 0 && arena_.mapped - cut < bytes; --i) cut -= arena_.pieces[i - 1].second;
     settle_swaps();
+    fill_now();
     ck(cudaStreamSynchronize(cs(st_)), "the expert cache");
     const size_t ne = (size_t) n_expert_, end = cut > kTail ? cut - kTail : 0;   // kTail stays past the last slot
     struct Held {
@@ -1052,6 +1583,25 @@ void Engine::load_moe(int il, bool shared) {
                                      size_t(8));
         L.gu_step = (L.gu_step + unit - 1) / unit * unit;
     }
+    // NVFP4 experts converted from NVIDIA's checkpoints carry each expert's global scale of gate, up and down
+    // (llama.cpp's ffn_*_exps_s).  Gate's and up's go on their products ahead of the activation (ExpertScales),
+    // down's on the expert's weight in its token's sum.  Only NVFP4's: Gemma 4's ffn_down_exps.scale is its own.
+    const bool nv = L.gu_type == GGML_TYPE_NVFP4 || L.u_type == GGML_TYPE_NVFP4 || L.d_type == GGML_TYPE_NVFP4;
+    if (nv && tensor(il, "ffn_gate_up_exps.scale"))
+        throw std::runtime_error(blk(il, "ffn_gate_up_exps.scale: NVFP4 scales of a joined gate and up are not supported"));
+    // A projection of another type in the same layer has none (Qwen3.6 NVFP4-MTP-HQ: some ups are Q4_K).
+    const auto one = [&](const char* n, uint32_t type, Dev& d, std::vector<float>& h) {
+        const TensorInfo* t = tensor(il, n);
+        h.clear();
+        if (type != GGML_TYPE_NVFP4 || !t) return;
+        if (t->type != kTypeF32) throw std::runtime_error(t->name + " is not F32");
+        d = upload(t, blk(il, n), n_expert_, 1, kF32);
+        h.resize((size_t) n_expert_);
+        std::memcpy(h.data(), home(*t).data(*t), h.size() * sizeof(float));
+    };
+    one("ffn_gate_exps.scale", L.gu_type, L.s_gate, L.h_s_gate);
+    one("ffn_up_exps.scale", L.u_type, L.s_up, L.h_s_up);
+    one("ffn_down_exps.scale", L.d_type, L.s_down, L.h_s_down);
     std::string err;
     if (!cpu_expert_types_ok((int) L.gu_type, (int) L.d_type, n_embd_, n_ff_exp_, err) ||
         !cpu_expert_types_ok((int) L.u_type, (int) L.d_type, n_embd_, n_ff_exp_, err))
@@ -1071,9 +1621,9 @@ std::unique_ptr<Engine> Engine::open(const Options& o) {
     // same layers, the same draft block, and no router anywhere in the file. Qwen35 runs it; load_shape() is told
     // to expect no experts, and every MoE hook stays off because no layer sets Layer::moe.
     const bool dense = name == "qwen35";
-    if (o.kv_format == KvFmt::kQ8_0 && !qwen35 && !dense && name != "kolibri1")
-        throw std::runtime_error("--kv q8_0 is supported for qwen35moe and kolibri1 models in v1; this is a '" + name +
-                                 "' model");
+    if (o.kv_format == KvFmt::kQ8_0 && !qwen35 && !dense && name != "kolibri1" && name != "flint" && name != "lfm2moe")
+        throw std::runtime_error("--kv q8_0 is supported for qwen35moe, kolibri1, flint and lfm2moe models in v1; "
+                                 "this is a '" + name + "' model");
     // q4_0 is the dense model's so far: its cache arithmetic lives in Qwen35's flash-attention and flash-decode
     // kernels, and the dense run is what has been measured.
     if (o.kv_format == KvFmt::kQ4_0 && !dense)
@@ -1166,6 +1716,28 @@ const Shards& Engine::home(const TensorInfo& t) const {
 // model's tensors through twice).
 Dev Engine::upload(const TensorInfo* t, const std::string& name, int64_t n_in, int64_t n_out, Want want,
                    float (*fix)(float)) {
+    Dev d = upload_as(t, name, n_in, n_out, want, fix);
+    d.scale = global_scale(*t);
+    return d;
+}
+
+// An NVFP4 matrix converted from NVIDIA's checkpoints has its global scale beside it, "<name>.scale" for
+// "<name>.weight" (llama.cpp's *_s tensors, which multiply the product): about 1e-4, so it cannot go into the
+// blocks' E4M3 scales.  1 for any other matrix.
+float Engine::global_scale(const TensorInfo& t) const {
+    static const std::string w = ".weight";
+    if (t.type != GGML_TYPE_NVFP4 || t.name.size() <= w.size() ||
+        t.name.compare(t.name.size() - w.size(), w.size(), w) != 0)
+        return 1.0f;
+    const TensorInfo* s = home(t).find(t.name.substr(0, t.name.size() - w.size()) + ".scale");
+    if (!s || s->type != kTypeF32 || s->elements() != 1) return 1.0f;
+    float v;
+    std::memcpy(&v, home(*s).data(*s), sizeof v);
+    return v;
+}
+
+Dev Engine::upload_as(const TensorInfo* t, const std::string& name, int64_t n_in, int64_t n_out, Want want,
+                      float (*fix)(float)) {
     if (!t) throw std::runtime_error("the GGUF has no tensor " + name);
     const uint64_t rest = t->elements() / std::max<uint64_t>(t->shape[0], 1);
 #ifdef ARYAINFER_ENGINE
@@ -1185,6 +1757,7 @@ Dev Engine::upload(const TensorInfo* t, const std::string& name, int64_t n_in, i
         throw std::runtime_error(t->name + " is " + shape_of(*t) + ", expected [" + std::to_string(n_in) + ", " +
                                  std::to_string(n_out) + "]");
     const size_t bytes = home(*t).payload(*t), count = (size_t) t->elements();
+    if (dense_) uploaded_.emplace_back(home(*t).data(*t), bytes);
     if (want == kGuessMat && !fix && n_in % ggml_blck_size(GGML_TYPE_Q4_0) == 0 &&
         ggml_get_type_traits((ggml_type) t->type)->to_float) {
         const size_t row = ggml_row_size(GGML_TYPE_Q4_0, n_in), out = row * (size_t) n_out;
@@ -1210,6 +1783,9 @@ Dev Engine::upload(const TensorInfo* t, const std::string& name, int64_t n_in, i
             });
         }
         h2d(d.p, q.data(), out);
+#if defined(STRATA_GPU_METAL)
+        if (opt_.metal_balanced) drop_file_pages(src, bytes);
+#endif
         return d;
     }
     const bool as_is = !fix && (t->type == kTypeF32 || (want != kF32 && t->type == kTypeBF16) ||
@@ -1223,6 +1799,9 @@ Dev Engine::upload(const TensorInfo* t, const std::string& name, int64_t n_in, i
     if (dense_at_ > dense_bytes_) throw std::logic_error("the dense arena is too small for " + t->name);
     if (as_is) {
         h2d(d.p, home(*t).data(*t), bytes);
+#if defined(STRATA_GPU_METAL)
+        if (opt_.metal_balanced) drop_file_pages(home(*t).data(*t), bytes);
+#endif
         return d;
     }
 
@@ -1231,6 +1810,9 @@ Dev Engine::upload(const TensorInfo* t, const std::string& name, int64_t n_in, i
     if (t->type == kTypeF32) std::memcpy(f.data(), home(*t).data(*t), bytes);
     else if (traits && traits->to_float) traits->to_float(home(*t).data(*t), f.data(), (int64_t) count);
     else throw std::runtime_error(t->name + " is " + shape_of(*t) + ", a type this engine cannot read");
+#if defined(STRATA_GPU_METAL)
+    if (opt_.metal_balanced) drop_file_pages(home(*t).data(*t), bytes);
+#endif
     if (fix)
         for (float& v : f) v = fix(v);
     if (type == kTypeF32) {
@@ -1257,20 +1839,36 @@ int64_t Engine::vram_free_mib() const {
 // The cache takes what is free but for a reserve.  What the engine allocates after it comes out of the reserve:
 // the recorded launches and a library's work space took 180 MiB of an 8 GB card in the first request.  Unless the
 // caller names it, the reserve is a thirty-second of the card, between 256 and 768 MiB (mind_vram() keeps what is
-// free near half of it later), or a sixteenth when the machine's RAM is within 4 GiB of the model's files
+// free near half of it later), or a sixteenth when the machine's RAM is within 5 GiB of the model's files
 // (default_reserve_mib()).  Under Windows a card that is asked for more than it has does not refuse: memory
 // moves to the system's, and an answer came at 13 tokens/s where it comes at 30.
+//
+// The line was 4 GiB while the two staging chunks held 1 GiB of pinned memory by now; they hold 128 MiB, and
+// the line moved with them, so that the same PC in the same state keeps the reserve it had.
 void Engine::fill_expert_cache() {
     if (!opt_.gpu_experts || n_moe_ == 0) return;
     size_t free_b = 0, total_b = 0;
     ck(cudaMemGetInfo(&free_b, &total_b), "cudaMemGetInfo");
     const size_t ram = ram_available(), files = gg_->bytes() + (dg_ ? dg_->bytes() : 0);
-    ram_tight_ = ram > 0 && files + (4ULL << 30) > ram;
+    ram_tight_ = ram > 0 && files + (5ULL << 30) > ram;
     // 256 MiB at least, whatever was asked: the launches recorded later take theirs out of the reserve (mind_vram())
-    reserve_mib_ = opt_.vram_reserve_mib >= 0 ? std::max(opt_.vram_reserve_mib, 256)
-                                             : default_reserve_mib(total_b, ram_tight_);
-    const size_t reserve = size_t(reserve_mib_) << 20;
-    if (free_b <= reserve) return;
+    reserve_mib_ = opt_.vram_reserve_mib >= 0 ? std::max(opt_.vram_reserve_mib, 256) :
+#if defined(STRATA_GPU_METAL)
+                   opt_.metal_balanced ? 256 :
+#endif
+                   default_reserve_mib(total_b, ram_tight_);
+    size_t reserve = size_t(reserve_mib_) << 20;
+    // The first time the pool claims what the card has but the margin (the reserve), for the whole run, and no more
+    // than the model can use (below, where the experts' bytes are known): from then on the cache and the rows share it.
+    // A later call (resize_cache()) divides what the pool holds again.
+    const bool claim_later = pool_on_ && !pool_claimed_;
+    // the staging buffer is mapped later in load(), from the pool: its narrow size stays out of the cache
+    const size_t stage_slack = (size_t(opt_.stage_mib > 0 ? opt_.stage_mib : 128) + 8) << 20;
+    if (pool_on_ && !claim_later) {
+        free_b = vpool_bytes();
+        reserve = stage_map_.base ? 0 : stage_slack;
+    }
+    if (!claim_later && free_b <= reserve) return;
 
     struct Cand {
         int il, e;
@@ -1308,9 +1906,55 @@ void Engine::fill_expert_cache() {
                      [](const Cand& a, const Cand& b) { return a.value != b.value ? a.value > b.value : a.e < b.e; });
 
     n_trade_ = (int) sizes.size();
+    if (claim_later) {
+        // What the engine can use is every expert's slot, the attention caches' whole address range and 512 MiB for the
+        // staging buffer and the rounding: a card that holds more than that keeps the rest for its other programs.
+        size_t kv_total = 0;
+        for (const Kv& k : kv_) kv_total += k.reserved;
+        for (const Seq& q : seqs_)
+            for (const Kv& k : q.kv) kv_total += k.reserved;
+        const size_t limit = all + 256 + kv_total + (size_t(512) << 20);
+        size_t by_budget = 0;
+        const bool budgeted = vpool_claim_to_budget(reserve, limit, by_budget);
+        if (!budgeted) vpool_claim(std::min(free_b > reserve ? free_b - reserve : (size_t) 0, limit));
+        pool_claimed_ = vpool_bytes() > 0;   // a card with nothing to spare keeps the maps that create their handles
+        std::fprintf(stderr, "strata-poly: VRAM pool: %zu MiB claimed for the run (the card had %zu MiB free; margin left "
+                             "outside it %d MiB, %s; the most the model can use: %zu MiB)\n",
+                     vpool_bytes() >> 20, free_b >> 20, reserve_mib_,
+                     budgeted ? "under the OS's budget for this process" : "of the card's free VRAM", limit >> 20);
+        free_b = vpool_bytes();
+        reserve = stage_map_.base ? 0 : stage_slack;
+        if (free_b <= reserve) return;
+    }
     // sized again (resize_cache()), it is no larger than load() made it, or than its addresses with VMM
-    const size_t most = vmm_ ? std::min(all, total_b) : full_bytes_ > 0 ? full_bytes_ : all;
+    const size_t most = vmm_ ? std::min(all, total_b) :
+#if defined(STRATA_GPU_METAL)
+                       opt_.metal_balanced ? all :
+#endif
+                       full_bytes_ > 0 ? full_bytes_ : all;
     size_t arena = std::min({all, free_b - reserve, arena_.base ? arena_.reserved - 256 : most});
+#if defined(STRATA_GPU_METAL)
+    size_t metal_cap = 0, metal_stage_need = 0;
+    if (opt_.metal_balanced) {
+        for (const Layer& L : layers_) {
+            if (!L.moe) continue;
+            drop_file_pages(L.exp_gate, (size_t) n_expert_ * L.gu_stride);
+            if (L.gu_stride == L.gu_bytes) drop_file_pages(L.exp_up, (size_t) n_expert_ * L.u_stride);
+            drop_file_pages(L.exp_down, (size_t) n_expert_ * L.d_bytes);
+        }
+        metal_cap = metal_cache_limit_ != SIZE_MAX ? metal_cache_limit_ : metal_host_headroom();
+        arena = std::min(arena, metal_cap > 256 ? metal_cap - 256 : 0);
+        if (arena < all) {
+            if (mmq_ && !stage_) metal_stage_need += stage_bytes_ + 256 + kTail + 2 * chunk_bytes_;
+            if (!swap_ && opt_.expert_swaps > 0) metal_stage_need += (size_t) opt_.expert_swaps * slot_max_;
+            if (metal_cache_limit_ == SIZE_MAX && !recorded_)
+                metal_stage_need += size_t(scratch_at_) * sizeof(float) + state_n_ * sizeof(float) + (size_t(512) << 20);
+            else if (arena > (size_t(512) << 20))
+                metal_stage_need += kMetalRefillCushion;
+            arena = arena > metal_stage_need ? arena - metal_stage_need : 0;
+        }
+    }
+#endif
     if (arena == 0) return;
     if (vmm_) {   // in pieces, so that it can give some up to the attention caches (shrink_cache()) and grow
         if (!arena_.base) vmm_reserve(arena_, most + 256);   // addresses only: grow_cache() maps more of them
@@ -1326,6 +1970,10 @@ void Engine::fill_expert_cache() {
     } else {
         exp_ = (uint8_t*) dmalloc(arena + 256, "the expert cache");
     }
+#if defined(STRATA_GPU_METAL)
+    metal_cache_bytes_ = arena + 256;
+    if (!opt_.metal_balanced)
+#endif
     zero_vram(exp_, arena + 256);   // the slots' tails stay zero (kTail)
     // Which experts is by value; where they go is by layer, a layer's side by side in the experts' order.
     std::vector<Cand> taken;
@@ -1342,29 +1990,86 @@ void Engine::fill_expert_cache() {
         uint8_t* s = exp_ + exp_at_;
         exp_at_ += c.bytes;
         const size_t e = (size_t) c.e;
-        h2d(s, L.exp_gate + e * L.gu_stride, L.gu_bytes);
-        h2d(s + L.gu_bytes, L.exp_up + e * L.u_stride, L.u_bytes);
-        h2d(s + L.gu2(), L.exp_down + e * L.d_bytes, L.d_bytes);
+        const uint8_t* g_src = L.exp_gate + e * L.gu_stride;
+        const uint8_t* u_src = L.exp_up + e * L.u_stride;
+        const uint8_t* d_src = L.exp_down + e * L.d_bytes;
+        h2d(s, g_src, L.gu_bytes);
+        h2d(s + L.gu_bytes, u_src, L.u_bytes);
+        h2d(s + L.gu2(), d_src, L.d_bytes);
+#if defined(STRATA_GPU_METAL)
+        if (opt_.metal_balanced) {
+            const size_t used = L.gu2() + L.d_bytes;
+            if (c.bytes > used) {
+                if (void* hv = gpu::host_view(s + used)) std::memset(hv, 0, c.bytes - used);
+                else zero_vram(s + used, c.bytes - used);
+            }
+            drop_file_pages(g_src, L.gu_bytes);
+            drop_file_pages(u_src, L.u_bytes);
+            drop_file_pages(d_src, L.d_bytes);
+        }
+#endif
         L.slot[e] = s;
         ++cached_;
     }
+#if defined(STRATA_GPU_METAL)
+    if (opt_.metal_balanced) {
+        if (arena + 256 > exp_at_) {
+            if (void* hv = gpu::host_view(exp_ + exp_at_)) std::memset(hv, 0, arena + 256 - exp_at_);
+            else zero_vram(exp_ + exp_at_, arena + 256 - exp_at_);
+        }
+        const size_t used_host = exp_at_ + 256 + metal_stage_need;
+        metal_warm_bytes_ = arena == all && metal_cap > used_host ? metal_cap - used_host : 0;
+        for (const Layer& L : layers_) {
+            if (!L.moe) continue;
+            drop_file_pages(L.exp_gate, (size_t) n_expert_ * L.gu_stride);
+            if (L.gu_stride == L.gu_bytes) drop_file_pages(L.exp_up, (size_t) n_expert_ * L.u_stride);
+            drop_file_pages(L.exp_down, (size_t) n_expert_ * L.d_bytes);
+        }
+    }
+#endif
     if (full_bytes_ == 0) {
         full_bytes_ = arena;
         full_cached_ = cached_;
     }
 }
 
+void Engine::ensure_stage() {
+    if (!mmq_ || stage_) return;
+#if defined(STRATA_GPU_METAL)
+    if (opt_.metal_balanced && all_cached()) return;
+#endif
+    if (stage_wide_ > stage_narrow_) {
+        vmm_reserve(stage_map_, stage_wide_ + 256 + kTail);
+        // with the pool the buffer comes out of it, and out of the expert cache when the pool lacks the room
+        if (pool_on_ && pool_claimed_ && exp_) {
+            const size_t need = up_to(stage_narrow_ + 256 + kTail, pg_);
+            if (need > vpool_bytes()) shrink_cache(need - vpool_bytes());
+        }
+        vmm_map(stage_map_, stage_narrow_ + 256 + kTail, SIZE_MAX, "the expert staging buffer");
+        stage_ = (uint8_t*) stage_map_.base;
+    } else {
+        stage_ = (uint8_t*) dmalloc(stage_bytes_ + 256 + kTail, "the expert staging buffer");
+    }
+    for (int b = 0; b < 2; ++b) h_stage_[b] = (uint8_t*) hmalloc(chunk_bytes_, "pinned memory");
+}
+
 // The thread and the stream that bring experts into the cache while an answer is written (follow()).
 void Engine::start_swaps() {
     if (swap_ || cached_ == 0 || opt_.expert_swaps == 0) return;
+#if defined(STRATA_GPU_METAL)
+    if (opt_.metal_balanced && all_cached()) return;
+#endif
     swap_ = std::make_unique<Swap[]>((size_t) opt_.expert_swaps);
     cudaStream_t up = nullptr;
     ck(cudaStreamCreateWithFlags(&up, cudaStreamNonBlocking), "cudaStreamCreate");
     swap_st_ = up;
-    for (; n_swap_ < opt_.expert_swaps; ++n_swap_) {
-        Swap& s = swap_[(size_t) n_swap_];
-        s.pinned = (uint8_t*) hmalloc(slot_max_, "pinned memory");
-        ck(cudaEventCreateWithFlags(&s.done, cudaEventDisableTiming), "cudaEventCreate");
+    for (; n_swap_ < opt_.expert_swaps; ++n_swap_)
+        ck(cudaEventCreateWithFlags(&swap_[(size_t) n_swap_].done, cudaEventDisableTiming), "cudaEventCreate");
+    for (int b = 0; b < kSwapPins; ++b) {
+        swap_pin_[b] = (uint8_t*) hmalloc(slot_max_, "pinned memory");
+        cudaEvent_t ev = nullptr;
+        ck(cudaEventCreateWithFlags(&ev, cudaEventDisableTiming), "cudaEventCreate");
+        swap_pin_ev_[b] = ev;
     }
     recent_.assign(use_.size(), 0.f);
     coming_.assign(use_.size(), 0);
@@ -1383,6 +2088,11 @@ void Engine::resize_card_cache(int mib) {
     // requests; unfreeze_experts() ends the freeze before one begins).
     if (freeze_experts_) return;
     OnCard here(device_, split_);
+#if defined(STRATA_GPU_METAL)
+    // Every Metal graph retains its indirect resources, including in the legacy memory mode.
+    metal_sync_memory();
+    metal_invalidate_graphs();
+#endif
     ck(cudaStreamSynchronize(cs(st_)), "resize");
     const auto failed = [&] {
         std::lock_guard<std::mutex> l(swap_m_);
@@ -1395,6 +2105,7 @@ void Engine::resize_card_cache(int mib) {
     for (int j = 0; j < n_swap_; ++j) swap_[(size_t) j].at.store(Swap::kFree);
     std::fill(coming_.begin(), coming_.end(), (uint8_t) 0);
     for (Layer& L : layers_) std::fill(L.slot.begin(), L.slot.end(), nullptr);
+    refill_.clear();
     staged_il_ = -1;
     cached_ = 0;
     exp_at_ = 0;
@@ -1406,8 +2117,12 @@ void Engine::resize_card_cache(int mib) {
         ck(cudaFree(exp_), "resize");
         exp_ = nullptr;
     }
+#if defined(STRATA_GPU_METAL)
+    metal_cache_bytes_ = 0;
+#endif
     opt_.vram_reserve_mib = mib < 0 ? asked_reserve_mib_ : mib;
     fill_expert_cache();
+    ensure_stage();
     start_swaps();
 }
 
@@ -1425,10 +2140,22 @@ bool Engine::mind_vram() {
 }
 
 bool Engine::mind_card_vram() {
+#if defined(STRATA_GPU_METAL)
+    if (opt_.metal_balanced) return metal_mind_memory();
+#endif
     if (!exp_ || reserve_mib_ <= 0) return false;
     // As shrink_cache(): a frozen answer's cache is the one its first token saw.
     if (freeze_experts_) return false;
     OnCard here(device_, split_);
+    if (pool_on_) {
+        // The pool is the cache's and the rows': what the rows gave back (trim_kv()) goes to the experts the cache
+        // lacks that are used most.  Nothing outside the pool is looked at: the margin stays where it was left.
+        if (minds_++ == 0) return false;   // nothing is recorded before the first request
+        // Two steps of the rows' growth stay in it (kv_step_bytes()), so that an answer that goes on does not take
+        // experts out again
+        const size_t have = vpool_bytes(), slack = 2 * kv_step_bytes();
+        return have >= slack + (16u << 20) && grow_cache(have - slack) > 0;
+    }
     size_t free_b = 0, total_b = 0;
     ck(cudaMemGetInfo(&free_b, &total_b), "cudaMemGetInfo");
     const int64_t free = (int64_t) (free_b >> 20);   // this card's
@@ -1456,10 +2183,11 @@ void Engine::widen_stage() {
     if (stage_lent_ || stage_wide_ <= stage_narrow_) return;
     if (up_) ck(cudaStreamSynchronize(cs(up_)), "the expert staging buffer");
     ck(cudaStreamSynchronize(cs(st_)), "the expert staging buffer");
-    const size_t want = up_to(stage_wide_ + 256 + kTail, grain_) - stage_map_.mapped;
+    const size_t want = up_to(stage_wide_ + 256 + kTail, pool_on_ ? pg_ : grain_) - stage_map_.mapped;
     size_t free_b = 0, total_b = 0;
     ck(cudaMemGetInfo(&free_b, &total_b), "cudaMemGetInfo");
-    const size_t quarter = (size_t(std::max(reserve_mib_, 0)) << 20) / 4;
+    if (pool_on_) free_b = vpool_bytes();   // what the card has is the pool's
+    const size_t quarter = pool_on_ ? 0 : (size_t(std::max(reserve_mib_, 0)) << 20) / 4;
     stage_cut_ = 0;
     if (exp_ && free_b < want + quarter) {
         const size_t had = arena_.mapped;
@@ -1488,7 +2216,7 @@ void Engine::narrow_stage() {
     stage_bytes_ = stage_narrow_;
     staged_il_ = -1;
     stage_lent_ = false;
-    if (exp_ && stage_cut_ > 0) grow_cache(stage_cut_);
+    if (exp_ && stage_cut_ > 0) grow_cache(stage_cut_, true);
     stage_cut_ = 0;
 }
 
@@ -1509,9 +2237,18 @@ void* Engine::seq_buf(int s, const void* p) const {
     const auto* q = (const uint8_t*) p;
     for (size_t i = 0; i < bufs_.size(); ++i) {
         const Buf& b = bufs_[i];
+#if defined(STRATA_GPU_METAL)
+        const size_t all = b.capacity;
+#else
         const size_t all = b.per ? (size_t) ((opt_.max_context + b.per - 1) / b.per) * b.bytes : b.bytes;
+#endif
         const auto* at = (const uint8_t*) b.p;
-        if (q >= at && q < at + all) return (uint8_t*) to[i].p + (q - at);
+        if (q >= at && q < at + all) {
+#if defined(STRATA_GPU_METAL)
+            if ((size_t) (q - at) >= to[i].capacity) throw std::logic_error("seq_buf: destination capacity");
+#endif
+            return (uint8_t*) to[i].p + (q - at);
+        }
     }
     throw std::logic_error("seq_buf: not in a buffer of the sequence");
 }
@@ -1526,11 +2263,13 @@ size_t Engine::other_rows() const {
 
 // `bytes` more VRAM at the cache's end, for the experts it lacks that are used most (use per byte, as
 // fill_expert_cache() chooses), side by side by layer.  VRAM the card does not give is not an error: the cache
-// keeps what was mapped.  Returns the experts it took.
-int Engine::grow_cache(size_t bytes) {
+// keeps what was mapped.  Returns the experts it took.  `later`: the follower uploads them while the answer is
+// written (follow()), in place of a wait here: 57 ms for the 148 experts Gemma 4 lent a read's staging buffer.
+int Engine::grow_cache(size_t bytes, bool later) {
     if (!vmm_ || !exp_) return 0;
     // As shrink_cache(): a frozen answer's cache does not change under it.
     if (freeze_experts_) return 0;
+    later = later && n_swap_ > 0;
     settle_swaps();
     ck(cudaStreamSynchronize(cs(st_)), "the expert cache");
     if (swap_st_) ck(cudaStreamSynchronize(cs(swap_st_)), "the expert cache");
@@ -1572,6 +2311,11 @@ int Engine::grow_cache(size_t bytes) {
         Layer& L = layers_[(size_t) c.il];
         uint8_t* s = exp_ + exp_at_;
         exp_at_ += L.slot_bytes;
+        if (later) {
+            refill_.push_back({c.il, c.e, s});
+            coming_[(size_t) c.il * n_expert_ + c.e] = 1;
+            continue;
+        }
         const size_t e = (size_t) c.e;
         h2d(s, L.exp_gate + e * L.gu_stride, L.gu_bytes);
         h2d(s + L.gu_bytes, L.exp_up + e * L.u_stride, L.u_bytes);
@@ -1582,6 +2326,22 @@ int Engine::grow_cache(size_t bytes) {
     staged_il_ = -1;
     held_is_budget();
     return (int) taken.size();
+}
+
+// The slots grow_cache() left to the follower that it has not asked for yet, filled here: the cache is about to
+// be cut or sized again, and an empty slot of it is lost to both.
+void Engine::fill_now() {
+    for (const Refill& r : refill_) {
+        Layer& L = layers_[(size_t) r.il];
+        const size_t e = (size_t) r.e;
+        h2d(r.slot, L.exp_gate + e * L.gu_stride, L.gu_bytes);
+        h2d(r.slot + L.gu_bytes, L.exp_up + e * L.u_stride, L.u_bytes);
+        h2d(r.slot + L.gu2(), L.exp_down + e * L.d_bytes, L.d_bytes);
+        L.slot[e] = r.slot;
+        coming_[(size_t) r.il * n_expert_ + e] = 0;
+        ++cached_;
+    }
+    refill_.clear();
 }
 
 // What a layer copies to the staging buffer ahead of its routing: the experts outside the cache, the most used
@@ -1597,12 +2357,14 @@ void Engine::plan_ahead(Layer& L, int il) {
     L.ahead.resize(std::min(L.ahead.size(), stage_bytes_ / (L.gu_step + L.d_bytes)));
 }
 
-// The follower: an asked-for expert goes from the mapped file to its pinned buffer, and from there to its slot.
-// The file may have to be read for it, which is why this is not the engine's thread.
+// The follower: an asked-for expert goes from the mapped file to a pinned buffer, and from there to its slot.
+// The file may have to be read for it, which is why this is not the engine's thread.  Two buffers take turns: an
+// expert is copied into one while the other uploads, and the upload is the quicker of the two.  (A buffer for
+// each of the 64 uploads that may be asked at once held 515 MiB of LFM2.5's RAM.)
 void Engine::follow_loop() {
     cudaSetDevice(device_);   // a thread starts on card 0
     std::unique_lock<std::mutex> lk(swap_m_);
-    for (;;) {
+    for (int b = 0;; b = (b + 1) % kSwapPins) {
         Swap* s = nullptr;
         swap_cv_.wait(lk, [&] {
             for (int j = 0; j < n_swap_ && !s; ++j)
@@ -1610,14 +2372,51 @@ void Engine::follow_loop() {
             return swap_quit_ || s;
         });
         if (swap_quit_) return;
+        // Under the RAM budget an expert comes from its pool_ slot, or else from the files: through the mapping its
+        // pages stayed in the working set.  A copy from RAM is many times faster than a read: with every one read,
+        // Qwen3.6's cache kept up with an answer after a 32K prompt so much more slowly that the CPU computed 14%
+        // more experts.
+        const int32_t from = s->from;
+        const bool mapped = s->mapped;
+        const int64_t takes = s->takes;
         lk.unlock();
         const Layer& L = layers_[(size_t) s->il];
         const size_t e = (size_t) s->e, gu = L.gu_bytes, gu2 = L.gu2();
-        std::memcpy(s->pinned, L.exp_gate + e * L.gu_stride, gu);
-        std::memcpy(s->pinned + gu, L.exp_up + e * L.u_stride, L.u_bytes);
-        std::memcpy(s->pinned + gu2, L.exp_down + e * L.d_bytes, L.d_bytes);
-        cudaError_t err = cudaMemcpyAsync(s->slot, s->pinned, gu2 + L.d_bytes, cudaMemcpyHostToDevice, cs(swap_st_));
+        uint8_t* const h = swap_pin_[b];
+        cudaError_t err = cudaEventSynchronize((cudaEvent_t) swap_pin_ev_[b]);   // h's last upload has left it
+        if (err == cudaSuccess) {
+            const auto get = [&](uint8_t* dst, const uint8_t* src, size_t n) {
+                if (mapped || !read_file(dst, src, n)) std::memcpy(dst, src, n);
+            };
+            if (from >= 0) {
+                std::memcpy(h, pool_at((size_t) from), gu2 + L.d_bytes);
+            } else {
+                get(h, L.exp_gate + e * L.gu_stride, gu);
+                get(h + gu, L.exp_up + e * L.u_stride, L.u_bytes);
+                get(h + gu2, L.exp_down + e * L.d_bytes, L.d_bytes);
+            }
+            err = cudaMemcpyAsync(s->slot, h, gu2 + L.d_bytes, cudaMemcpyHostToDevice, cs(swap_st_));
+            if (takes >= 0) {
+                // Its pages are copied: they go, and those of the expert that takes its place come, by the read
+                // threads.  Here they held the uploads up while the cache was busiest, in the first answer.
+                const Layer& T = layers_[(size_t) takes / (size_t) n_expert_];
+                const int te = (int) (takes % n_expert_);
+                std::vector<PoolJob> jobs;
+                const auto as = [&](int32_t k) {
+                    return [&jobs, k](const uint8_t* p, size_t n) { jobs.push_back({nullptr, p, n, k}); };
+                };
+                expert_bytes(L, (int) e, (int) e + 1, as(kDrop));
+                expert_bytes(T, te, te + 1, as(kTouch));
+                {
+                    std::lock_guard<std::mutex> l(pool_m_);
+                    pool_pages_.insert(pool_pages_.end(), jobs.begin(), jobs.end());
+                    pool_n_.fetch_add((int) jobs.size(), std::memory_order_release);
+                }
+                pool_cv_.notify_all();
+            }
+        }
         if (err == cudaSuccess) err = cudaEventRecord(s->done, cs(swap_st_));
+        if (err == cudaSuccess) err = cudaEventRecord((cudaEvent_t) swap_pin_ev_[b], cs(swap_st_));
         lk.lock();
         if (err != cudaSuccess) {
             swap_error_ = cudaGetErrorString(err);
@@ -1655,6 +2454,28 @@ void Engine::follow(int written) {
             ck(arrived, "expert upload");
             layers_[(size_t) s.il].slot[(size_t) s.e] = s.slot;
             coming_[(size_t) s.il * ne + (size_t) s.e] = 0;
+            if (s.from >= 0) {   // the card has it now: its pool_ slot is free for another
+                const size_t v = (size_t) s.from;
+                --pool_pin_[v];
+                pool_sizes_[pool_size_of_[(size_t) s.il]].nprot -= pool_prot_[v];
+                pool_prot_[v] = 0;
+                pool_of_[(size_t) s.il * ne + (size_t) s.e] = -1;
+                pool_who_[v] = -1;
+                s.from = -1;
+                // the expert the cache gave up for it, if it is still the CPU's and of the slot's size
+                const int64_t g = s.gets;
+                if (g >= 0 && pool_of_[(size_t) g] < 0 && !kept_[(size_t) g] &&
+                    !layers_[(size_t) g / ne].slot[(size_t) g % ne] &&
+                    pool_size_of_[(size_t) g / ne] == pool_size_of_[(size_t) s.il]) {
+                    pool_who_[v] = g;
+                    pool_of_[(size_t) g] = (int32_t) v;
+                    pool_tick_[v] = pool_now_;
+                    pool_queue(layers_[(size_t) g / ne], (size_t) g % ne, (int32_t) v, false);
+                }
+                s.gets = -1;
+            }
+            cached_ += s.adds;
+            s.adds = false;
             s.at.store(Swap::kFree);
             ++stats_.swapped_experts;
             staged_il_ = -1;   // the staging buffer holds what was not cached
@@ -1664,7 +2485,39 @@ void Engine::follow(int written) {
     if (written <= 0) return;
     const float keep = std::exp2(-(float) written / (float) kSwapHalf);
     for (float& r : recent_) r *= keep;
-    if (n_free == 0) return;
+    const auto from_pool = [&](Swap& s) {   // the slot follow_loop() copies s from, held until s arrives
+        s.from = -1;
+        if (!pool_) return;
+        const int32_t v = pool_of_[(size_t) s.il * ne + (size_t) s.e];
+        if (v < 0 || pool_state_[(size_t) v].load(std::memory_order_acquire) != 0) return;
+        s.from = v;
+        ++pool_pin_[(size_t) v];
+    };
+    // The empty slots grow_cache() left to the uploads go first.
+    bool asked = false;
+    for (int j = 0; j < n_swap_ && !refill_.empty(); ++j) {
+        Swap& s = swap_[(size_t) j];
+        if (s.at.load() != Swap::kFree) continue;
+        const Refill r = refill_.back();
+        refill_.pop_back();
+        s.il = r.il;
+        s.e = r.e;
+        s.slot = r.slot;
+        s.adds = true;
+        from_pool(s);
+        s.mapped = !pool_ || kept_[(size_t) s.il * ne + (size_t) s.e];
+        s.takes = -1;
+        s.at.store(Swap::kAsked);
+        asked = true;
+        --n_free;
+    }
+    if (n_free == 0) {
+        if (asked) {
+            { std::lock_guard<std::mutex> l(swap_m_); }
+            swap_cv_.notify_one();
+        }
+        return;
+    }
 
     // One pass over the experts lists, for each slot size, the ones that may come in, the most used first, and
     // the cached ones that may go, the least used first: as many of each as uploads are free, which is all the
@@ -1702,7 +2555,6 @@ void Engine::follow(int written) {
     // An upload goes to the size whose next pair gains most.  A cached expert that has given its slot is no
     // candidate to come in: it was used no more than the cached ones left.
     trade_at_.assign((size_t) n_trade_, 0);
-    bool asked = false;
     for (; n_free > 0; --n_free) {
         int best = -1;
         float gain = 0.f;
@@ -1730,6 +2582,25 @@ void Engine::follow(int written) {
         given = nullptr;
         staged_il_ = -1;
         coming_[(size_t) in.il * ne + (size_t) in.e] = 1;
+        from_pool(*s);
+        // Under the RAM budget the expert the cache gives up is the CPU's from now on.  The one that comes in leaves
+        // kept_, and the one that goes out takes its place there, of the same size: the follower drops the first
+        // one's pages once it has copied them and reads the other's in.  Left out of kept_ and the slots, an expert
+        // the cache gave up was read from the files by the call that met it: the first answer after the load missed
+        // 194 experts with every other one in RAM.
+        const size_t xi = (size_t) in.il * ne + (size_t) in.e, xo = (size_t) out.il * ne + (size_t) out.e;
+        s->mapped = !pool_ || kept_[xi];
+        s->takes = -1;
+        s->gets = -1;
+        // One that comes from a slot leaves it to the outgoing one, read into it once the upload has arrived.  With
+        // only kept_ handed over, the experts the cache gave up for slotted ones were 28% of a short chat's misses
+        // after a 32K prompt on lab-pro6000.
+        if (pool_ && s->from >= 0 && !kept_[xo]) s->gets = (int64_t) xo;
+        if (pool_ && kept_[xi]) {
+            kept_[xi] = 0;
+            kept_[xo] = 1;
+            s->takes = (int64_t) xo;
+        }
         s->at.store(Swap::kAsked);
         asked = true;
     }
@@ -1740,29 +2611,83 @@ void Engine::follow(int written) {
 }
 
 void Engine::load(const Options& o) {
+#if defined(STRATA_GPU_METAL)
+    gpu::metal::set_optimize(o.metal_optimize);
+    gpu::metal::set_scoped_residency(o.metal_balanced);
+#endif
     opt_ = o;
     asked_reserve_mib_ = o.vram_reserve_mib;
     if (opt_.max_context < 16) throw std::runtime_error("the context must be at least 16 tokens");
     if (opt_.prompt_batch < 1 || opt_.prompt_batch > 4096)
         throw std::runtime_error("a prompt batch is 1 to 4096 tokens");
-    if (opt_.stage_mib < 1) throw std::runtime_error("the staging buffer must be at least 1 MiB");
+    if (opt_.stage_mib < 0) throw std::runtime_error("the staging buffer must be at least 1 MiB (0: the default)");
     if (opt_.stage_ahead < 0) throw std::runtime_error("the batch size to stage ahead from cannot be negative");
     if (opt_.expert_swaps < 0 || opt_.expert_swaps > 64)
         throw std::runtime_error("0 to 64 experts can be on their way into the cache at a time");
     if (opt_.window < 0 || opt_.window > 8)
         throw std::runtime_error("a window is 1 to 8 tokens, or 0 for the model's own");
+    if (opt_.lock_experts && opt_.ram_experts_mib >= 0)
+        throw std::runtime_error("--lock-experts locks every expert outside VRAM in RAM, so it does not go with "
+                                 "--ram-experts-mib");
     if (opt_.tail_skip < 0) throw std::runtime_error("--tail-skip (STRATA_ROUTE_TAIL_SKIP) cannot be negative");
     if (!(opt_.skip_weight >= 0.f && opt_.skip_weight < 1.f))
         throw std::runtime_error("--skip-weight is a share of a token's experts' weight: 0 (off) up to below 1");
     if (!(opt_.cache_bias >= 0.f && opt_.cache_bias <= 16.f))
         throw std::runtime_error("--cache-bias is added to a router score: 0 (off) up to 16");
     if (opt_.dump || std::min(opt_.prompt_batch, opt_.max_context) == 1) opt_.window = 1;
+    const char* stream_stage = std::getenv("STRATA_POLY_STREAM_STAGE");
+    const bool requested_stream_stage = stream_stage && std::atoi(stream_stage) == 1;
+    stream_stage_ = requested_stream_stage && stage_copy_streaming_available();
+    if (requested_stream_stage)
+        std::fprintf(stderr, "strata-poly: STRATA_POLY_STREAM_STAGE: %s\n",
+                     stream_stage_ ? "streaming CPU stores for expert staging" : "unsupported CPU build; stock copies");
     gg_ = std::make_unique<Shards>(opt_.model);
     if (!opt_.draft_model.empty() && opt_.draft && opt_.window != 1) dg_ = std::make_unique<Shards>(opt_.draft_model);
+#if defined(STRATA_GPU_METAL)
+    if (opt_.kv_format == KvFmt::kAuto) {
+        const MetaValue* arch = gg_->get("general.architecture");
+        const MetaValue* heads = gg_->get("qwen35moe.attention.head_count_kv");
+        const MetaValue* key = gg_->get("qwen35moe.attention.key_length");
+        const MetaValue* value = gg_->get("qwen35moe.attention.value_length");
+        // The Q8 attention kernels store a scale for each 32 values within each head.
+        opt_.kv_format = arch && arch->s == "qwen35moe" && heads && heads->u > 0 &&
+                         key && key->u > 0 && key->u % 32 == 0 && value && value->u == key->u
+                             ? KvFmt::kQ8_0 : KvFmt::kFp16;
+    }
+#endif
     load_geometry();
+#if defined(STRATA_GPU_METAL)
+    std::fprintf(stderr, "strata-poly: Metal optimize=%s memory=%s kv=%s\n",
+                 opt_.metal_optimize ? "on" : "off", opt_.metal_balanced ? "balanced" : "legacy",
+                 opt_.kv_format == KvFmt::kQ8_0 ? "q8_0" : "fp16");
+#endif
     if (block_ != dg_.get()) dg_.reset();
     hi_ = end_ < 0 ? n_layer_ : end_;
 
+    // STRATA_POLY_STAGED_TILES=8,16,32: a prompt batch's staged experts go to llama.cpp's MMQ in size classes, the
+    // experts of up to 8 rows in one launch, up to 16 in the next, up to 32 in the next, the rest in the last.  One
+    // launch takes its tile width from its largest expert, and a tile computes that many columns whatever rows
+    // are in them: with the median staged expert at 15 rows, a 64-column tile is 43% full.  The numbers are
+    // ascending row counts.  The results are one launch's to the bit, except where llama.cpp's MMQ uses stream-k
+    // (Mmq::split_exact()), which adds a row's partial sums in an order set by the launch's tile count.
+    if (const char* v = std::getenv("STRATA_POLY_STAGED_TILES"); v && *v) {
+        std::vector<int> t;
+        bool ok = true;
+        for (const char* p = v; *p && ok;) {
+            char* end = nullptr;
+            const long x = std::strtol(p, &end, 10);
+            ok = end != p && x > 0 && x < 100000 && (t.empty() || x > t.back()) && (*end == ',' || !*end) &&
+                 (int) t.size() < kMaxStagedTiles - 1;
+            t.push_back((int) x);
+            p = *end ? end + 1 : end;
+        }
+        if (ok) {
+            staged_tiles_ = t;
+        } else {
+            std::fprintf(stderr, "strata-poly: STRATA_POLY_STAGED_TILES=%s is not ascending row counts a comma apart: "
+                                 "ignored\n", v);
+        }
+    }
     // STRATA_FREEZE_EXPERTS=1: an answer's experts are the cache's as it was at the request's first token.  The
     // split between the card's experts and the CPU's (moe()) decides a layer's sums to the last bit - the two
     // paths add in different orders - so a greedy answer is a function of the request alone only while the split
@@ -1802,6 +2727,10 @@ void Engine::load(const Options& o) {
         vmm_ = cuMemGetAllocationGranularity(&grain_, &prop, CU_MEM_ALLOC_GRANULARITY_MINIMUM) == CUDA_SUCCESS &&
                grain_ > 0;
     }
+    pool_on_ = opt_.vram_pool && vmm_ && opt_.kv_grow && !split_;
+    if (opt_.vram_pool && !pool_on_)
+        std::fprintf(stderr, "strata-poly: --vram-pool needs VMM, growing attention caches and one card: off\n");
+    if (pool_on_) pg_ = up_to(size_t(2) << 20, grain_);
 
     // the token table stays in the file, a row a token, and embed() reads a row in whatever type it has
     const TensorInfo* te = gg_->find("token_embd.weight");
@@ -1861,10 +2790,14 @@ void Engine::load(const Options& o) {
     alloc();
     if (!opt_.profile.empty()) read_profile(opt_.profile, (int) layers_.size(), n_expert_, prior_);
     fill_expert_cache();
+    ensure_stage();
     // The weights and the expert cache are written on st_ now (h2d(), zero_vram()): the load is not over until
     // those are done, so that everything after it - a read of what the cache holds, the first request's cover()
     // mapping the attention caches - finds what it expects.
     ck(cudaStreamSynchronize(cs(st_)), "the load");
+    // The card has the dense weights now, and the CPU does not read them again.
+    for (const auto& [p, n] : uploaded_) drop_pages(p, n);
+    uploaded_ = {};
     // A card of a split that has less free beside its layers than the reserve it keeps by default runs out of VRAM
     // in a later request, where one card alone can do nothing else.  It may be that another program held VRAM when
     // the split was made.  A larger reserve asked for (--vram-reserve-mib) only leaves the card without experts.
@@ -1897,14 +2830,103 @@ void Engine::load(const Options& o) {
             }
         }
     }
-    const int threads = opt_.threads > 0 ? opt_.threads : usable_cpus();
+    const int threads = opt_.threads > 0 ? opt_.threads : default_threads();
     mind_memory();
-    std::vector<std::pair<const uint8_t*, size_t>> spans;   // the routed experts in the mapped files
-    for (const Layer& L : layers_) {
+    // the routed experts in the mapped files, and of them the ones the CPU reads through the mapping: those the
+    // card does not have, as many as Options::ram_experts_mib keeps
+    std::vector<std::pair<const uint8_t*, size_t>> spans, cpu;
+    const auto to = [](auto& v) { return [&v](const uint8_t* p, size_t n) { v.emplace_back(p, n); }; };
+    outside_bytes_ = 0;
+    for (const Layer& L : layers_)
+        if (L.moe)
+            expert_runs(L, n_expert_, [&](int e) { return !L.slot[(size_t) e]; },
+                        [&](const uint8_t*, size_t n) { outside_bytes_ += n; });
+    // Options::ram_experts_mib below -1, the default: every expert outside VRAM in RAM when they fit in what is free,
+    // with kRamHeadroom left for the rest of the process; else a budget of what is free less that.  Through the
+    // mapping, experts that do not fit are read back a fault at a time: on the lab's machine held to 12 GB, Qwen3.6
+    // UD-Q3_K_M wrote 51, 73 and 99 tokens/s (a chat, after a 24,000-token prompt, a chat again) with every expert
+    // mapped and 61, 88 and 120 with a budget of 6 GiB.
+    if (opt_.ram_experts_mib < -1) {
+        constexpr size_t kRamHeadroom = size_t(4) << 30;
+        const size_t avail = ram_available();
+        opt_.ram_experts_mib = -1;
+        if (avail && !opt_.lock_experts && outside_bytes_ + kRamHeadroom > avail) {
+            opt_.ram_experts_mib = std::max<int64_t>(1024, (int64_t) ((avail > kRamHeadroom ? avail - kRamHeadroom : 0) >> 20));
+            std::fprintf(stderr, "strata-poly: %.1f GiB of RAM free for %.1f GiB of experts outside VRAM: they do not fit, "
+                                 "so the ones used most stay in RAM (--ram-experts-mib -1 maps them all)\n",
+                         (double) avail / (1 << 30), (double) outside_bytes_ / (1 << 30));
+        }
+    }
+    if (opt_.ram_experts_mib >= 0) {
+        // each size of slot takes the share of the budget its experts outside VRAM have of all of those
+        pool_size_of_.assign(layers_.size(), 0);
+        std::vector<size_t> outside;   // by size
+        for (size_t il = 0; il < layers_.size(); ++il) {
+            const Layer& L = layers_[il];
+            if (!L.moe) continue;
+            const size_t b = (L.gu2() + L.d_bytes + 63) / 64 * 64;
+            size_t c = 0;
+            while (c < pool_sizes_.size() && pool_sizes_[c].bytes != b) ++c;
+            if (c == pool_sizes_.size()) {
+                pool_sizes_.push_back({b, 0, 0, 0, 0});
+                outside.push_back(0);
+            }
+            pool_size_of_[il] = (uint8_t) c;
+            for (int e = 0; e < n_expert_; ++e) outside[c] += L.slot[(size_t) e] ? 0 : b;
+        }
+        const size_t want = ((size_t) opt_.ram_experts_mib << 20) / 4;   // a quarter of the budget; kept_ has the rest
+        size_t all = 0, slots = 0;
+        for (size_t b : outside) all += b;
+        for (size_t c = 0; c < pool_sizes_.size(); ++c) {
+            // a call's experts are of one layer, so one size; one that finds every slot of its size held by this
+            // call and the next goes through the mapping (pool_take())
+            PoolSize& z = pool_sizes_[c];
+            const double part = all ? (double) outside[c] / (double) all : 0.0;
+            z.n = std::max<size_t>((size_t) ((double) want * part) / z.bytes, 64);
+            const size_t turn = std::min(z.n, (size_t) 2 * kCpuRows * kMaxUsed);   // a call's and the next one's
+            z.prot_max = z.n - std::max(turn, z.n / 4);
+            z.first = slots;
+            z.at = pool_bytes_;
+            slots += z.n;
+            pool_bytes_ += z.n * z.bytes;
+        }
+        pool_.reset(new uint8_t[pool_bytes_]);
+        pool_of_.assign(layers_.size() * (size_t) n_expert_, -1);
+        pool_who_.assign(slots, -1);
+        pool_tick_.assign(slots, 0);
+        pool_ref_.assign(slots, 0);
+        pool_prot_.assign(slots, 0);
+        pool_pin_.assign(slots, 0);
+        prompt_use_.assign(layers_.size() * (size_t) n_expert_, 0.f);
+        pool_pending_.reset(new std::atomic<int>[slots]);
+        pool_failed_.reset(new std::atomic<uint8_t>[slots]);
+        for (size_t v = 0; v < slots; ++v) pool_pending_[v].store(0), pool_failed_[v].store(0);
+        // 8: on the laptop 4 left a call waiting for its reads 8% longer; 12 were no better than 8
+        for (int t = 0; t < 8; ++t) pool_threads_.emplace_back([this] { pool_loop(); });
+        pool_state_.reset(new std::atomic<uint8_t>[slots]);
+        for (size_t s = 0; s < slots; ++s) pool_state_[s].store(0);
+        // the next layer's top 8: the best of 0, 8, 12 and 16, and of 8 with the layer after's top 8 as well
+        prefetch_k_ = 8;
+        const size_t part = 16 * (size_t) n_expert_;   // a part's rows: up to 16
+        ahead_dev_ = (float*) dmalloc(8 * part * sizeof(float), "scratch");
+        h_ahead_ = (float*) hmalloc(8 * part * sizeof(float), "pinned memory");
+    }
+    const std::vector<uint8_t> keep = ram_keep();
+    if (opt_.ram_experts_mib >= 0) {
+        kept_ = keep;
+        for (const Shards* sh : {gg_.get(), dg_.get()}) {
+            if (!sh) continue;
+            const auto v = sh->views();
+            for (size_t i = 0; i < v.size(); ++i)
+                if (v[i].first) views_.push_back({v[i].first, v[i].second, sh->paths()[i]});
+        }
+    }
+    for (size_t il = 0; il < layers_.size(); ++il) {
+        const Layer& L = layers_[il];
         if (!L.moe) continue;
-        spans.emplace_back(L.exp_gate, (size_t) n_expert_ * L.gu_stride);
-        if (L.gu_stride == L.gu_bytes) spans.emplace_back(L.exp_up, (size_t) n_expert_ * L.u_stride);
-        spans.emplace_back(L.exp_down, (size_t) n_expert_ * L.d_bytes);
+        expert_bytes(L, 0, n_expert_, to(spans));
+        const uint8_t* k = keep.data() + il * (size_t) n_expert_;
+        expert_runs(L, n_expert_, [&](int e) { return !L.slot[(size_t) e] && k[e]; }, to(cpu));
     }
     if (!workers_) {   // a later card's engine has the first one's
         if (opt_.stay_near) {   // before any thread that reads the experts is started
@@ -1918,9 +2940,69 @@ void Engine::load(const Options& o) {
     if (opt_.cache_bias > 0.f) bias_rl_.assign((size_t) n_expert_, 0.f);
     start_swaps();
     reset();
+    std::vector<std::pair<int, int>> outside;
+    if (opt_.lock_experts) {
+        locked_.assign(layers_.size() * (size_t) n_expert_, 0);
+        for (size_t il = 0; il < layers_.size(); ++il)
+            for (int e = 0; layers_[il].moe && e < n_expert_; ++e)
+                if (!layers_[il].slot[(size_t) e]) outside.emplace_back((int) il, e);
+    }
     // nothing is read from the files when every expert is in VRAM
-    if (!all_cached())
-        mapper_ = std::thread([this, spans = std::move(spans)] { map_pages(spans, *gg_, map_quit_); });
+    if (!all_cached()) {
+#if defined(STRATA_GPU_METAL)
+        if (opt_.metal_balanced) {
+            if (metal_warm_bytes_ > 0) {
+                struct Warm {
+                    int64_t used;
+                    std::pair<const uint8_t*, size_t> gate, up, down;
+                };
+                std::vector<Warm> cold;
+                for (size_t il = 0; il < layers_.size(); ++il) {
+                    const Layer& l = layers_[il];
+                    if (!l.moe) continue;
+                    for (int e = 0; e < n_expert_; ++e) {
+                        if (l.slot[(size_t) e]) continue;
+                        const size_t i = il * n_expert_ + size_t(e);
+                        const int64_t used = (prior_.empty() ? 0 : prior_[i]) + use_[i];
+                        cold.push_back({used, {l.exp_gate + size_t(e) * l.gu_stride, l.gu_bytes},
+                                             {l.exp_up + size_t(e) * l.u_stride, l.u_bytes},
+                                             {l.exp_down + size_t(e) * l.d_bytes, l.d_bytes}});
+                    }
+                }
+                std::stable_sort(cold.begin(), cold.end(), [](const Warm& a, const Warm& b) { return a.used > b.used; });
+                const size_t warm_cap = metal_warm_bytes_;
+                mapper_ = std::thread([this, cold = std::move(cold), warm_cap] {
+                    constexpr size_t page = 16384, check_every = size_t(16) << 20;
+                    size_t touched = check_every, total_warmed = 0;
+                    bool warned = false;
+                    volatile uint8_t seen = 0;
+                    for (const Warm& expert : cold) for (const auto& span : {expert.gate, expert.up, expert.down}) {
+                        for (size_t at = 0; at < span.second; at += page) {
+                            if (map_quit_.load(std::memory_order_relaxed) || total_warmed >= warm_cap) return;
+                            if (touched >= check_every) {
+                                const auto available = strata::core::available_host_bytes();
+                                if (available && *available <= kMetalHostReserve) return;
+                                if (!available && !warned) {
+                                    std::fprintf(stderr, "strata-poly: host memory is unavailable while warming uncached experts\n");
+                                    warned = true;
+                                }
+                                touched = 0;
+                            }
+                            seen = uint8_t(seen + span.first[at]);
+                            touched += page;
+                            total_warmed += page;
+                        }
+                        if (span.second) seen = uint8_t(seen + span.first[span.second - 1]);
+                    }
+                });
+            }
+        } else
+#endif
+        mapper_ = std::thread([this, cpu = std::move(cpu), outside = std::move(outside)] {
+            map_pages(cpu, *gg_, map_quit_);
+            if (!outside.empty()) lock_outside(outside);
+        });
+    }
 }
 
 void Engine::load_drafter() {
@@ -1984,7 +3066,15 @@ void Engine::alloc() {
     snap_places_ = snaps_spread() ? std::min(opt_.window - 1, kSnapPlaces) : opt_.window - 1;
     if (snap_places_ > 0)
         snap_ = (float*) dmalloc(size_t(snap_places_) * rec_n_ * sizeof(float), "the recurrent state");
-    const size_t logit_rows = (size_t) std::max(opt_.window, opt_.batch + 1);   // window()'s, step()'s
+    // step() with guesses: every sequence's state after its first row
+    if (opt_.batch_mtp && opt_.batch > 0 && rec_n_ > 0)
+        step_snap_ = (float*) dmalloc(size_t(opt_.batch + 1) * rec_n_ * sizeof(float), "the recurrent state");
+    if (opt_.batch_mtp && opt_.batch > 0 && draft_) {
+        step_h_ = (float*) dmalloc(size_t(opt_.batch + 1) * n_embd_ * sizeof(float), "scratch");
+        h_guesses_ = (Likeliest*) hmalloc(size_t(opt_.batch + 1) * sizeof(Likeliest), "pinned memory");
+    }
+    // window()'s, step()'s (two rows a sequence with guesses)
+    const size_t logit_rows = (size_t) std::max(opt_.window, (opt_.batch_mtp ? 2 : 1) * (opt_.batch + 1));
     wlogits_ = (float*) dmalloc(logit_rows * n_vocab_ * sizeof(float), "scratch");
     h_wlogits_ = (float*) hmalloc(logit_rows * n_vocab_ * sizeof(float), "pinned memory");
     alloc_caches();
@@ -2054,7 +3144,8 @@ void Engine::alloc() {
 
     if (mmq_) {
         const size_t rr = n * n_used_,
-                     tab = (3 * rr + 3 * (size_t) n_expert_ + 3 + kClasses * ((size_t) n_expert_ + 1)) * sizeof(int32_t);
+                     tab = (3 * rr + 3 * (size_t) n_expert_ + 3 + kClasses * ((size_t) n_expert_ + 1) +
+                            2 * kMaxStagedTiles * (2 * (size_t) n_expert_ + 2)) * sizeof(int32_t);
         mq_ = dmalloc(Mmq::q8_bytes((int64_t) rr, n_embd_), "scratch");
         mq2_ = dmalloc(Mmq::q8_bytes((int64_t) rr, n_ff_exp_), "scratch");
         if (mixed_tiles) mqu_ = dmalloc(Mmq::q8_bytes((int64_t) rr, n_embd_), "scratch");
@@ -2066,6 +3157,8 @@ void Engine::alloc() {
         tab_ = (int32_t*) dmalloc(tab, "scratch");
         h_tab_ = (int32_t*) hmalloc(tab, "pinned memory");
         iota_ = (int32_t*) dmalloc(rr * sizeof(int32_t), "scratch");
+        d_ex_ = (int32_t*) dmalloc(rr * sizeof(int32_t), "scratch");
+        h_ex_ = (int32_t*) hmalloc(rr * sizeof(int32_t), "pinned memory");
         std::vector<int32_t> ramp(rr);
         std::iota(ramp.begin(), ramp.end(), 0);
         ck(cudaMemcpy(iota_, ramp.data(), rr * sizeof(int32_t), cudaMemcpyHostToDevice), "scratch");
@@ -2073,21 +3166,31 @@ void Engine::alloc() {
         // One layer's experts pass through it at a time, so it never holds more than a layer has.  A model of
         // small experts has a few hundred MiB a layer, and the rest of the default would be VRAM that the
         // expert cache of a small card does without.
-        stage_bytes_ = std::max(std::min((size_t) opt_.stage_mib << 20, (size_t) n_expert_ * one_expert), one_expert);
+        //
+        // By default, where a read can widen it (VMM, one card), it is 128 MiB and a read of several batches
+        // widens it to a layer: it is the expert cache's VRAM while an answer is written.  On the laptop Gemma 4
+        // cached 1,166 experts in place of 1,013 and Qwen3.6 2,712 in place of 2,444; prompts of 3,000 to 6,000
+        // tokens read up to 2% slower.  A batch alone (up to --prompt-batch tokens) reads with the narrow one: 300
+        // and 1,000 tokens no slower.  Without the widening, 128 MiB read 6,000 tokens 20% slower.  ROCm keeps the old
+        // default: it gives back VRAM only with its addresses (vmm_unmap()), and a read's widening is untested there.
+        const bool widens = vmm_ && !split_;
+#ifdef STRATA_VMM_RELEASE_WITH_ADDRESSES
+        const bool lend = false;
+#else
+        const bool lend = widens;
+#endif
+        const int stage_mib = opt_.stage_mib > 0 ? opt_.stage_mib : lend ? 128 : 2048;
+        const int read_mib = opt_.stage_read_mib >= 0 ? opt_.stage_read_mib : opt_.stage_mib > 0 || !lend ? 0 : 2048;
+        stage_bytes_ = std::max(std::min((size_t) stage_mib << 20, (size_t) n_expert_ * one_expert), one_expert);
         chunk_bytes_ = std::max(kChunkBytes, one_expert);
         // With stage_read_mib the buffer's addresses are reserved for the larger size, and a read maps the rest.
         stage_narrow_ = stage_wide_ = stage_bytes_;
-        if (vmm_ && !split_ && opt_.stage_read_mib > 0)
-            stage_wide_ = std::max(stage_bytes_, std::min((size_t) opt_.stage_read_mib << 20,
-                                                          (size_t) n_expert_ * one_expert));
-        if (stage_wide_ > stage_narrow_) {
-            vmm_reserve(stage_map_, stage_wide_ + 256 + kTail);
-            vmm_map(stage_map_, stage_narrow_ + 256 + kTail, SIZE_MAX, "the expert staging buffer");
-            stage_ = (uint8_t*) stage_map_.base;
-        } else {
-            stage_ = (uint8_t*) dmalloc(stage_bytes_ + 256 + kTail, "the expert staging buffer");
-        }
-        for (int b = 0; b < 2; ++b) h_stage_[b] = (uint8_t*) hmalloc(chunk_bytes_, "pinned memory");
+        if (widens && read_mib > 0)
+            stage_wide_ = std::max(stage_bytes_, std::min((size_t) read_mib << 20, (size_t) n_expert_ * one_expert));
+#if defined(STRATA_GPU_METAL)
+        if (!opt_.metal_balanced)
+#endif
+            ensure_stage();
         for (void** e : {&ev_stage_[0], &ev_stage_[1], &ev_ahead_, &ev_free_}) {
             cudaEvent_t ev = nullptr;
             ck(cudaEventCreateWithFlags(&ev, cudaEventDisableTiming), "cudaEventCreate");
@@ -2198,6 +3301,189 @@ void Engine::load_rows(const uint8_t* src, int64_t from, int64_t count, int64_t 
     OnCard here(device_, split_);
     load_card_rows(src, from, count, first, n);
     if (next_) next_->load_rows(src + (size_t) count * card_row_bytes(), from, count, first, n);
+}
+
+// The CPU reads an expert the card has only after an answer moves it out of the cache (follow() gives away the
+// slot of the least used one), and a page brought back while an answer is written costs that answer: with every
+// cached expert's pages dropped at load, LFM2.5's first short chat moved 624 of its 838 cached experts out and
+// wrote at 70 tokens/s in place of 80.  So of the card's experts only the half used most lately go, the last to
+// move out (the same chat at 90 tokens/s, as with nothing dropped).  The CPU's experts past the RAM budget go too,
+// and the pinned rows of a long read: 256 MiB after Qwen3.6's 32K prompt, held for the next one that long.
+// It runs once after the load as well.  Before an answer only the profile's counts order the card's experts, and
+// that half still held LFM2.5's first short chat to 61 tokens/s in place of 67, so it goes then only under the RAM
+// budget: Qwen3.6 held 5.3 GiB after the load with --ram-experts-mib 3072 in place of 7.1.  Under the budget all of
+// the card's experts go: one the cache moves out comes to the CPU through pool_, read from the files.
+// Options::lock_experts, on mapper_ once map_pages() is done: the experts outside VRAM at the load, locked one by
+// one so that relock() knows which are.  Windows locks no more pages than the working-set minimum leaves room
+// for, so it is raised once, by those experts and 512 MiB for the rest of the process.  It says what it got.
+void Engine::lock_outside(const std::vector<std::pair<int, int>>& outside) {
+    size_t want = 0, got = 0;
+    for (const auto& [il, e] : outside)
+        expert_bytes(layers_[(size_t) il], e, e + 1, [&](const uint8_t*, size_t n) { want += n; });
+#ifdef _WIN32
+    const HANDLE self = GetCurrentProcess();
+    SIZE_T lo = 0, hi = 0;
+    DWORD flags = 0;
+    if (GetProcessWorkingSetSizeEx(self, &lo, &hi, &flags)) {
+        const SIZE_T min = lo + want + ((SIZE_T) 512 << 20);
+        SetProcessWorkingSetSizeEx(self, min, std::max(hi, min + ((SIZE_T) 512 << 20)),
+                                   QUOTA_LIMITS_HARDWS_MIN_DISABLE | QUOTA_LIMITS_HARDWS_MAX_DISABLE);
+    }
+#endif
+    bool refused = false;
+    for (const auto& [il, e] : outside) {
+        if (map_quit_.load(std::memory_order_relaxed)) return;
+        bool ok = true;
+        size_t n = 0;
+        expert_bytes(layers_[(size_t) il], e, e + 1, [&](const uint8_t* p, size_t b) {
+            ok = ok && lock_pages(p, b, true);
+            n += b;
+        });
+        if (!ok) {
+            refused = true;
+            break;
+        }
+        locked_[(size_t) il * n_expert_ + e] = 1;
+        got += n;
+    }
+    const double gib = 1.0 / (1ull << 30);
+    if (!refused) {
+        std::fprintf(stderr, "strata-poly: %.1f GiB of experts outside VRAM locked in RAM (--lock-experts)\n",
+                     want * gib);
+    } else {
+#ifdef _WIN32
+        char why[64];
+        std::snprintf(why, sizeof why, "VirtualLock refused the rest (error %lu)", GetLastError());
+#else
+        char why[96];
+        rlimit r{};
+        if (getrlimit(RLIMIT_MEMLOCK, &r) == 0 && r.rlim_cur != RLIM_INFINITY)
+            std::snprintf(why, sizeof why, "mlock refused the rest: ulimit -l is %llu MiB",
+                          (unsigned long long) (r.rlim_cur >> 20));
+        else
+            std::snprintf(why, sizeof why, "mlock refused the rest");
+#endif
+        std::fprintf(stderr, "strata-poly: --lock-experts locked %.1f of the %.1f GiB of experts outside VRAM; %s, "
+                             "so they stay in the file cache\n", got * gib, want * gib, why);
+    }
+    locks_ready_.store(true, std::memory_order_release);
+}
+
+// Options::lock_experts, between requests: the experts the cache took since are unlocked, then the ones it gave
+// up are locked, until the system refuses one.  The split changes while an answer is written (follow()) and when
+// the cache is cut or sized again; this keeps the locked ones the CPU's without a lock at each of those.  Nothing
+// before lock_outside() is done.
+void Engine::relock() {
+    if (!opt_.lock_experts || !locks_ready_.load(std::memory_order_acquire)) return;
+    for (int pass = 0; pass < 2; ++pass)
+        for (size_t il = 0; il < layers_.size(); ++il) {
+            const Layer& L = layers_[il];
+            if (!L.moe) continue;
+            for (int e = 0; e < n_expert_; ++e) {
+                uint8_t& k = locked_[il * (size_t) n_expert_ + e];
+                const bool outside = !L.slot[(size_t) e];
+                if (pass == 0 && k && !outside) {
+                    expert_bytes(L, e, e + 1, [](const uint8_t* p, size_t n) { lock_pages(p, n, false); });
+                    k = 0;
+                } else if (pass == 1 && !k && outside) {
+                    bool ok = true;
+                    expert_bytes(L, e, e + 1, [&](const uint8_t* p, size_t n) { ok = ok && lock_pages(p, n, true); });
+                    if (!ok) return;
+                    k = 1;
+                }
+            }
+        }
+}
+
+void Engine::trim() {
+    relock();   // first: under Linux the pages dropped below must not be locked
+    struct Held {
+        float recent;
+        int64_t used;
+        int il, e;
+    };
+    std::vector<Held> held;
+    const bool answered = std::any_of(use_.begin(), use_.end(), [](int64_t u) { return u > 0; });
+    for (int il = 0; il < (int) layers_.size() && (answered || opt_.ram_experts_mib >= 0); ++il)
+        if (layers_[(size_t) il].moe)
+            for (int e = 0; e < n_expert_; ++e)
+                if (layers_[(size_t) il].slot[(size_t) e]) {
+                    const size_t i = (size_t) il * n_expert_ + e;
+                    held.push_back({recent_.empty() ? 0.f : recent_[i], (prior_.empty() ? 0 : prior_[i]) + use_[i],
+                                    il, e});
+                }
+    const size_t n = pool_ ? held.size() : held.size() / 2;
+    std::partial_sort(held.begin(), held.begin() + (ptrdiff_t) n, held.end(), [](const Held& a, const Held& b) {
+        return a.recent != b.recent ? a.recent > b.recent : a.used > b.used;
+    });
+    for (size_t i = 0; i < n; ++i) expert_bytes(layers_[(size_t) held[i].il], held[i].e, held[i].e + 1, drop_pages);
+    if (pool_)   // and the CPU's outside kept_, which come from pool_; kept_'s stay for the next answer
+        for (size_t il = 0; il < layers_.size(); ++il) {
+            const Layer& L = layers_[il];
+            const uint8_t* k = kept_.data() + il * (size_t) n_expert_;
+            if (L.moe) expert_runs(L, n_expert_, [&](int e) { return !L.slot[(size_t) e] && !k[e]; }, drop_pages);
+        }
+    hfree(h_res_);
+    h_res_ = nullptr;
+    h_res_rows_ = 0;
+    if (pool_ && !answered) pool_fill();
+    if (pool_) {
+        std::fill(prompt_use_.begin(), prompt_use_.end(), 0.f);
+        prompt_rows_ = 0;
+    }
+    if (next_) next_->trim();
+    else drop_images();   // once, by the last card's engine
+}
+
+// n bytes of the mapped files from src into dst, read through the file cache instead of the mapping, so that the
+// pages stay out of this process's working set; false when src is in none of the files or the read fails.  A
+// thread keeps a handle to each file.  For the experts the RAM budget leaves out (Options::ram_experts_mib), which
+// a prompt batch copies to the card: through the mapping they came back into the working set a fault at a time.
+bool Engine::read_file(uint8_t* dst, const uint8_t* src, size_t n) const {
+    const FileView* v = nullptr;
+    for (const FileView& f : views_)
+        if (src >= f.base && src + n <= f.base + f.bytes) v = &f;
+    if (!v) return false;
+    const uint64_t off = (uint64_t) (src - v->base);
+#ifdef _WIN32
+    struct Handles {
+        std::map<std::string, HANDLE> h;
+        ~Handles() {
+            for (auto& [path, fh] : h) CloseHandle(fh);
+        }
+    };
+    thread_local Handles mine;
+    HANDLE& fh = mine.h[v->path];
+    if (!fh) fh = CreateFileA(v->path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+    if (fh == INVALID_HANDLE_VALUE) return false;
+    for (size_t done = 0; done < n;) {
+        OVERLAPPED o{};
+        o.Offset = (DWORD) (off + done);
+        o.OffsetHigh = (DWORD) ((off + done) >> 32);
+        DWORD got = 0;
+        const DWORD want = (DWORD) std::min<size_t>(n - done, size_t(1) << 30);
+        if (!ReadFile(fh, dst + done, want, &got, &o) || got == 0) return false;
+        done += got;
+    }
+#else
+    struct Fds {
+        std::map<std::string, int> fd;
+        ~Fds() {
+            for (auto& [path, f] : fd)
+                if (f >= 0) ::close(f);
+        }
+    };
+    thread_local Fds mine;
+    auto it = mine.fd.find(v->path);
+    if (it == mine.fd.end()) it = mine.fd.emplace(v->path, ::open(v->path.c_str(), O_RDONLY | O_CLOEXEC)).first;
+    if (it->second < 0) return false;
+    for (size_t done = 0; done < n;) {
+        const ssize_t got = ::pread(it->second, dst + done, n - done, (off_t) (off + done));
+        if (got <= 0) return false;
+        done += (size_t) got;
+    }
+#endif
+    return true;
 }
 
 const Stats& Engine::stats() const {
@@ -2316,6 +3602,20 @@ void Engine::lin(const Dev& w, const float* x, float* y, int n, const void* xq, 
         return;
     }
 #endif
+    lin_raw(w, x, y, n, xq, rows_per_x);
+    if (w.scale != 1.0f) axpy(y, w.scale, y, n * w.n_out, false, st_);
+}
+
+ExpertScales Engine::expert_scales(const Layer& L, const int32_t* ids) const {
+    ExpertScales s;
+    if (L.h_s_gate.empty() && L.h_s_up.empty()) return s;
+    s.gate = L.h_s_gate.empty() ? nullptr : fp(L.s_gate);
+    s.up = L.h_s_up.empty() ? nullptr : fp(L.s_up);
+    s.ids = ids;
+    return s;
+}
+
+void Engine::lin_raw(const Dev& w, const float* x, float* y, int n, const void* xq, int rows_per_x) {
     if (w.type == kTypeF32 || w.type == kTypeBF16) {
         const int per = rows_per_x ? rows_per_x : w.n_out;
         const size_t count = (size_t) w.n_in * w.n_out;
@@ -2384,6 +3684,362 @@ int Engine::card_rows() const { return block_guess_ ? std::max(kSumRows, opt_.wi
 void Engine::moe_router(const Layer& L, int n) {
     router_scores(L, n);
     copy2(rl_, h_rl_, n * n_expert_, xn_, h_x_, n * n_embd_, st_);
+    if (prefetch_k_ <= 0 || block_pass_ || n > 16) return;
+    size_t part = 0;
+    for (size_t q = 0; q < 8; ++q)
+        if (ev_ == ev_row_[q]) part = q;
+    const size_t ne = (size_t) n_expert_;
+    // the next MoE layer's router on this layer's input, for pool_ahead()
+    int j = (int) (&L - layers_.data()) + 1;
+    while (j < n_layer_ && !layers_[(size_t) j].moe) ++j;
+    if (j >= n_layer_) return;
+    float* d = ahead_dev_ + part * 16 * ne;
+    lin(layers_[(size_t) j].gate_inp, xn_, d, n, xq_);
+    ck(cudaMemcpyAsync(h_ahead_ + part * 16 * ne, d, (size_t) n * ne * sizeof(float), cudaMemcpyDeviceToHost, cs(st_)),
+       "read ahead");
+}
+
+// Layer j's likeliest prefetch_k_ experts of each of n tokens, as moe_router() guessed them before ev_: those the CPU
+// would read from the files get a slot now, and pool_threads_ read them while this layer is computed, every token's
+// best guess first, then every token's second, and so on.  A slot read ahead is held through the calls up to its
+// layer's (a window's halves are a call each): held for the next call alone, it could go to the other half's misses
+// before its own half came to it.  It is on trial: one its layer does not use goes when the clock comes to it.
+void Engine::pool_ahead(int j, int n, size_t part, int k) {
+    const Layer& L = layers_[(size_t) j];
+    const size_t ne = (size_t) n_expert_;
+    k = std::min(k, 16);
+    n = std::min(n, 16);
+    int32_t top[16][16];
+    int m[16];
+    for (int r = 0; r < n; ++r) {
+        // the k best in one pass: a sort of all of them was a fifth of a millisecond a token on the laptop
+        const float* g = h_ahead_ + part * 16 * ne + (size_t) r * ne;
+        int32_t* t = top[r];
+        float best[16];
+        m[r] = 0;
+        for (int e = 0; e < (int) ne; ++e) {
+            const float s = g[e];
+            if (m[r] == k && s <= best[k - 1]) continue;
+            int at = m[r] < k ? m[r]++ : k - 1;
+            for (; at > 0 && best[at - 1] < s; --at) best[at] = best[at - 1], t[at] = t[at - 1];
+            best[at] = s;
+            t[at] = e;
+        }
+    }
+    for (int q = 0; q < k; ++q)
+        for (int r = 0; r < n; ++r) {
+            if (q >= m[r]) continue;
+            const size_t e = (size_t) top[r][q], x = (size_t) j * ne + e;
+            if (L.slot[e] || kept_[x] || pool_of_[x] >= 0) continue;
+            const size_t v = pool_victim(j);
+            if (v == SIZE_MAX) return;   // no slot to spare; what was queued is still read
+            if (pool_who_[v] >= 0) pool_of_[(size_t) pool_who_[v]] = -1;
+            pool_who_[v] = (int64_t) x;
+            pool_of_[x] = (int32_t) v;
+            pool_tick_[v] = pool_now_ + 4;
+            pool_queue(L, e, (int32_t) v, false);
+        }
+}
+
+int Engine::first_moe_layer() const {
+    int il = 0;
+    while (il < n_layer_ && !layers_[(size_t) il].moe) ++il;
+    return il;
+}
+
+// The CPU's experts this process keeps in its working set, by (layer, expert): the most used lately, then by the
+// profile's and this run's counts, as many as Options::ram_experts_mib holds past pool_; every one without a budget.
+// The card's are none of them.
+std::vector<uint8_t> Engine::ram_keep(const std::vector<float>* lately) const {
+    const size_t ne = (size_t) n_expert_;
+    std::vector<uint8_t> keep(layers_.size() * ne, 1);
+    if (opt_.ram_experts_mib < 0) return keep;
+    std::fill(keep.begin(), keep.end(), 0);
+    struct Cand {
+        float recent;
+        int64_t used;
+        size_t i;
+    };
+    std::vector<Cand> cands;
+    for (size_t il = 0; il < layers_.size(); ++il) {
+        if (!layers_[il].moe) continue;
+        for (size_t e = 0; e < ne; ++e) {
+            const size_t i = il * ne + e;
+            if (layers_[il].slot[e]) continue;
+            cands.push_back({lately ? (*lately)[i] : recent_.empty() ? 0.f : recent_[i],
+                             (prior_.empty() ? 0 : prior_[i]) + use_[i], i});
+        }
+    }
+    std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) {
+        return a.recent != b.recent ? a.recent > b.recent : a.used > b.used;
+    });
+    size_t room = (size_t) opt_.ram_experts_mib << 20;
+    room -= std::min(room, pool_bytes_);
+    for (const Cand& c : cands) {
+        size_t bytes = 0;
+        expert_bytes(layers_[c.i / ne], 0, 1, [&](const uint8_t*, size_t n) { bytes += n; });
+        if (bytes > room) break;
+        room -= bytes;
+        keep[c.i] = 1;
+    }
+    return keep;
+}
+
+// After a long prompt (with pool_reseed()): kept_ by the prompt's own uses, then the counts.  The pages of the
+// experts that leave it go, and those that come in are read into the working set, by the read threads.
+void Engine::rekeep() {
+    std::vector<uint8_t> was = ram_keep(&prompt_use_);
+    {
+        std::lock_guard<std::mutex> l(swap_m_);   // the follower looks at it (follow_loop())
+        kept_.swap(was);
+    }
+    // The page work goes to the read threads behind their reads, in pieces of 4 MiB, and the answer starts at once:
+    // its first call waited for it.  An expert of the new kept_ that a call meets first is faulted in by it.
+    static constexpr size_t kPiece = size_t(4) << 20;
+    std::vector<PoolJob> jobs;
+    const auto as = [&jobs](int32_t k) {
+        return [&jobs, k](const uint8_t* p, size_t n) {
+            for (size_t at = 0; at < n; at += kPiece) jobs.push_back({nullptr, p + at, std::min(kPiece, n - at), k});
+        };
+    };
+    for (size_t il = 0; il < layers_.size(); ++il) {
+        const Layer& L = layers_[il];
+        if (!L.moe) continue;
+        const uint8_t* a = was.data() + il * (size_t) n_expert_;
+        const uint8_t* b = kept_.data() + il * (size_t) n_expert_;
+        expert_runs(L, n_expert_, [&](int e) { return a[e] && !b[e] && !L.slot[(size_t) e]; }, as(kDrop));
+        expert_runs(L, n_expert_, [&](int e) { return !a[e] && b[e] && !L.slot[(size_t) e]; }, as(kTouch));
+    }
+    {
+        std::lock_guard<std::mutex> l(pool_m_);
+        pool_pages_.insert(pool_pages_.end(), jobs.begin(), jobs.end());
+        pool_n_.fetch_add((int) jobs.size(), std::memory_order_release);
+    }
+    pool_cv_.notify_all();
+}
+
+// After the load: the slots take the experts the profile has used most of those outside kept_ and the card, read
+// on every CPU thread, so that the first answer finds them.
+void Engine::pool_fill() {
+    const size_t ne = (size_t) n_expert_;
+    std::vector<std::pair<int64_t, size_t>> cands;
+    for (size_t il = 0; il < layers_.size(); ++il)
+        if (layers_[il].moe)
+            for (size_t e = 0; e < ne; ++e)
+                if (!layers_[il].slot[e] && !kept_[il * ne + e])
+                    cands.push_back({prior_.empty() ? 0 : prior_[il * ne + e], il * ne + e});
+    std::sort(cands.rbegin(), cands.rend());
+    struct Fill {
+        size_t x;
+        PoolRead r;
+    };
+    std::vector<Fill> fills;
+    std::vector<size_t> next;   // by size: the next slot to fill
+    for (const PoolSize& z : pool_sizes_) next.push_back(z.first);
+    for (const auto& cand : cands) {
+        const size_t x = cand.second, c = pool_size_of_[x / ne], k = next[c];
+        PoolSize& z = pool_sizes_[c];
+        if (k == z.first + z.n) continue;
+        ++next[c];
+        if (pool_who_[k] >= 0) pool_of_[(size_t) pool_who_[k]] = -1;
+        pool_who_[k] = (int64_t) x;
+        pool_of_[x] = (int32_t) k;
+        pool_prot_[k] = k - z.first < z.prot_max;   // the profile's most used start held
+        fills.push_back({x, {x % ne, (int32_t) k, false}});
+    }
+    workers_->run((int) fills.size(), [&](int t) { pool_read(layers_[fills[(size_t) t].x / ne], fills[(size_t) t].r); });
+    for (const Fill& f : fills)
+        if (!f.r.ok) {
+            pool_of_[f.x] = -1;
+            pool_who_[(size_t) f.r.s] = -1;
+            pool_prot_[(size_t) f.r.s] = 0;
+        }
+    for (PoolSize& z : pool_sizes_)
+        z.nprot = (size_t) std::count(pool_prot_.begin() + (ptrdiff_t) z.first,
+                                      pool_prot_.begin() + (ptrdiff_t) (z.first + z.n), 1);
+}
+
+// After a prompt of 4,096 tokens or more, at the answer's first call: the held part of each size of slot (prot_max)
+// takes the experts the prompt used most, read on every CPU thread; the slots of experts it used less give way.
+// The answer to a new document routes to its experts, not to the last answer's: after a 32K prompt the slots
+// missed 4.5 experts a token, and waiting for them was the CPU's whole extra time.
+void Engine::pool_reseed() {
+    prompt_rows_ = 0;
+    const size_t ne = (size_t) n_expert_;
+    std::vector<std::pair<float, size_t>> cands;
+    for (size_t il = 0; il < layers_.size(); ++il)
+        if (layers_[il].moe)
+            for (size_t e = 0; e < ne; ++e)
+                if (!layers_[il].slot[e] && !kept_[il * ne + e] && prompt_use_[il * ne + e] > 0.f)
+                    cands.push_back({prompt_use_[il * ne + e], il * ne + e});
+    std::fill(prompt_use_.begin(), prompt_use_.end(), 0.f);
+    size_t held = 0;
+    for (const PoolSize& z : pool_sizes_) held += z.prot_max;
+    const size_t want = std::min(cands.size(), held);
+    std::partial_sort(cands.begin(), cands.begin() + (ptrdiff_t) want, cands.end(), std::greater<>());
+    std::vector<uint8_t> wanted(layers_.size() * ne, 0);
+    for (size_t k = 0; k < want; ++k) wanted[cands[k].second] = 1;
+    // by size: the slots that may take them, the last one first, and how many more may be held
+    std::vector<std::vector<size_t>> free(pool_sizes_.size());
+    std::vector<size_t> room;
+    for (size_t c = 0; c < pool_sizes_.size(); ++c) {
+        const PoolSize& z = pool_sizes_[c];
+        room.push_back(z.prot_max);
+        for (size_t v = z.first + z.n; v-- > z.first;)
+            if (!pool_pin_[v] && pool_state_[v].load(std::memory_order_acquire) != 1 &&
+                (pool_who_[v] < 0 || !wanted[(size_t) pool_who_[v]]))
+                free[c].push_back(v);
+    }
+    struct Fill {
+        size_t x;
+        PoolRead r;
+    };
+    std::vector<Fill> fills;
+    for (size_t k = 0; k < want; ++k) {
+        const size_t x = cands[k].second, c = pool_size_of_[x / ne];
+        if (room[c] == 0) continue;
+        --room[c];
+        if (pool_of_[x] >= 0) {
+            pool_prot_[(size_t) pool_of_[x]] = 1;
+            continue;
+        }
+        if (free[c].empty()) continue;
+        const size_t v = free[c].back();
+        free[c].pop_back();
+        if (pool_who_[v] >= 0) pool_of_[(size_t) pool_who_[v]] = -1;
+        pool_who_[v] = (int64_t) x;
+        pool_of_[x] = (int32_t) v;
+        pool_prot_[v] = 1;
+        pool_tick_[v] = pool_ref_[v] = 0;
+        fills.push_back({x, {x % ne, (int32_t) v, false}});
+    }
+    workers_->run((int) fills.size(), [&](int t) { pool_read(layers_[fills[(size_t) t].x / ne], fills[(size_t) t].r); });
+    for (const Fill& f : fills)
+        if (!f.r.ok) {
+            pool_of_[f.x] = -1;
+            pool_who_[(size_t) f.r.s] = -1;
+            pool_prot_[(size_t) f.r.s] = 0;
+        }
+    for (PoolSize& z : pool_sizes_)
+        z.nprot = (size_t) std::count(pool_prot_.begin() + (ptrdiff_t) z.first,
+                                      pool_prot_.begin() + (ptrdiff_t) (z.first + z.n), 1);
+}
+
+uint8_t* Engine::pool_at(size_t v) const {
+    size_t c = 0;
+    while (v >= pool_sizes_[c].first + pool_sizes_[c].n) ++c;
+    return pool_.get() + pool_sizes_[c].at + (v - pool_sizes_[c].first) * pool_sizes_[c].bytes;
+}
+
+// The slot of layer il's size that p is in, or SIZE_MAX: p is in the mapping.
+size_t Engine::pool_slot_of(int il, const uint8_t* p) const {
+    const PoolSize& z = pool_sizes_[pool_size_of_[(size_t) il]];
+    const uintptr_t a = (uintptr_t) pool_.get() + z.at, q = (uintptr_t) p;
+    if (q < a || q >= a + z.n * z.bytes) return SIZE_MAX;
+    return z.first + (size_t) (q - a) / z.bytes;
+}
+
+// The slot of layer il's size that the next expert takes: the hand of that size's clock goes past those this call or
+// the next one holds, that are being read or that an upload copies, and past the held ones (pool_prot_), clearing
+// the mark of those used since it last came by and putting the others back on trial while too many are held.  It
+// takes the first trial slot.  A search of every slot for the least lately used one was a few million comparisons a
+// step on the thread that computes the CPU's experts.  SIZE_MAX: none after three rounds.
+size_t Engine::pool_victim(int il) {
+    PoolSize& z = pool_sizes_[pool_size_of_[(size_t) il]];
+    for (size_t k = 0; k < 3 * z.n; ++k) {
+        const size_t v = z.first + z.hand++ % z.n;
+        if (pool_tick_[v] >= pool_now_ || pool_pin_[v] || pool_state_[v].load(std::memory_order_acquire) == 1)
+            continue;
+        if (pool_prot_[v]) {
+            if (pool_ref_[v]) {
+                pool_ref_[v] = 0;
+            } else if (z.nprot > z.prot_max) {
+                pool_prot_[v] = 0;
+                --z.nprot;
+            }
+            continue;
+        }
+        return v;
+    }
+    return SIZE_MAX;
+}
+
+void Engine::pool_run(const PoolJob& job) {
+    if (job.s < 0) {   // the pages of an expert that changed places in kept_ (follow_loop()): read in, or let go
+        if (job.s == kTouch) touch_pages(job.src, job.n);
+        else drop_pages(job.src, job.n);
+        return;
+    }
+    const size_t v = (size_t) job.s;
+    if (!read_file(job.dst, job.src, job.n)) pool_failed_[v].store(1, std::memory_order_relaxed);
+    if (pool_pending_[v].fetch_sub(1, std::memory_order_acq_rel) == 1)   // its last piece
+        pool_state_[v].store(pool_failed_[v].load(std::memory_order_relaxed) ? 2 : 0, std::memory_order_release);
+}
+
+// A read thread without a job spins 2 ms before it sleeps: an answer queues reads every layer, a fraction of a
+// millisecond apart.
+void Engine::pool_loop() {
+    for (;;) {
+        const Clock::time_point t0 = Clock::now();
+        while (pool_n_.load(std::memory_order_acquire) == 0 && Clock::now() - t0 < std::chrono::milliseconds(2))
+            _mm_pause();
+        PoolJob job;
+        {
+            std::unique_lock<std::mutex> l(pool_m_);
+            pool_cv_.wait(l, [&] { return pool_quit_ || !pool_jobs_.empty() || !pool_pages_.empty(); });
+            if (pool_quit_) return;
+            std::deque<PoolJob>& q = pool_jobs_.empty() ? pool_pages_ : pool_jobs_;
+            job = q.front();
+            q.pop_front();
+            pool_n_.fetch_sub(1, std::memory_order_relaxed);
+        }
+        pool_run(job);
+    }
+}
+
+// A thread that waits for a read takes the first piece queued (those of the reads a call waits for are first);
+// false when none is.  Spinning, the CPU's threads left a call's few late experts to the read threads alone.
+bool Engine::pool_help() {
+    PoolJob job;
+    {
+        std::lock_guard<std::mutex> l(pool_m_);
+        if (pool_jobs_.empty()) return false;
+        job = pool_jobs_.front();
+        pool_jobs_.pop_front();
+        pool_n_.fetch_sub(1, std::memory_order_relaxed);
+    }
+    pool_run(job);
+    return true;
+}
+
+// Expert e of L into slot s by the read threads, in pieces of 256 KiB: ahead of what is queued with `first`, for a
+// call that is about to compute it.  The threads that wait for it share its pieces; in pieces of 64 KiB a piece took
+// 89 to 109 us on the laptop while the others read (one of 256 KiB 143 to 154), and the call waited longer.
+void Engine::pool_queue(const Layer& L, size_t e, int32_t s, bool first) {
+    constexpr int kMost = 64;
+    uint8_t* p = pool_at((size_t) s);
+    const std::pair<uint8_t*, const uint8_t*> part[3] = {{p, L.exp_gate + e * L.gu_stride},
+                                                         {p + L.gu_bytes, L.exp_up + e * L.u_stride},
+                                                         {p + L.gu2(), L.exp_down + e * L.d_bytes}};
+    const size_t bytes[3] = {L.gu_bytes, L.u_bytes, L.d_bytes};
+    // pieces of the larger experts grow so that each matrix takes at most a third of jobs
+    const size_t most = (std::max({bytes[0], bytes[1], bytes[2]}) + kMost / 3 - 1) / (kMost / 3);
+    const size_t piece = std::max(size_t(256) << 10, (most + 4095) / 4096 * 4096);
+    PoolJob jobs[kMost];
+    int n = 0;
+    for (int k = 0; k < 3; ++k)
+        for (size_t at = 0; at < bytes[k]; at += piece)
+            jobs[n++] = {part[k].first + at, part[k].second + at, std::min(piece, bytes[k] - at), s};
+    pool_failed_[(size_t) s].store(0, std::memory_order_relaxed);
+    pool_pending_[(size_t) s].store(n, std::memory_order_relaxed);
+    pool_state_[(size_t) s].store(1, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> l(pool_m_);
+        if (first) pool_jobs_.insert(pool_jobs_.begin(), jobs, jobs + n);
+        else pool_jobs_.insert(pool_jobs_.end(), jobs, jobs + n);
+        pool_n_.fetch_add(n, std::memory_order_release);
+    }
+    pool_cv_.notify_all();
 }
 
 // The draft block's FFN where the file has a router: the MoE sequence draft_step() has run for it all along.
@@ -2401,6 +4057,51 @@ const float* Engine::biased(const Layer& L, const float* scores) {
     return bias_rl_.data();
 }
 
+// The call's experts from pool_'s slots.  One not there takes the slot pool_victim() gives and goes on
+// pool_reads_, which moe() hands the read threads ahead of everything else.
+void Engine::pool_take(const Layer& L, int il, CpuExpert* host, int n) {
+    const size_t ne = (size_t) n_expert_;
+    ++pool_now_;
+    pool_reads_.clear();
+    for (int i = 0; i < n; ++i) {
+        const size_t e = (size_t) (host[i].gate - L.exp_gate) / L.gu_stride;
+        if (kept_[(size_t) il * ne + e]) continue;   // through the mapping
+        int32_t& s = pool_of_[(size_t) il * ne + e];
+        if (s >= 0 && !pool_prot_[(size_t) s]) {   // used after it was read: held
+            pool_prot_[(size_t) s] = 1;
+            ++pool_sizes_[pool_size_of_[(size_t) il]].nprot;
+        }
+        if (s < 0) {
+            const size_t v = pool_victim(il);
+            if (v == SIZE_MAX) continue;   // every slot held by this call or the next: the mapping, then
+            if (pool_who_[v] >= 0) pool_of_[(size_t) pool_who_[v]] = -1;
+            pool_who_[v] = (int64_t) ((size_t) il * ne + e);
+            s = (int32_t) v;
+            pool_reads_.push_back({e, s, false});
+        }
+        pool_tick_[(size_t) s] = pool_now_;
+        pool_ref_[(size_t) s] = 1;
+        uint8_t* p = pool_at((size_t) s);
+        host[i].gate = p;
+        host[i].up = p + L.gu_bytes;
+        host[i].down = p + L.gu2();
+    }
+}
+
+// Expert e of layer il's bytes in its pool_ slot, or nullptr: none, or still being read.
+const uint8_t* Engine::pool_has(int il, int e) const {
+    const int32_t v = pool_ ? pool_of_[(size_t) il * n_expert_ + (size_t) e] : -1;
+    if (v < 0 || pool_state_[(size_t) v].load(std::memory_order_acquire) != 0) return nullptr;
+    return pool_at((size_t) v);
+}
+
+void Engine::pool_read(const Layer& L, PoolRead& r) {
+    uint8_t* p = pool_at((size_t) r.s);
+    r.ok = read_file(p, L.exp_gate + r.e * L.gu_stride, L.gu_bytes) &&
+           read_file(p + L.gu_bytes, L.exp_up + r.e * L.u_stride, L.u_bytes) &&
+           read_file(p + L.gu2(), L.exp_down + r.e * L.d_bytes, L.d_bytes);
+}
+
 // The routed experts of tokens that come a few at a time.  moe_router() is on its way, with ev_ behind it.  True
 // when experts were computed on the CPU: their sum waits in h_cpu_ for moe_add().  `first` is run once, by the
 // thread that hands the cached experts to the card and ahead of them.
@@ -2410,6 +4111,18 @@ bool Engine::moe(Layer& L, int il, int n, const std::function<void()>* first) {
     ck(cudaEventSynchronize((cudaEvent_t) ev_), "router");
     stats_.route_wait_ms += ms_since(t0);
     if (block_pass_) route_block(il, h_rl_, n);
+    if (pool_ && prompt_rows_ >= 4096 && !block_pass_) {
+        rekeep();
+        pool_reseed();
+    }
+    if (prefetch_k_ > 0 && !block_pass_ && n <= 16) {   // as moe_router() asked for it
+        size_t part = 0;
+        for (size_t q = 0; q < 8; ++q)
+            if (ev_ == ev_row_[q]) part = q;
+        int j = il + 1;
+        while (j < n_layer_ && !layers_[(size_t) j].moe) ++j;
+        if (j < n_layer_) pool_ahead(j, n, part, prefetch_k_);
+    }
 
     const float limit = clamp_exp_[(size_t) il];
     const size_t xq_row = kernels::native_q8_1_bytes(n_embd_);
@@ -2421,6 +4134,7 @@ bool Engine::moe(Layer& L, int il, int n, const std::function<void()>* first) {
             const uint8_t* slot;
             float w;
             int row;
+            int e;
         };
         CpuExpert host[kCpuRows * kMaxUsed];
         Cached cached[kCpuRows * kMaxUsed];
@@ -2453,14 +4167,16 @@ bool Engine::moe(Layer& L, int il, int n, const std::function<void()>* first) {
                     ++use_[(size_t) il * n_expert_ + e];
                     if (n_swap_ > 0) recent_[(size_t) il * n_expert_ + e] += 1.f;
                 }
+                // NVFP4's down scale goes on the weight (ExpertScales)
+                const float we = L.h_s_down.empty() ? w[k] : w[k] * L.h_s_down[e];
                 if (const uint8_t* s = L.slot[e]) {
-                    cached[n_cached++] = {s, w[k], at + t};
+                    cached[n_cached++] = {s, we, at + t, (int) e};
                     continue;
                 }
                 host_e[n_host] = (int32_t) e;
                 host_k[n_host] = k;
-                host[n_host++] = {L.exp_gate + e * L.gu_stride, L.exp_up + e * L.u_stride,
-                                  L.exp_down + e * L.d_bytes, w[k], t};
+                host[n_host++] = {L.exp_gate + e * L.gu_stride, L.exp_up + e * L.u_stride, L.exp_down + e * L.d_bytes,
+                                  we, t, L.h_s_gate.empty() ? 1.f : L.h_s_gate[e], L.h_s_up.empty() ? 1.f : L.h_s_up[e]};
             }
         }
         // Strata's STRATA_ROUTE_TAIL_SKIP: an expert outside VRAM that every token here ranks at tail_skip or later
@@ -2487,6 +4203,7 @@ bool Engine::moe(Layer& L, int il, int n, const std::function<void()>* first) {
             }
             n_host = kept;
         }
+        if (pool_) pool_take(L, il, host, n_host);
         stats_.gpu_experts += n_cached;
         stats_.cpu_experts += n_host;
         // The launches cost this thread more than they cost the card, so each one less counts.  The cached experts
@@ -2529,8 +4246,10 @@ bool Engine::moe(Layer& L, int il, int n, const std::function<void()>* first) {
                     for (int j = 0; j < m && !one_u; ++j)
                         kernels::native_mmvq((int) L.u_type, up.w[j], up.x[j], up.y[j], n_embd_, n_ff_exp_, 1, st_);
                 }
-                if (gelu_) geglu_rows(g_, h_, n_ff_exp_, m, st_);
-                else swiglu_clamp_rows(g_, h_, n_ff_exp_, m, limit, st_);
+                ExpertScales es = expert_scales(L);
+                for (int j = 0; j < m && (es.gate || es.up); ++j) es.e[j] = cached[i0 + j].e;
+                if (gelu_) geglu_rows(g_, h_, n_ff_exp_, m, st_, &es);
+                else swiglu_clamp_rows(g_, h_, n_ff_exp_, m, limit, st_, &es);
                 kernels::native_quantize_q8_1(h_, q8_, n_ff_exp_, m, st_);
                 if (!(m > 1 && kernels::native_mmvq_slots((int) L.d_type, down, m, n_ff_exp_, n_embd_, st_)))
                     for (int j = 0; j < m; ++j)
@@ -2545,6 +4264,10 @@ bool Engine::moe(Layer& L, int il, int n, const std::function<void()>* first) {
                     if (k == kSumRows - 1 || i0 + j == n_cached - 1) add_scaled(sum, k + 1, n_embd_, st_);
                 }
             }
+#if defined(STRATA_GPU_METAL)
+            if (opt_.metal_optimize && n_host > 0)
+                ck(gpu::metal::submit(static_cast<gpu::Stream>(st_)), "submitting cached experts");
+#endif
         };
 
         // The next layer's router wait is what makes h_cpu_ free to write again.
@@ -2556,9 +4279,41 @@ bool Engine::moe(Layer& L, int il, int n, const std::function<void()>* first) {
         }
         any_host = true;
         t0 = Clock::now();
+        const std::function<void()>* meanwhile = n_cached > 0 || (first && at == 0) ? &launch : nullptr;
+        // The experts still being read (missed now, or read ahead and not there yet) are computed last, by
+        // cpu_experts(), and the others meanwhile: read before them, a call's reads held its whole CPU part up.
+        uint8_t late[kCpuRows * kMaxUsed];
+        bool any_late = false;
+        for (const PoolRead& r : pool_reads_) pool_queue(L, r.e, r.s, true);
+        for (int i = 0; i < n_host && pool_; ++i) {
+            const size_t v = pool_slot_of(il, host[i].gate);
+            late[i] = v != SIZE_MAX && pool_state_[v].load(std::memory_order_acquire) != 0;
+            any_late = any_late || late[i];
+        }
+        // A read that failed is made once more by one of the waiting threads, then through the mapping.
+        const std::function<void(int)> wait = [&](int j) {
+            const size_t v = pool_slot_of(il, host[j].gate);
+            uint8_t st;
+            while ((st = pool_state_[v].load(std::memory_order_acquire)) != 0) {
+                if (st == 2 && pool_state_[v].compare_exchange_strong(st, 3)) {
+                    const size_t x = (size_t) pool_who_[v], e = x % (size_t) n_expert_;
+                    PoolRead r{e, (int32_t) v, false};
+                    pool_read(L, r);
+                    if (!r.ok) {
+                        uint8_t* p = pool_at(v);
+                        std::memcpy(p, L.exp_gate + e * L.gu_stride, L.gu_bytes);
+                        std::memcpy(p + L.gu_bytes, L.exp_up + e * L.u_stride, L.u_bytes);
+                        std::memcpy(p + L.gu2(), L.exp_down + e * L.d_bytes, L.d_bytes);
+                    }
+                    pool_state_[v].store(0, std::memory_order_release);
+                    break;
+                }
+                if (!pool_help()) std::this_thread::yield();
+            }
+        };
         cpu_experts(*workers_, host, n_host, m, (int) L.gu_type, (int) L.u_type, (int) L.d_type, n_embd_, n_ff_exp_,
-                    h_x_ + (size_t) at * e_row, limit, gelu_, cpu,
-                    n_cached > 0 || (first && at == 0) ? &launch : nullptr);
+                    h_x_ + (size_t) at * e_row, limit, gelu_, cpu, meanwhile, any_late ? late : nullptr, &wait);
+        pool_reads_.clear();
         stats_.cpu_ms += ms_since(t0);
     }
     return any_host;
@@ -2585,6 +4340,9 @@ bool Engine::card_moe(int n) {
                           h_slots_.begin() + (ptrdiff_t) il * n_expert_);
         ck(cudaMemcpy(d_slots_, h_slots_.data(), h_slots_.size() * sizeof(void*), cudaMemcpyHostToDevice),
            "expert slots");
+#if defined(STRATA_GPU_METAL)
+        ck(gpu::metal::register_indirect(d_slots_, h_slots_.data(), h_slots_.size()), "expert dependencies");
+#endif
     }
     return true;
 }
@@ -2610,8 +4368,10 @@ bool Engine::moe_card(Layer& L, int il, int n) {
         const kernels::MmvqIds up{table, d_ids_, L.gu_bytes, xq_, xq_row, n_used_, g_ + ff, 2 * ff};
         kernels::native_mmvq_ids((int) L.u_type, up, rr, n_embd_, n_ff_exp_, st_);
     }
-    if (gelu_) geglu_rows(g_, h_, n_ff_exp_, rr, st_);
-    else swiglu_clamp_rows(g_, h_, n_ff_exp_, rr, clamp_exp_[(size_t) il], st_);
+    const ExpertScales es = expert_scales(L, d_ids_);
+    if (gelu_) geglu_rows(g_, h_, n_ff_exp_, rr, st_, &es);
+    else swiglu_clamp_rows(g_, h_, n_ff_exp_, rr, clamp_exp_[(size_t) il], st_, &es);
+    if (!L.h_s_down.empty()) expert_weights(d_wts_, fp(L.s_down), d_ids_, rr, st_);
     kernels::native_quantize_q8_1(h_, q8_, n_ff_exp_ * rr, 1, st_);   // the rows back to back, as one vector
     const kernels::MmvqIds down{table, d_ids_, L.gu2(), q8_, kernels::native_q8_1_bytes(n_ff_exp_), 1, d_,
                                 (size_t) n_embd_};
@@ -2633,11 +4393,24 @@ void Engine::stage(const Layer& L, const int32_t* experts, int m, void* stream, 
         uint8_t* h = h_stage_[stage_turn_];
         const cudaEvent_t left = (cudaEvent_t) ev_stage_[stage_turn_];
         ck(cudaEventSynchronize(left), "expert staging");
+        // Under the RAM budget an expert outside kept_ comes from its pool_ slot, or else from the file, not the
+        // mapping (read_file()).  Nothing takes a slot while a prompt batch is read.
+        const int il = (int) (&L - layers_.data());
+        const auto put = [&](void* dst, const void* src, size_t bytes) {
+            if (stream_stage_) stage_copy_streaming(dst, src, bytes);
+            else std::memcpy(dst, src, bytes);
+        };
         const auto copy = [&](int i) {
             const size_t j = (size_t) i / 3, e = (size_t) experts[(size_t) j0 + j];
-            if (i % 3 == 0) std::memcpy(h + j * step, L.exp_gate + e * L.gu_stride, L.gu_bytes);
-            else if (i % 3 == 1) std::memcpy(h + j * step + L.gu_bytes, L.exp_up + e * L.u_stride, L.u_bytes);
-            else std::memcpy(h + c * step + j * L.d_bytes, L.exp_down + e * L.d_bytes, L.d_bytes);
+            const uint8_t* in = pool_has(il, (int) e);
+            const bool mapped = !pool_ || kept_[(size_t) il * n_expert_ + e];
+            const auto get = [&](uint8_t* dst, const uint8_t* src, size_t n, size_t at) {
+                if (in) put(dst, in + at, n);
+                else if (mapped || !read_file(dst, src, n)) put(dst, src, n);
+            };
+            if (i % 3 == 0) get(h + j * step, L.exp_gate + e * L.gu_stride, L.gu_bytes, 0);
+            else if (i % 3 == 1) get(h + j * step + L.gu_bytes, L.exp_up + e * L.u_stride, L.u_bytes, L.gu_bytes);
+            else get(h + c * step + j * L.d_bytes, L.exp_down + e * L.d_bytes, L.d_bytes, L.gu2());
         };
         (alone ? *stagers_ : *workers_).run((int) (3 * c), copy);
         ck(cudaMemcpyAsync(stage_ + (size_t) j0 * step, h, c * step, cudaMemcpyHostToDevice, cs(stream)),
@@ -2670,6 +4443,9 @@ void Engine::moe_rows(Layer& L, int il, int n) {
     int32_t* rel = bounds + n_expert_ + 1;
     float* w = (float*) (rel + 2 * n_expert_ + 2);
     int32_t* cb = (int32_t*) (w + cap);   // per class: the cached experts' first rows, in the order of the slots
+    // STRATA_POLY_STAGED_TILES: per size class and round, the staged experts' first rows (tb), and the same counted
+    // from the round's first row (tb + n_tile * tile_row)
+    int32_t* tb = cb + kClasses * ((size_t) n_expert_ + 1);
     router_scores(L, n);
     // Routed on the card, a batch hands the host its picks: the host took longer to route a batch of 1,024 tokens
     // than the card took for its experts.
@@ -2728,6 +4504,7 @@ void Engine::moe_rows(Layer& L, int il, int n) {
     const int32_t* d_rel = d_bounds + n_expert_ + 1;
     const float* d_w = (const float*) (d_rel + 2 * n_expert_ + 2);
     const int32_t* d_cb = (const int32_t*) (d_w + cap);
+    const int32_t* d_tb = d_cb + kClasses * cb_row;
 
     // A token's routing is a softmax over every expert and a search for the largest few.  On one thread it was
     // 0.9 s of the 2.4 s a 7,709-token prompt took with 40 layers of 256 experts, so the host's threads take a
@@ -2745,7 +4522,9 @@ void Engine::moe_rows(Layer& L, int il, int n) {
     for (int i = 0; i < rr; ++i) {
         ++count_[(size_t) ids_[(size_t) i]];
         ++use_[(size_t) il * n_expert_ + (size_t) ids_[(size_t) i]];
+        if (pool_) prompt_use_[(size_t) il * n_expert_ + (size_t) ids_[(size_t) i]] += 1.f;
     }
+    if (pool_ && il == first_moe_layer()) prompt_rows_ += n;
     // The CPU computes some of the routed experts outside VRAM while the others are copied: the ones the fewest
     // tokens chose, whose copy costs as much as any other's and which cost the CPU about as much as their tokens.
     int n_spare = 0, n_cpu = 0;
@@ -2753,8 +4532,11 @@ void Engine::moe_rows(Layer& L, int il, int n) {
     on_cpu_.assign((size_t) n_expert_, 0);
     if (spare) {
         spare_.clear();
+        // under the RAM budget, the ones in kept_ or pool_ only: the card gets the others through the staging buffer
+        const uint8_t* kept = kept_.empty() ? nullptr : kept_.data() + (size_t) il * n_expert_;
         for (int e = 0; e < n_expert_; ++e)
-            if (count_[(size_t) e] > 0 && !L.slot[(size_t) e]) spare_.push_back(e);
+            if (count_[(size_t) e] > 0 && !L.slot[(size_t) e] && (!pool_ || kept[e] || pool_has(il, e)))
+                spare_.push_back(e);
         std::stable_sort(spare_.begin(), spare_.end(),
                          [&](int32_t a, int32_t b) { return count_[(size_t) a] < count_[(size_t) b]; });
         n_spare = (int) spare_.size();
@@ -2784,27 +4566,6 @@ void Engine::moe_rows(Layer& L, int il, int n) {
     const int n_group = (int) group_.size();
     auto rows_of = [&](int g) { return count_[(size_t) group_[(size_t) g]]; };
 
-    int at = 0;
-    for (int g = 0; g < n_group; ++g) {
-        bounds[g] = at;
-        first_[(size_t) group_[(size_t) g]] = at;
-        at += rows_of(g);
-    }
-    bounds[n_group] = at;
-    const int rg = at;   // the card's rows
-    host_.clear();
-    for (int i = 0; i < rr; ++i) {
-        const size_t e = (size_t) ids_[(size_t) i];
-        if (on_cpu_[e]) {   // by token, as cpu_experts() takes them, and nothing of it in the card's sum
-            host_.push_back({L.exp_gate + e * L.gu_stride, L.exp_up + e * L.u_stride, L.exp_down + e * L.d_bytes,
-                             w[i], i / n_used_});
-            w[i] = 0.f;
-            continue;
-        }
-        const int row = first_[e]++;
-        tok[row] = i / n_used_;
-        place[row] = i;
-    }
     const size_t gu2 = L.gu2(), step = L.gu_step;   // a slot's down is gu2 in; staged experts are step apart
     // a round is what the staging buffer holds at a time; round_ has the first group of each, and the end
     const int per_round = (int) (stage_bytes_ / (step + L.d_bytes));
@@ -2812,7 +4573,77 @@ void Engine::moe_rows(Layer& L, int il, int n) {
     if (n_ahead > 0) round_.push_back(n_cached + n_ahead);
     while (round_.back() < n_group) round_.push_back(std::min(round_.back() + per_round, n_group));
     const int n_round = (int) round_.size() - 1;
-    for (int r = 0; r < n_round; ++r)
+    const int n_tile = (int) staged_tiles_.size() + 1;   // the size classes of a round's experts
+    const size_t tile_row = (size_t) 2 * n_expert_ + 2;
+    const auto tile_of = [&](int rows) {
+        int t = 0;
+        while (t < n_tile - 1 && rows > staged_tiles_[(size_t) t]) ++t;
+        return t;
+    };
+    int at = 0;
+    for (int g = 0; g < n_cached; ++g) {
+        bounds[g] = at;
+        first_[(size_t) group_[(size_t) g]] = at;
+        at += rows_of(g);
+    }
+    bounds[n_cached] = at;
+    round_row_.assign((size_t) n_round + 1, 0);
+    if (n_tile == 1) {
+        for (int g = n_cached; g < n_group; ++g) {
+            bounds[g] = at;
+            first_[(size_t) group_[(size_t) g]] = at;
+            at += rows_of(g);
+        }
+        bounds[n_group] = at;
+        for (int r = 0; r <= n_round; ++r) round_row_[(size_t) r] = bounds[round_[(size_t) r]];
+    } else {
+        // A round's rows lie class after class, and a class has bounds in which the other classes' experts have none
+        // (as the cached experts' cb below), so that a launch's tile is as wide as its class's largest expert needs.
+        // A row's product does not depend on the tile it is in, so the results are one launch's (within rounding
+        // where MMQ uses stream-k).
+        for (int r = 0; r < n_round; ++r) {
+            const int g0 = round_[(size_t) r], m = round_[(size_t) r + 1] - g0;
+            round_row_[(size_t) r] = at;
+            for (int k = 0; k < n_tile; ++k) {
+                int32_t* ta = tb + (size_t) k * tile_row + (size_t) (g0 - n_cached + r);
+                int32_t* tr = ta + (size_t) n_tile * tile_row;
+                for (int j = 0; j < m; ++j) {
+                    ta[j] = at;
+                    tr[j] = at - round_row_[(size_t) r];
+                    if (tile_of(rows_of(g0 + j)) == k) {
+                        first_[(size_t) group_[(size_t) (g0 + j)]] = at;
+                        at += rows_of(g0 + j);
+                    }
+                }
+                ta[m] = at;
+                tr[m] = at - round_row_[(size_t) r];
+            }
+        }
+        round_row_[(size_t) n_round] = at;
+        bounds[n_group] = at;
+    }
+    const int rg = at;   // the card's rows
+    host_.clear();
+    const ExpertScales es = expert_scales(L, d_ex_);
+    for (int i = 0; i < rr; ++i) {
+        const size_t e = (size_t) ids_[(size_t) i];
+        if (!L.h_s_down.empty()) w[i] *= L.h_s_down[e];   // NVFP4's down scale goes on the weight (ExpertScales)
+        if (on_cpu_[e]) {   // by token, as cpu_experts() takes them, and nothing of it in the card's sum
+            const float gs = es.gate ? L.h_s_gate[e] : 1.f, us = es.up ? L.h_s_up[e] : 1.f;
+            if (const uint8_t* p = pool_has(il, (int) e))
+                host_.push_back({p, p + L.gu_bytes, p + L.gu2(), w[i], i / n_used_, gs, us});
+            else
+                host_.push_back({L.exp_gate + e * L.gu_stride, L.exp_up + e * L.u_stride, L.exp_down + e * L.d_bytes,
+                                 w[i], i / n_used_, gs, us});
+            w[i] = 0.f;
+            continue;
+        }
+        const int row = first_[e]++;
+        tok[row] = i / n_used_;
+        place[row] = i;
+        h_ex_[row] = (int32_t) e;
+    }
+    for (int r = 0; n_tile == 1 && r < n_round; ++r)
         for (int g = round_[(size_t) r]; g <= round_[(size_t) r + 1]; ++g)
             rel[g - n_cached + r] = bounds[g] - bounds[round_[(size_t) r]];
     // A class's launch runs over every cached expert of a run of slots, and the others must have no rows in it:
@@ -2827,9 +4658,12 @@ void Engine::moe_rows(Layer& L, int il, int n) {
         b[n_chan] = at;
     }
     ck(cudaMemcpyAsync(tab_, h_tab_,
-                       (3 * cap + 3 * (size_t) n_expert_ + 3 + kClasses * cb_row) * sizeof(int32_t),
+                       (3 * cap + 3 * (size_t) n_expert_ + 3 + kClasses * cb_row + 2 * n_tile * tile_row * (n_tile > 1)) *
+                           sizeof(int32_t),
                        cudaMemcpyHostToDevice, cs(st_)),
        "expert rows");
+    if ((es.gate || es.up) && rg > 0)
+        ck(cudaMemcpyAsync(d_ex_, h_ex_, (size_t) rg * sizeof(int32_t), cudaMemcpyHostToDevice, cs(st_)), "expert rows");
 
     const int rc = bounds[n_cached];   // the rows of the cached experts
     stats_.batch_cached += rc;
@@ -2860,14 +4694,28 @@ void Engine::moe_rows(Layer& L, int il, int n) {
         auto slot_of = [&](int j) { return L.slot[(size_t) chan_[(size_t) j]]; };
         runs_.clear();
         for (int j = 0; j < n_chan;) {
-            int m = 1, most[kClasses] = {};
+            int m = 1, most[kClasses] = {}, first_c[kClasses], last_c[kClasses];
+            for (int c = 0; c < kClasses; ++c) { first_c[c] = j + n_chan; last_c[c] = -1; }
             while (j + m < n_chan && slot_of(j + m) == slot_of(j + m - 1) + L.slot_bytes) ++m;
             for (int i = j; i < j + m; ++i) {
                 const int rows = count_[(size_t) chan_[(size_t) i]];
-                if (rows > 0) most[tile_class(rows)] = std::max(most[tile_class(rows)], rows);
+                if (rows > 0) {
+                    const int c = tile_class(rows);
+                    most[c] = std::max(most[c], rows);
+                    first_c[c] = std::min(first_c[c], i);
+                    last_c[c] = std::max(last_c[c], i);
+                }
             }
-            for (int c = 0; c < kClasses; ++c)
-                if (most[c] > 0) runs_.push_back({c, j, m, most[c]});
+            for (int c = 0; c < kClasses; ++c) {
+                if (most[c] <= 0) continue;
+#if defined(STRATA_GPU_METAL)
+                if (opt_.metal_optimize) {
+                    runs_.push_back({c, first_c[c], last_c[c] - first_c[c] + 1, most[c]});
+                    continue;
+                }
+#endif
+                runs_.push_back({c, j, m, most[c]});
+            }
             j += m;
         }
         for (const Run& r : runs_) {
@@ -2876,8 +4724,8 @@ void Engine::moe_rows(Layer& L, int il, int n) {
             up_mul(slot_of(r.j), L.slot_bytes, r.m, d_cb + (size_t) r.c * cb_row + r.j, r.most);
         }
         if (rc > 0) {
-            if (gelu_) geglu_rows(gu_, hx_, n_ff_exp_, rc, st_);
-            else swiglu_clamp_rows(gu_, hx_, n_ff_exp_, rc, limit, st_);
+            if (gelu_) geglu_rows(gu_, hx_, n_ff_exp_, rc, st_, &es);
+            else swiglu_clamp_rows(gu_, hx_, n_ff_exp_, rc, limit, st_, &es);
             if (guard) guard_half_sums(hx_, ff, n_ff_exp_, rc, hf_, st_);
             Mmq::quantize(hx_, nullptr, mq2_, dt, ff, ff, rc, st_);
         }
@@ -2899,7 +4747,7 @@ void Engine::moe_rows(Layer& L, int il, int n) {
             const int r = kept < 0 ? (turn + from) % n_round : turn == 0 ? kept : turn - (turn <= kept ? 1 : 0);
             const int g0 = round_[(size_t) r], m = round_[(size_t) r + 1] - g0;
             const size_t down_at = pad((size_t) m * step);
-            const int r0 = bounds[g0], rows = bounds[g0 + m] - r0;
+            const int r0 = round_row_[(size_t) r], rows = round_row_[(size_t) r + 1] - r0;
             if (r == kept) {
                 // the buffer has it
             } else if (r == 0 && early) {
@@ -2911,14 +4759,33 @@ void Engine::moe_rows(Layer& L, int il, int n) {
             if (rows == 0) continue;   // nothing routed to the experts that go ahead
             int most = 0;
             for (int g = g0; g < g0 + m; ++g) most = std::max(most, rows_of(g));
-            mmq_->mul(stage_, gt, gu_rows, n_embd_, step, m, mq_, d_bounds + g0, iota_, rg, most, gu_, ff2, st_);
-            up_mul(stage_, step, m, d_bounds + g0, most);
-            if (gelu_) geglu_rows(gu_ + (size_t) r0 * ff2, hx_ + (size_t) r0 * ff, n_ff_exp_, rows, st_);
-            else swiglu_clamp_rows(gu_ + (size_t) r0 * ff2, hx_ + (size_t) r0 * ff, n_ff_exp_, rows, limit, st_);
+            // with size classes, a launch for each class that has rows in the round, as wide a tile as its experts need
+            const auto each_class = [&](auto&& launch) {
+                if (n_tile == 1) return launch(0, most);
+                for (int k = 0; k < n_tile; ++k) {
+                    int top = 0;
+                    for (int g = g0; g < g0 + m; ++g)
+                        if (tile_of(rows_of(g)) == k) top = std::max(top, rows_of(g));
+                    if (top > 0) launch(k, top);
+                }
+            };
+            each_class([&](int k, int top) {
+                const int32_t* b = n_tile == 1 ? d_bounds + g0 : d_tb + (size_t) k * tile_row + (size_t) (g0 - n_cached + r);
+                mmq_->mul(stage_, gt, gu_rows, n_embd_, step, m, mq_, b, iota_, rg, top, gu_, ff2, st_);
+                up_mul(stage_, step, m, b, top);
+            });
+            ExpertScales er = es;
+            if (er.ids) er.ids += r0;
+            if (gelu_) geglu_rows(gu_ + (size_t) r0 * ff2, hx_ + (size_t) r0 * ff, n_ff_exp_, rows, st_, &er);
+            else swiglu_clamp_rows(gu_ + (size_t) r0 * ff2, hx_ + (size_t) r0 * ff, n_ff_exp_, rows, limit, st_, &er);
             if (guard) guard_half_sums(hx_ + (size_t) r0 * ff, ff, n_ff_exp_, rows, hf_ + r0, st_);
             Mmq::quantize(hx_ + (size_t) r0 * ff, nullptr, mq2_, dt, ff, ff, rows, st_);
-            mmq_->mul(stage_ + down_at, dt, n_embd_, ff, L.d_bytes, m, mq2_, d_rel + (g0 - n_cached + r), d_place + r0,
-                      rows, most, dx_, n_embd_, st_);
+            each_class([&](int k, int top) {
+                const int32_t* b = (n_tile == 1 ? d_rel + (g0 - n_cached + r)
+                                                : d_tb + (size_t) (n_tile + k) * tile_row + (size_t) (g0 - n_cached + r));
+                mmq_->mul(stage_ + down_at, dt, n_embd_, ff, L.d_bytes, m, mq2_, b, d_place + r0, rows, top, dx_, n_embd_,
+                          st_);
+            });
             if (guard) scale_rows(dx_, n_embd_, n_embd_, rows, d_place + r0, hf_ + r0, false, st_);
         }
         ck(cudaEventRecord((cudaEvent_t) ev_free_, cs(st_)), "expert staging");
@@ -3209,57 +5076,78 @@ void Engine::run(const int32_t* tokens, int n) {
 // these tokens missing, which makes its guesses worse and its tokens no different.  On several cards each takes the
 // rows from the one before it, a row a sequence in the same order (pass_ from its start), and the last one gives the
 // logits.
-void Engine::step(const int* seqs, const int32_t* tokens, int n) {
+void Engine::step(const int* seqs, const int32_t* tokens, int n) { step(seqs, tokens, n, nullptr); }
+
+bool Engine::steps_guesses() const {
+    return opt_.batch_mtp && draft_ && step_h_ && !block_guess_ && !next_ && !pass_ && batch_heads() &&
+           (rec_n_ == 0 || (rows_snaps() && step_snap_));
+}
+
+void Engine::step(const int* seqs, const int32_t* tokens, int n, const int32_t* guesses) {
     if (n < 1 || n > std::min(rows_, sequences())) throw std::logic_error("step takes 1 to sequences() tokens");
+    if (guesses && !steps_guesses()) throw std::logic_error("step: guesses need --batch-mtp, a draft block and one card");
+    if (!step_seqs_.empty()) throw std::logic_error("step: the rows of the step before are not kept yet (keep_step())");
     OnCard here(device_, split_);
     end_read();
     const int home = bound_;
     const auto use = [&](int s) { hold(s); };
-    std::vector<int64_t> at((size_t) n);
+    // the rows: each sequence's token, then its guess when it has one
+    std::vector<int> rseq;
+    std::vector<int32_t> rtok;
+    std::vector<int64_t> at;
+    std::vector<float*> rsnap;
     for (int i = 0; i < n; ++i) {
         if (seqs[i] < 0 || seqs[i] >= sequences() || std::count(seqs, seqs + i, seqs[i]))
             throw std::logic_error("step: no such sequence, or one twice");
         use(seqs[i]);
-        if (pos_ + 1 > opt_.max_context)
+        const int m = guesses && guesses[i] >= 0 ? 2 : 1;
+        if (pos_ + m > opt_.max_context)
             throw std::runtime_error("the context is full (" + std::to_string(opt_.max_context) + " tokens)");
-        cover(pos_ + 1);
-        at[(size_t) i] = pos_;
+        cover(pos_ + m);
+        for (int j = 0; j < m; ++j) {
+            rseq.push_back(seqs[i]);
+            rtok.push_back(j ? guesses[i] : tokens[i]);
+            at.push_back(pos_ + j);
+            rsnap.push_back(m == 2 && j == 0 && step_snap_ ? step_snap_ + (size_t) seqs[i] * rec_n_ : nullptr);
+        }
     }
+    const int R = (int) rseq.size();
+    if (R > rows_) throw std::logic_error("step: more rows than a call takes");
 
     ck(cudaStreamSynchronize(cs(st_)), "step");
-    if (n_swap_ > 0) follow(n);
-    tok_ = tokens;
+    if (n_swap_ > 0) follow(R);
+    tok_ = rtok.data();
     windowed_ = false;
     snap_bits_ = 0;
     const size_t e_row = (size_t) n_embd_, r_row = (size_t) streams() * e_row;
     const float scale = embed_scale();
-    if (pass_) std::memcpy(h_r_, pass_, (size_t) n * r_row * sizeof(float));   // a later card
-    for (int i = 0; i < n; ++i) {
-        use(seqs[i]);
+    if (pass_) std::memcpy(h_r_, pass_, (size_t) R * r_row * sizeof(float));   // a later card
+    for (int i = 0; i < R; ++i) {
+        use(rseq[(size_t) i]);
         float* r = h_r_ + (size_t) i * r_row;
         if (!pass_) {
-            if (!input(tokens[i], at[(size_t) i], r) && scale != 1.f)
+            if (!input(rtok[(size_t) i], at[(size_t) i], r) && scale != 1.f)
                 for (size_t k = 0; k < e_row; ++k) r[k] *= scale;
             for (int h = 1; h < streams(); ++h) std::memcpy(r + (size_t) h * e_row, r, e_row * sizeof(float));
         }
         h_at_[2 * i] = at[(size_t) i];
         h_at_[2 * i + 1] = turn(at[(size_t) i]);
     }
-    copy2(h_r_, r_, n * (int) r_row, nullptr, nullptr, 0, st_);
-    copy2(h_at_, at_, n * 2 * (int) (sizeof(long long) / 4), nullptr, nullptr, 0, st_);
+    copy2(h_r_, r_, R * (int) r_row, nullptr, nullptr, 0, st_);
+    copy2(h_at_, at_, R * 2 * (int) (sizeof(long long) / 4), nullptr, nullptr, 0, st_);
 
-    const size_t wn = (size_t) opt_.window, recs = 3 * wn + (size_t) opt_.batch + 1, rec = (size_t) n - 1;
+    const size_t wn = (size_t) opt_.window, recs = 3 * wn + (size_t) opt_.batch + 1, rec = (size_t) R - 1;
     const bool replay = opt_.graphs && !opt_.dump;
     const auto replayed = [&](std::vector<void*>& made, size_t key, auto&& work) {
         if (made.size() <= key) made.resize(key + 1, nullptr);
         if (!made[key]) made[key] = record(work);
         ck(cudaGraphLaunch((cudaGraphExec_t) made[key], cs(st_)), "layer graph");
     };
-    const bool card = n < kStageRows && card_moe(n);
+    const bool card = R < kStageRows && card_moe(R);
     // an architecture that takes the rows in one head: their sequences and positions while it does
     std::vector<Row> rows;
     if (batch_heads())
-        for (int i = 0; i < n; ++i) rows.push_back({seqs[i], at[(size_t) i]});
+        for (int i = 0; i < R; ++i) rows.push_back({rseq[(size_t) i], at[(size_t) i], rsnap[(size_t) i]});
     struct Clear {
         const Row*& p;
         ~Clear() { p = nullptr; }
@@ -3269,26 +5157,27 @@ void Engine::step(const int* seqs, const int32_t* tokens, int n) {
         Layer& L = layers_[(size_t) il];
         if (batch_heads()) {
             const int64_t keep = pos_;
-            key.assign(1, n);
-            for (int i = 0; i < n; ++i) {
+            key.assign(1, R);
+            for (int i = 0; i < R; ++i) {
                 pos_ = at[(size_t) i];
-                key.push_back(seqs[i]);
+                key.push_back(rseq[(size_t) i]);
                 key.push_back(head_key(il, 1));
+                if (guesses) key.push_back(rsnap[(size_t) i] ? 1 : 0);   // a recording that leaves the state
             }
             pos_ = keep;
             rows_of_ = rows.data();
-            n_rows_of_ = n;
+            n_rows_of_ = R;
             if (replay && L.fixed) {
                 void*& made = L.rows_heads[key];
-                if (!made) made = record([&] { layer_head(L, il, n); });
+                if (!made) made = record([&] { layer_head(L, il, R); });
                 ck(cudaGraphLaunch((cudaGraphExec_t) made, cs(st_)), "layer graph");
             } else {
-                layer_head(L, il, n);
+                layer_head(L, il, R);
             }
             rows_of_ = nullptr;
         } else {
-            for (int i = 0; i < n; ++i) {
-                use(seqs[i]);
+            for (int i = 0; i < R; ++i) {
+                use(rseq[(size_t) i]);
                 shift_rows(i);
                 pos_ = at[(size_t) i];
                 const size_t head = (size_t) head_key(il, 1) * recs + 3 * wn + (size_t) i;
@@ -3299,39 +5188,60 @@ void Engine::step(const int* seqs, const int32_t* tokens, int n) {
             }
         }
         if (!L.moe) continue;
-        if (batched(L, n)) {
-            moe_rows(L, il, n);
+        if (batched(L, R)) {
+            moe_rows(L, il, R);
         } else {
             ck(cudaEventRecord((cudaEvent_t) ev_, cs(st_)), "router");
-            if (replay) replayed(L.shared, rec, [&] { moe_shared(L, il, n); });
-            else moe_shared(L, il, n);
+            if (replay) replayed(L.shared, rec, [&] { moe_shared(L, il, R); });
+            else moe_shared(L, il, R);
             if (card && L.card == 1 && replay) {
-                replayed(L.card_moe, rec, [&] { moe_card(L, il, n); });
-                stats_.gpu_experts += n * n_used_;
-            } else if (card && moe_card(L, il, n)) {
-                stats_.gpu_experts += n * n_used_;
-            } else if (moe(L, il, n)) {
-                moe_add(n);
+                replayed(L.card_moe, rec, [&] { moe_card(L, il, R); });
+                stats_.gpu_experts += R * n_used_;
+            } else if (card && moe_card(L, il, R)) {
+                stats_.gpu_experts += R * n_used_;
+            } else if (moe(L, il, R)) {
+                moe_add(R);
             }
         }
-        if (replay && L.fixed) replayed(L.tail, rec, [&] { layer_tail(L, il, n); });
-        else layer_tail(L, il, n);
+        if (replay && L.fixed) replayed(L.tail, rec, [&] { layer_tail(L, il, R); });
+        else layer_tail(L, il, R);
     }
 
     if (next_) {
-        float* h = pass_rows(n);
-        ck(cudaMemcpyAsync(h, r_, (size_t) n * r_row * sizeof(float), cudaMemcpyDeviceToHost, cs(st_)), "the next card");
+        float* h = pass_rows(R);
+        ck(cudaMemcpyAsync(h, r_, (size_t) R * r_row * sizeof(float), cudaMemcpyDeviceToHost, cs(st_)), "the next card");
         ck(cudaStreamSynchronize(cs(st_)), "the next card");
         next_->pass_ = h;
         next_->step(seqs, tokens, n);
     } else {
-        output_rows(0, n, xn_);
-        lin(output_, xn_, wlogits_, n);
-        finish_logits(wlogits_, n);
-        ck(cudaMemcpyAsync(h_wlogits_, wlogits_, (size_t) n * n_vocab_ * sizeof(float), cudaMemcpyDeviceToHost,
+        output_rows(0, R, xn_);
+        lin(output_, xn_, wlogits_, R);
+        finish_logits(wlogits_, R);
+        ck(cudaMemcpyAsync(h_wlogits_, wlogits_, (size_t) R * n_vocab_ * sizeof(float), cudaMemcpyDeviceToHost,
                            cs(st_)),
            "logits");
+        // with guesses: each row's output for its sequence's draft block, in its rows after the first, as window()
+        // leaves them (draft_rows())
+        if (guesses)
+            for (int i = 0, j = 0; i < R; ++i, ++j) {
+                if (i > 0 && rseq[(size_t) i] != rseq[(size_t) i - 1]) j = 0;
+                ck(cudaMemcpyAsync(seq_state(rseq[(size_t) i], hn_) + (size_t) (1 + j) * e_row, xn_ + (size_t) i * e_row,
+                                   e_row * sizeof(float), cudaMemcpyDeviceToDevice, cs(st_)),
+                   "step");
+            }
         ck(cudaStreamSynchronize(cs(st_)), "step");
+    }
+    if (guesses) {   // keep_step() settles the positions
+        step_seqs_.assign(seqs, seqs + n);
+        step_rows_.assign((size_t) n, 1);
+        step_tok_.assign((size_t) 2 * n, 0);
+        for (int i = 0; i < n; ++i) {
+            step_rows_[(size_t) i] = guesses[i] >= 0 ? 2 : 1;
+            step_tok_[(size_t) 2 * i] = tokens[i];
+            step_tok_[(size_t) 2 * i + 1] = guesses[i];
+        }
+        use(home);
+        return;
     }
     for (int i = 0; i < n; ++i) {
         use(seqs[i]);
@@ -3340,6 +5250,143 @@ void Engine::step(const int* seqs, const int32_t* tokens, int n) {
     }
     use(home);
     stats_.tokens += n;
+}
+
+void Engine::keep_step(const int* kept) {
+    if (step_seqs_.empty()) throw std::logic_error("keep_step: no step with guesses to keep");
+    OnCard here(device_, split_);
+    const int home = bound_;
+    const size_t e = (size_t) n_embd_;
+    // The draft block's rows of the kept tokens, every sequence's in one pass: token j at the sequence's position
+    // + j, with the model's output for the token before it (hn_'s row j).  draft() wrote the first token's already
+    // where it guessed from it.
+    std::vector<Row> rows;
+    std::vector<int32_t> toks;
+    for (size_t i = 0; i < step_seqs_.size(); ++i) {
+        const int k = kept[i], m = step_rows_[i];
+        if (k < 1 || k > m) throw std::logic_error("keep_step keeps 1 to the sequence's rows");
+        if (!draft_) continue;
+        hold(step_seqs_[i]);
+        const int32_t* t = step_tok_.data() + 2 * i;
+        for (int j = ahead_pos_ == pos_ && t[0] == ahead_tok_ ? 1 : 0; j < k; ++j) {
+            ck(cudaMemcpyAsync(step_h_ + rows.size() * e, hn_ + (size_t) j * e, e * sizeof(float),
+                               cudaMemcpyDeviceToDevice, cs(st_)),
+               "keep_step");
+            rows.push_back({step_seqs_[i], pos_ + j});
+            toks.push_back(t[j]);
+        }
+    }
+    if (!rows.empty()) draft_rows_of(rows.data(), toks.data(), (int) rows.size(), nullptr);
+    for (size_t i = 0; i < step_seqs_.size(); ++i) {
+        const int k = kept[i], m = step_rows_[i];
+        hold(step_seqs_[i]);
+        // a guess that was wrong: the state after the sequence's first row, which that row left
+        if (k < m && rec_n_ > 0)
+            ck(cudaMemcpyAsync(state_, step_snap_ + (size_t) step_seqs_[i] * rec_n_, rec_n_ * sizeof(float),
+                               cudaMemcpyDeviceToDevice, cs(st_)),
+               "keep_step");
+        // the output the next token pairs with
+        if (draft_) copy2(hn_ + (size_t) k * e, hn_, n_embd_, nullptr, nullptr, 0, st_);
+        pos_ += k;
+        ahead_pos_ = -1;
+        stats_.tokens += k;
+    }
+    step_seqs_.clear();
+    hold(home);
+}
+
+// The draft block over rows of different sequences, as draft_step() and draft_rows() run it for one: row i takes
+// tokens[i] at rows[i].pos, with step_h_'s row i (the model's output for the token before it), and keeps its rows
+// in its own sequence's caches (the architecture's step() rows, rows_of_).  With `out` the rows go through the
+// rest of the block too and out[i] gets row i's guess.  The card is left working.
+void Engine::draft_rows_of(const Row* rows, const int32_t* tokens, int n, Likeliest* out) {
+    Layer& L = layers_[(size_t) n_layer_];
+    const size_t e = (size_t) n_embd_;
+    for (int i = 0; i < n; ++i) {
+        h_at_[2 * i] = rows[i].pos;
+        h_at_[2 * i + 1] = turn(rows[i].pos);
+    }
+    copy2(h_at_, at_, n * 2 * (int) (sizeof(long long) / 4), nullptr, nullptr, 0, st_);
+    // draft_input()'s, with each row's own sequence for its embedding (a picture's rows are a sequence's)
+    if (!ev_hr_) {
+        cudaEvent_t ev = nullptr;
+        ck(cudaEventCreateWithFlags(&ev, cudaEventDisableTiming), "cudaEventCreate");
+        ev_hr_ = ev;
+    } else {
+        ck(cudaEventSynchronize((cudaEvent_t) ev_hr_), "embed");
+    }
+    for (int i = 0; i < n; ++i) {
+        hold(rows[i].seq);
+        input(tokens[i], rows[i].pos, h_r_ + (size_t) i * e);
+    }
+    copy2(h_r_, cur_, n * n_embd_, nullptr, nullptr, 0, st_);
+    ck(cudaEventRecord((cudaEvent_t) ev_hr_, cs(st_)), "embed");
+    rms_norm(cur_, fp(d_enorm_), r_, n_embd_, n, rms_eps_, st_, 2 * n_embd_);
+    rms_norm(step_h_, fp(d_hnorm_), r_ + e, n_embd_, n, rms_eps_, st_, 2 * n_embd_);
+    float* x = r_ + 2 * (size_t) n * e;
+    lin(d_proj_, r_, x, n);
+    rms_norm(x, fp(L.attn_norm), xn_, n_embd_, n, rms_eps_, st_);
+    kernels::native_quantize_q8_1(xn_, xq_, n_embd_ * n, 1, st_);
+    struct Clear {
+        const Row*& p;
+        ~Clear() { p = nullptr; }
+    } clear{rows_of_};
+    rows_of_ = rows;
+    n_rows_of_ = n;
+    block_attend(rows[0].pos, n);
+    rows_of_ = nullptr;
+    if (!out) return;
+    axpy(ao_, 1.f, x, n * n_embd_, true, st_);
+    rms_norm(x, fp(L.ffn_norm), xn_, n_embd_, n, rms_eps_, st_);
+    kernels::native_quantize_q8_1(xn_, xq_, n_embd_ * n, 1, st_);
+    moe_router(L, n);
+    ck(cudaEventRecord((cudaEvent_t) ev_, cs(st_)), "router");
+    moe_shared(L, n_layer_, n);
+    tok_ = nullptr;   // a guess's row has no token of the sequence
+    if (moe(L, n_layer_, n)) moe_add(n);
+    axpy(fo_, 1.f, x, n * n_embd_, true, st_);
+    rms_norm(x, fp(d_head_), step_h_, n_embd_, n, rms_eps_, st_);
+    Dev head = output_;   // the matrix's first rows are the common tokens'
+    head.n_out = draft_rows();
+    lin(head, step_h_, wlogits_, n);
+    finish_logits(wlogits_, n);
+    for (int r = 0; r < n; ++r) likeliest(wlogits_ + (size_t) r * head.n_out, head.n_out, out + r, st_);
+}
+
+void Engine::draft_many(const int* seqs, const int32_t* tokens, int n, int32_t* guesses) {
+    if (!steps_guesses() || !step_h_ || n < 1 || n > opt_.batch + 1)
+        throw std::logic_error("draft_many: guesses need --batch-mtp and a draft block");
+    if (!step_seqs_.empty()) throw std::logic_error("draft_many: the rows of the step before are not kept yet");
+    OnCard here(device_, split_);
+    end_read();
+    const int home = bound_;
+    const size_t e = (size_t) n_embd_;
+    // a sequence with no room for its token and a guess after it gets no guess
+    std::vector<Row> rows;
+    std::vector<int32_t> toks;
+    std::vector<int> of;
+    for (int i = 0; i < n; ++i) {
+        guesses[i] = -1;
+        hold(seqs[i]);
+        if (pos_ + 2 > opt_.max_context) continue;
+        cover(pos_ + 1);
+        ck(cudaMemcpyAsync(step_h_ + rows.size() * e, hn_, e * sizeof(float), cudaMemcpyDeviceToDevice, cs(st_)),
+           "draft");
+        rows.push_back({seqs[i], pos_});
+        toks.push_back(tokens[i]);
+        of.push_back(i);
+    }
+    if (!rows.empty()) {
+        draft_rows_of(rows.data(), toks.data(), (int) rows.size(), h_guesses_);
+        ck(cudaStreamSynchronize(cs(st_)), "draft");
+        for (size_t r = 0; r < rows.size(); ++r) {
+            hold(rows[r].seq);
+            ahead_pos_ = rows[r].pos;
+            ahead_tok_ = toks[r];
+            guesses[of[r]] = h_guesses_[r].token;
+        }
+    }
+    hold(home);
 }
 
 void Engine::shift_rows(ptrdiff_t by) {
@@ -3360,11 +5407,8 @@ void Engine::shift_rows(ptrdiff_t by) {
 // Pinned memory for n rows of the residual on their way to the next card.
 float* Engine::pass_rows(int n) {
     if (h_pass_rows_ < n) {
-        if (h_pass_) {
-            host_allocs_.erase(std::find(host_allocs_.begin(), host_allocs_.end(), (void*) h_pass_));
-            ck(cudaFreeHost(h_pass_), "freeing pinned memory");
-            h_pass_ = nullptr;
-        }
+        hfree(h_pass_);
+        h_pass_ = nullptr;
         h_pass_rows_ = std::max(n, rows_);
         h_pass_ = (float*) hmalloc((size_t) h_pass_rows_ * streams() * n_embd_ * sizeof(float), "pinned memory");
     }
@@ -3524,11 +5568,8 @@ bool Engine::read(const int32_t* tokens, int n, const Mark* marks, int n_marks,
     const int64_t pos0 = pos_;
     const bool host = n_calls > 2;
     if (host && h_res_rows_ < n) {   // for this read's tokens and some more, so that a longer one seldom asks again
-        if (h_res_) {
-            host_allocs_.erase(std::find(host_allocs_.begin(), host_allocs_.end(), (void*) h_res_));
-            ck(cudaFreeHost(h_res_), "freeing pinned memory");
-            h_res_ = nullptr;
-        }
+        hfree(h_res_);
+        h_res_ = nullptr;
         h_res_rows_ = std::min(read_rows_, (n + 4095) / 4096 * 4096);
         h_res_ = (float*) hmalloc((size_t) h_res_rows_ * r_bytes, "pinned memory");
     }
