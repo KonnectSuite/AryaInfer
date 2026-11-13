@@ -1,5 +1,5 @@
 {
-  "exe": "$DATA\\engines\\strata-0.1.58\\strata.exe",
+  "exe": "$DATA\\engines\\strata-0.1.59\\strata.exe",
   "args": [
     "--pack",
     "$DATA\\packs\\swift-iq3_xxs",
@@ -49,14 +49,14 @@
   "display_name": "AryaStrata Swift 1.5 IQ3_XXS — 256K vision",
   "log": "$INSTALL\\strata-swift-iq3_xxs.log",
   "lib_dirs": [
-    "$DATA\\engines\\strata-0.1.58",
+    "$DATA\\engines\\strata-0.1.59",
     "$INSTALL\\.venv\\Lib\\site-packages\\nvidia\\cu13\\bin\\x86_64"
   ],
   "port": 8080,
   "gpu": 0,
   "gpus_asked": true,
   "vision": {
-    "exe": "$DATA\\engines\\strata-0.1.58\\strata-vision.exe",
+    "exe": "$DATA\\engines\\strata-0.1.59\\strata-vision.exe",
     "mmproj": "$DATA\\models\\mmproj-Swift-Qwen3.8-Flash-Next-BF16.gguf",
     "model": "$DATA\\models\\swift-IQ3_XXS\\Swift-Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf",
     "gpu": true,

@@ -16,7 +16,7 @@ in the same roster.
 
 | Backend | Binary | Source | Models on this host | Context | Vision |
 | --- | --- | --- | --- | ---: | --- |
-| **Strata** (native Qwen engine) | `strata.exe` 0.1.58 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5, Swift 1.5 abliterated | 262,144, int8 KV | `strata-vision.exe` + mmproj, GPU |
+| **Strata** (native Qwen engine) | `strata.exe` 0.1.59 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5, Swift 1.5 abliterated | 262,144, int8 KV | `strata-vision.exe` + mmproj, GPU |
 | **PolyStrata** (`strata-poly`) | `engine-poly\strata-poly.exe` | `src/poly`, from [VecSzn/PolyStrata](https://github.com/simplexai-labs/PolyStrata) | Qwen3.6-35B-A3B UD-Q4_K_XL and abliterated, Ornith 1.5 APEX, and the GGUF families in [BACKENDS.md](BACKENDS.md) | 262,144, q8_0 KV | `strata-vision.exe` + mmproj, GPU |
 | **AryaInfer** (fork build) | `C:\AI\Strata-data\engines\arya-infer\aryainfer.exe` (repo build: `build-poly\aryainfer.exe`) | `src/poly` fork target, CUDA `sm_89`; AQ3 kernels in `src/poly/prefill_f16.cu` | Qwen3.8-27B AQ3 (GSQ 3-bit), Qwen3.8-27B Turbo IQ3_XXS, Qwen3.5-4B Q4_K_M | 131,072 (27B), 65,536 (4B), q4_0 KV | `strata-vision.exe` + mmproj, CPU |
 | **NInfer** (ported) | `engine-ninfer\ninfer-engine.exe` | [roofkid/ninfer-4080](https://github.com/roofkid/ninfer-4080) at `rtx4080-port` commit `2469b57`, plus `engine-ninfer/shim/main.cpp` | Qwen3.8-27B GSQ3 `.ninfer` | 131,072, rk4v4-e8 KV | external `.sve` embeddings from `strata-vision.exe`, CPU |
@@ -54,15 +54,15 @@ The roster is the `strata-*.json` files next to the config you start with
 
 | Model | Engine | Context | Why it is here |
 | --- | --- | ---: | --- |
-| `qwen3.8-flash-next-iq3_xxs` | Strata 0.1.58 | 262,144 | Fastest long-context MoE path here; DFlash2 + MTP |
+| `qwen3.8-flash-next-iq3_xxs` | Strata 0.1.59 | 262,144 | Fastest long-context MoE path here; DFlash2 + MTP |
 | `qwen3.8-27b-aq3` | AryaInfer | 131,072 | Dense 27B quality at 3-bit codes, 1.2K tok/s prompt reads |
 | `qwen3.8-27b-ninfer` | NInfer | 114,688 | Highest measured prefill on this card (2,039 tok/s at 8K); 131,072 overruns a 16 GiB card with vision |
 | `qwen3.6-35b-a3b-ud-q4_k_xl` | PolyStrata | 262,144 | Best validated 35B MoE for agent work |
 | `qwen3.6-35b-a3b-abliterated` | PolyStrata | 262,144 | Unrestricted 35B variant |
 | `ornith-1.5-35b-a3b-apex-i-quality` | PolyStrata | 262,144 | 18/18 bounded coding with low reasoning |
 | `qwen3.8-27b-turbo-iq3xxs` | AryaInfer | 131,072 | Daily-driver 27B with MTP |
-| `swift-1.5-iq3_xxs` | Strata 0.1.58 | 262,144 | Token-efficient Qwen3.8 variant, 262K vision |
-| `swift-1.5-abliterated-iq3_xxs` | Strata 0.1.58 | 262,144 | Unrestricted Swift 1.5 |
+| `swift-1.5-iq3_xxs` | Strata 0.1.59 | 262,144 | Token-efficient Qwen3.8 variant, 262K vision |
+| `swift-1.5-abliterated-iq3_xxs` | Strata 0.1.59 | 262,144 | Unrestricted Swift 1.5 |
 | `qwen3.5-4b` | AryaInfer | 65,536 | Small, fast, vision-capable |
 
 ## Measured on this host

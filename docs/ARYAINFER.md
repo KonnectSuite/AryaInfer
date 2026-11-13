@@ -18,7 +18,7 @@ budget, tools, images, API, web app) is shared:
 
 | Backend | Binary here | Runs | Context |
 | --- | --- | --- | ---: |
-| Strata (native Qwen engine, upstream 0.1.58) | `C:\AI\Strata-data\engines\strata-0.1.58\strata.exe` | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5, Swift abliterated | 262,144 |
+| Strata (native Qwen engine, upstream 0.1.59) | `C:\AI\Strata-data\engines\strata-0.1.59\strata.exe` | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5, Swift abliterated | 262,144 |
 | PolyStrata (`strata-poly`) | `engine-poly\strata-poly.exe` (0.1.45, src `7bc1d82f`) | Qwen3.6-35B-A3B UD-Q4, abliterated, Ornith 1.5, and the GGUF families | 262,144 |
 | AryaInfer build (`aryainfer`) | `build-poly\aryainfer.exe` (2026-11-03) | Qwen3.8-27B AQ3, 27B Turbo IQ3_XXS, Qwen3.5-4B | 131,072 / 65,536 |
 | NInfer (ported) | `engine-ninfer\ninfer-engine.exe` (pinned `2469b57` + shim) | Qwen3.8-27B GSQ3 `.ninfer` | 131,072; the entry ships 114,688 to fit a 16 GiB card |
@@ -341,3 +341,23 @@ Measured on this host after the update, base Flash-Next IQ3_XXS, 262144 context,
 The same model on 0.1.56, at about 15K tokens, was seen at 52.8 tok/s decode, and its log shows prompt reads of 491-523 tok/s.  The v0.2.12 notes explain the single-card gain: the CPU/upload share for missed experts follows the measured CPU pool (ceiling 0.95 instead of 0.60), and a bare `--prefill auto` takes an 8192-token chunk here (the RAM guard keeps it below 16384).  Both matter on a 16 GB card that keeps most experts in system RAM.
 
 The Swift rows were not re-measured; they share the same engine and flags.  Rollback: point the three configs at `strata-0.1.56` and restart.  `--pcie-frac`, `--adapt-decay` and `--vram-reserve-mib` are still accepted by 0.1.58 even though the engine no longer lists them in `--help`.
+
+## Engine 0.1.59 (2026-11-13)
+
+The native Strata engine is now **0.1.59**, the engine in the v0.2.13 release
+(`strata-engine-0.1.59-windows-x86_64-cuda-cuda13.tar.gz`, 630,783,433 bytes, build commit `712fec6b4297`,
+SHA-256 `3f071a7ccbbf3dcdefed8bff777896d8dd0b580417a078154a7d2c2402ec4158` - the hash in the release's
+`SHA256SUMS.txt`).  It is unpacked in `C:\AI\Strata-data\engines\strata-0.1.59` with its own `cublas` DLLs, and
+the three native Flash-Next run configs (base, Swift 1.5 and Swift 1.5 abliterated) point at it.  0.1.58 stays
+for rollback; both are plain folders, so switching back is one line in a run config.
+
+This is a drop-in engine swap, not a source merge: the engine is a separate binary speaking the same protocol, so
+`src/` here stays at PolyStrata's Strata 0.1.45 base and the other three backends are untouched.
+
+Checked on this host after the swap (base Flash-Next IQ3_XXS, 32768 context, int8 KV, DFlash2, `--expert-cache
+auto`, prompt tokens `9707,11,220`, `--max-new 8`): 0.1.59 and 0.1.58 wrote the same eight tokens
+(`248046 11 220 248044 13 220 79790 400`), at 13.52 and 13.70 tok/s decode in that single 8-token run.  Eight
+tokens is a smoke check, not a measurement of the engine's speed: the 262144-context numbers above were taken on
+0.1.58 and have not been repeated on 0.1.59.  `--pcie-frac`, `--adapt-decay` and `--vram-reserve-mib` are still
+accepted by 0.1.59 although its `--help` does not list them; `--fit-max-tokens` is a server flag, not an engine
+one.
