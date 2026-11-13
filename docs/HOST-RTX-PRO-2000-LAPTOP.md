@@ -69,15 +69,22 @@ grows is work over the context itself, on a card this small.
 
 ## Settings that were measured and rejected here
 
-Each of these was run on this machine, on the Coder, and lost:
+Each of these was run on this machine, on the Coder, and lost. The engine column is
+the one the row was measured on: the two builds account for VRAM differently, so a
+row from 0.1.45 does not automatically carry over to 0.1.59.1.
 
-| Change | Result |
-|---|---|
-| `--vram-reserve-mib 812` or `1344` | free VRAM rises but the expert cache loses slots: 4.5 tok/s at 24K (812) and 1.5 tok/s (1344, which leaves 0 slots) against 5.3 for the shipped reserve |
-| `--mtp-q4 all` | 480 slots instead of 528 (the draft experts are not what costs the VRAM), 7.1 tok/s at 2K |
-| `--kv-resident 20480`, `--kv-grow`, `--prefill 2048` | 6-7 tok/s at 20K against 20.0 for the shipped configuration |
-| `--spec 2` instead of 4, at 24-26K | no gain: 6.4 tok/s with 66 of 66 drafts accepted, against 5.2-8.8 for `--spec 4`. `--spec 0` is refused: a native (IQ) pack requires `--spec T` with `T >= 2` |
-| moving more experts into VRAM / more KV into RAM | frees about 90 MiB of VRAM and costs 3-19x at long context |
+| Change | Engine | Result |
+|---|---|---|
+| `--vram-reserve-mib 812` | 0.1.45 | free VRAM rises but the expert cache loses slots: 4.5 tok/s at 24K against 5.3 for the shipped reserve |
+| `--vram-reserve-mib 1344` | 0.1.45 | leaves 0 expert-cache slots: 1.5 tok/s at 24K |
+| `--vram-reserve-mib 1344` | 0.1.59.1 | 965 MiB free as asked, but warm-up ran 1.6-1.8 tok/s and the arm ended on HTTP 503 |
+| `--mtp-q4 all` | 0.1.45 | 480 slots instead of 528 (the draft experts are not what costs the VRAM), 7.1 tok/s at 2K |
+| `--kv-resident 20480`, `--kv-grow`, `--prefill 2048` | 0.1.45 | 6-7 tok/s at 20K against 20.0 for the shipped configuration |
+| `--spec 2` instead of 4, at 24-26K | 0.1.59.1 | no gain: 6.4 tok/s with 66 of 66 drafts accepted, against 5.2-8.8 for `--spec 4`. `--spec 0` is refused: a native (IQ) pack requires `--spec T` with `T >= 2` |
+| moving more experts into VRAM / more KV into RAM | 0.1.45 | frees about 90 MiB of VRAM and costs 3-19x at long context |
+
+An `--vram-reserve-mib 812` on 0.1.59.1 was not measured; the engine asks for 579
+and gets 233 MiB free at 300, and 100K recall works at that setting.
 
 Defender exclusions for `AryaInfer\`, `PolyStrata-data\`, `strata.exe` and
 `strata-vision.exe` were added while measuring. They cut model load time; they do
