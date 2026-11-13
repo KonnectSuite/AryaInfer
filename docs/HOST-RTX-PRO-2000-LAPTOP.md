@@ -1,5 +1,13 @@
 # This laptop: what it runs, and what it measured
 
+> **The Coder was removed from this machine on 2026-11-13**: the model shards, its
+> pack, the MTP runtime, the vision encoder and `strata-coder-iq1_m.json` were
+> deleted (63.08 GB freed), because at 8 GB of VRAM it ran at 5-33 tok/s with a
+> 3-4 minute first token at 100K context. This page stays as the measured record of
+> what it did on this hardware. `strata-qwen36-200k.json` and
+> `models\qwen36-UD-Q4_K_M\` are what remain: 21.1 GB, and 73.7 tok/s measured on
+> the same day through the same server.
+
 The numbers in the rest of `docs/` come from the machine in `docs/ARYAINFER.md`
 (i9-14900KF, 16 GB RTX 4070 Ti SUPER). This page is the other host: a 16-core
 laptop with an 8 GB workstation card, which is the machine the Coder
