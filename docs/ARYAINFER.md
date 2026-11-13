@@ -368,4 +368,5 @@ from `strata-0.1.59`.  Measured before switching, 27B mmproj, one screenshot, CP
 0.1.59 both reported `READY 5120` and `OK 1024` and wrote byte-identical embeddings (20,971,540 bytes, the same
 SHA-256), so the `.sve` files NInfer reads are unchanged and nothing downstream can tell the builds apart.  The
 same encoder also loaded the other two mmproj files here (5120 and 2560 wide) and encoded the same image in 6-9 s
-each.
+each.  The `strata-0.1.54` folder was then deleted (0.88 GiB); `strata-0.1.56` and `strata-0.1.58` remain for
+rollback of the native engine.
