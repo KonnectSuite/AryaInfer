@@ -9,6 +9,14 @@ accounting (the `--serve` pipe's `DONE` line: `prompt_ms`, `decode_ms`, draft ac
 tier hits). Everything that cites a vendor or community figure says where it came from and on what
 hardware, because almost none of it was measured on a 4070 Ti SUPER.
 
+> **2026-11-19 correction.** The `--vram-reserve-mib 700` prefill win in section 4.2
+> (+13.5% / +15.0%) does not reproduce. The harness of the time sent one prompt per
+> case, so after the warm-up request every measured rep was served from the
+> conversation cache and "prefill" timed a short tail read instead of a cold prompt.
+> With one cold prompt per measured rep the arm is -3.9% at 32K. The section is kept
+> as written history; see `bench/results/iq3_xxs-0.1.62-draft-cap-8/` for the
+> corrected measurement and the engine 0.1.62 record.
+
 ---
 
 ## 1. What the community benchmark archive actually says for *this* hardware

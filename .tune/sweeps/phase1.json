@@ -1,0 +1,16 @@
+[
+  {"tag": "p1-base",        "overrides": {}},
+  {"tag": "p1-vram1000",    "overrides": {"--vram-reserve-mib": 1000}},
+  {"tag": "p1-vram700",     "overrides": {"--vram-reserve-mib": 700}},
+  {"tag": "p1-ctx131k",     "overrides": {"--max-context": 131072}},
+  {"tag": "p1-perlayer",    "overrides": {"--expert-cache-per-layer": true}},
+  {"tag": "p1-pooltasks192","overrides": {"--pool-tasks": 192}},
+  {"tag": "p1-chunk16k",    "overrides": {"--prefill": "auto:16384"}},
+  {"tag": "p1-chunk32k",    "overrides": {"--prefill": "auto:32768"}},
+  {"tag": "p1-mtpq4proj",   "overrides": {"--mtp-q4": "proj"}},
+  {"tag": "p1-mtpq4all",    "overrides": {"--mtp-q4": "all"}},
+  {"tag": "p1-specminp050", "overrides": {"--spec-min-p": 0.50}},
+  {"tag": "p1-adaptasync",  "overrides": {"--adapt-async": 1}},
+  {"tag": "p1-nohitpoke",   "overrides": {"--no-hit-poke": true}},
+  {"tag": "p1-base2",       "overrides": {}}
+]

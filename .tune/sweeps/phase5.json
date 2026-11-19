@@ -1,0 +1,7 @@
+[
+ {"tag": "p5-old", "overrides": {}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.59\\strata.exe"},
+ {"tag": "p5-new-cap8", "overrides": {"--draft-cap": 8}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"},
+ {"tag": "p5-new-cap8-minp50", "overrides": {"--draft-cap": 8, "--spec-min-p": 0.50}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"},
+ {"tag": "p5-old2", "overrides": {}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.59\\strata.exe"},
+ {"tag": "p5-new-cap8b", "overrides": {"--draft-cap": 8}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"}
+]

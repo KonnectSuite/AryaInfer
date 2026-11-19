@@ -1,0 +1,6 @@
+[
+ {"tag": "p3-old", "overrides": {}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.59\\strata.exe"},
+ {"tag": "p3-new", "overrides": {}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"},
+ {"tag": "p3-old2", "overrides": {}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.59\\strata.exe"},
+ {"tag": "p3-new2", "overrides": {}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"}
+]
