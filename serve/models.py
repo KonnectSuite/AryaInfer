@@ -70,7 +70,7 @@ def _gguf(path: Path) -> dict:
         "experts": m.get(arch + ".expert_count"),
         "experts_used": m.get(arch + ".expert_used_count"),
         "mtp": bool(m.get(arch + ".nextn_predict_layers")),
-        "dense_bytes": dense, "expert_bytes": experts, "parts": parts,
+        "dense_bytes": dense, "expert_bytes": experts, "parts": parts, "file_bytes": st.st_size,
         "types": g.by_type(),
     }
     _seen[key] = out
@@ -170,9 +170,14 @@ def describe(config: Path) -> dict | None:
                 if g["parts"] == 1:
                     # the file is read in place: all of it is file cache at most, and VRAM holds the dense
                     # weights whole and the experts as far as the card has room
-                    e["ram_gb"] = round((g["dense_bytes"] + g["expert_bytes"]) / 1e9, 1)
-                    e["vram_gb"] = {"least": round(g["dense_bytes"] / 1e9 + 1.0, 1),
-                                    "all": round((g["dense_bytes"] + g["expert_bytes"]) / 1e9 + 1.0, 1)}
+                    dense, experts = g["dense_bytes"], g["expert_bytes"]
+                    if dense + experts < g["file_bytes"] * 0.98:
+                        # a tensor type BLOCK_GEOMETRY cannot size (the Arya engine's I8 containers): the
+                        # file itself is then the measure, and without experts all of it is dense
+                        dense, experts = (g["file_bytes"], 0) if not experts else (dense, g["file_bytes"] - dense)
+                    e["ram_gb"] = round((dense + experts) / 1e9, 1)
+                    e["vram_gb"] = {"least": round(dense / 1e9 + 1.0, 1),
+                                    "all": round((dense + experts) / 1e9 + 1.0, 1)}
                 if not g["runnable"]:
                     e["status"], e["problem"] = "unavailable", f"no engine here runs a '{g['backend']}' model"
     # the name setup gave it, else the file's own (a file's can be a converter's leftover), else the id
