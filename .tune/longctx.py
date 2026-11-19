@@ -14,7 +14,7 @@ import threading
 import time
 from pathlib import Path
 
-ROOT = Path(r"C:\AryaStrata")
+ROOT = Path(__file__).resolve().parent.parent   # repository root (this file lives in .tune/)
 sys.path.insert(0, str(ROOT / ".tune"))
 
 import bench                                              # noqa: E402
