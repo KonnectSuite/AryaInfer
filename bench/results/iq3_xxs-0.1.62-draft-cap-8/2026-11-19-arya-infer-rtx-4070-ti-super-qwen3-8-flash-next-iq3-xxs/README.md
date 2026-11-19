@@ -58,6 +58,10 @@ Every configuration arm tried against 0.1.59 on cold prompts (`.tune/results/pha
 
 **Retraction:** the earlier `.tune/SETTINGS-REPORT.md` claim that `--vram-reserve-mib 700` buys “prefill +13.5 % / +15.0 %” does not reproduce. The old harness reused one prompt per case, so after the warm-up request every measured rep was served from the conversation cache and “prefill” timed a short tail read (a 32K case reported `prompt_read 3072` of 32768). With one prompt per rep the effect disappears. `.tune/bench.py` was fixed and the report should not be trusted for that arm.
 
+## Confirmation through the install's own tool
+
+The same configuration, served the normal way, was measured once with the install's own `tools/strata_bench.py --long` (3 runs, medians with ranges; the server starts the engine from `strata-iq3_xxs.json`): 4K fresh prompt 1,949.7 tok/s and 2.11 s to first token, 16K 3,334.3 tok/s and 4.84 s, 32K 3,447.2 tok/s and 9.35 s, chat decode 100.2 tok/s, agent follow-up decode 97.5 tok/s at 2.01 s to first token and a 69.4 % cache hit. Full report and per-request data: `install-suite/`. That folder is a smoke confirmation of the real start path (engine binary, `lib_dirs`, vision binary), not a comparison row: the archived 0.1.58 record it would sit beside is IQ3_S, this one is IQ3_XXS.
+
 ## Correctness and limitations
 
 No correctness check was run; speculative decoding is verified by the engine, so flag changes cannot alter the sampled output, but that was not re-measured here. Decode rates move ±5-15 % between arms because each arm reads different prompt text; only the 4K (+19 %) and 96K (+31 %) decode gains clear that floor — 16K and 32K decode are a wash. The 96K row has 2 reps. Background load and power limits were not recorded. Vision was not exercised (the configuration's vision binary was updated together with the engine).
