@@ -850,18 +850,19 @@ r = client.chat.completions.create(model="strata", messages=[{"role": "user", "c
 print(r.choices[0].message.content)
 ```
 
-- **Thinking levels: none, low, medium, high.** The model thinks before it answers (streamed as
+- **Thinking levels: none, low, medium, high, xhigh.** The model thinks before it answers (streamed as
   `reasoning_content`, Anthropic: `thinking` blocks). Choose how much per request - in the chat page (the "Thinking"
   menu), in `chat.py` (`/think low`), or over the API:
 
   | API | how |
   | --- | --- |
-  | OpenAI | `"reasoning_effort": "none" \| "low" \| "medium" \| "high"` (also `"reasoning": {"effort": ...}`, or `"chat_template_kwargs": {"enable_thinking": false}`) |
-  | Anthropic | `"output_config": {"effort": "low" \| "medium" \| "high"}`, `"thinking": {"type": "disabled"}`, or `"thinking": {"type": "enabled", "budget_tokens": N}` (under 2K = low, under 8K = medium, more = high) |
+  | OpenAI | `"reasoning_effort": "none" \| "low" \| "medium" \| "high" \| "xhigh"` (also `"reasoning": {"effort": ...}`, or `"chat_template_kwargs": {"enable_thinking": false}`) |
+  | Anthropic | `"output_config": {"effort": "low" \| "medium" \| "high" \| "xhigh"}`, `"thinking": {"type": "disabled"}`, or `"thinking": {"type": "enabled", "budget_tokens": N}` (under 2K = low, under 8K = medium, more = high) |
 
   Without a setting the model uses its own default, **high**. `none` answers at once (fastest); `low` keeps the thinking
-  short. The levels are instructions the model was trained with, not a hard token limit: on easy questions all three
-  think briefly, on hard ones `high` thinks longest and is most accurate.
+  short. The levels are instructions the model was trained with, not a hard token limit: on easy questions the graded
+  levels think briefly, on hard ones `high`/`xhigh` think longest. A model config can cap them with
+  `reasoning_budget_by_effort` (the five shipped configs use low 2,048 / medium 8,192 / high 16,384 / xhigh 0 = no cap).
   To start with another level for every request that names none, put `"reasoning_effort": "low"` (or `none`, `medium`,
   `high`) in `strata-<model>.json`, outside `"args"` (#1641): the engine has no such option, and `--reasoning-effort` in
   `"args"` is moved to this key with a note at startup. The web app's shared Chat settings ("Use for other apps too") and a

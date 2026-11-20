@@ -13,11 +13,11 @@ from serve.frontend import (ChatTemplate, effort_levels, openai_to_messages, wit
 class Levels(unittest.TestCase):
     def test_a_template_that_reads_enable_thinking_offers_off(self):
         self.assertEqual(effort_levels("{% if enable_thinking is false %}x{% endif %}", True),
-                         ["off", "low", "medium", "high"])
+                         ["off", "low", "medium", "high", "xhigh"])
 
     def test_a_model_that_always_thinks_offers_no_off(self):
         # Flint's template has neither switch: it cannot stop thinking, so Off must not be offered.
-        self.assertEqual(effort_levels("<|im_start|>{{ messages }}", True), ["low", "medium", "high"])
+        self.assertEqual(effort_levels("<|im_start|>{{ messages }}", True), ["low", "medium", "high", "xhigh"])
 
     def test_no_system_turn_means_no_levels(self):
         # A template that cannot render a system role cannot carry the instruction either.
@@ -85,7 +85,10 @@ class Templates(unittest.TestCase):
         self.assertTrue(template.supports_enable_thinking)
 
     def test_flint_template_reads_neither(self):
-        template = self._template(r"C:\AI\Strata-data\packs\flint-ud-q4_k_xl\tokenizer\chat_template.jinja")
+        path = r"C:\AI\Strata-data\packs\flint-ud-q4_k_xl\tokenizer\chat_template.jinja"
+        if not Path(path).is_file():
+            self.skipTest("Flint is not installed on this machine")
+        template = self._template(path)
         self.assertFalse(template.supports_reasoning_effort)
         self.assertFalse(template.supports_enable_thinking)
 
@@ -93,7 +96,7 @@ class Templates(unittest.TestCase):
 class Registry(unittest.TestCase):
     """What /api/models and /v1/models publish, per installed model, from the config's own tokenizer."""
 
-    ROOT = Path(r"C:\AryaStrata")
+    ROOT = Path(__file__).resolve().parent.parent  # the repo this test lives in
 
     def _efforts(self, model_id):
         for path in sorted(self.ROOT.glob("strata-*.json")):
@@ -113,7 +116,7 @@ class Registry(unittest.TestCase):
             efforts = self._efforts(model_id)
             self.assertTrue(efforts, f"{model_id} publishes no levels")
             graded = efforts[1:] if efforts[0] == "off" else efforts
-            self.assertEqual(graded, ["low", "medium", "high"], model_id)
+            self.assertEqual(graded, ["low", "medium", "high", "xhigh"], model_id)
             self.assertIn(efforts[0], ("off", "low"), model_id)
 
     def test_the_models_that_cannot_stop_thinking_offer_no_off(self):
@@ -121,7 +124,7 @@ class Registry(unittest.TestCase):
         if flint is None:
             self.skipTest("Flint is not installed here")
         self.assertNotIn("off", flint)
-        self.assertEqual(self._efforts("qwen3.8-flash-next-iq3_xxs"), ["off", "low", "medium", "high"])
+        self.assertEqual(self._efforts("qwen3.8-flash-next-iq3_xxs"), ["off", "low", "medium", "high", "xhigh"])
 
 
 if __name__ == "__main__":
