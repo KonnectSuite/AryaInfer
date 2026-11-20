@@ -112,8 +112,8 @@ def _effort_levels(tokenizer) -> list[str]:
     try:
         source = path.read_text(encoding="utf-8")
     except OSError:
-        return ["off", "low", "medium", "high"]
-    levels = ["low", "medium", "high"]
+        return ["off", "low", "medium", "high", "xhigh"]
+    levels = ["low", "medium", "high", "xhigh"]
     return (["off"] + levels) if "enable_thinking" in source else levels
 
 

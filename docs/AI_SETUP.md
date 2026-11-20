@@ -233,7 +233,8 @@ line when it is ready; the engine log is `strata-<model>.log` in the AryaStrata 
   (AryaInfer ignores the name), and any `ANTHROPIC_AUTH_TOKEN` (or the configured key). Add
   `"fit_max_tokens": true` to `strata-<model>.json`: Claude Code asks for 32,000 tokens of answer in every request,
   and the server refuses a request whose prompt leaves less room than that in the context.
-- **Thinking level:** `"reasoning_effort": "none" | "low" | "medium" | "high"` (default high).
+- **Thinking level:** `"reasoning_effort": "none" | "low" | "medium" | "high" | "xhigh"` (default high;
+  `xhigh` is uncapped thinking, the graded levels are capped by the config's `reasoning_budget_by_effort`).
 - AryaInfer answers one request at a time; `"parallel": N` in the model's config (or setup `--parallel N`) decodes up to
   N together ([BATCHING.md](BATCHING.md)). API details: [DETAILS.md](DETAILS.md#using-it).
 
