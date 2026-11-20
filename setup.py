@@ -96,6 +96,7 @@ HF_REVISIONS = {
     "Diffuspace/Clover-35B-A3B-Preview": "4b0402b65e523d0183a14c431955438714cb16ff",                     # 2026-10-28
     "unsloth/Ornith-1.5-122B-GGUF": "3842d003341507c216295c6f28dfcd30349925c6",                          # 2026-10-20
     "ornith-ai/Ornith-1.5-122B": "dfa07bab90e90746ffbfc0b0cba3126eb9265de2",                              # 2026-10-20
+    "Edge0/Edge0-145B-q3k": "4bebcc0f9390c6eb13384b8463ac75722f5ff703",                                 # 2026-11-19
 }
 
 
@@ -896,7 +897,63 @@ FAMILIES = {
                              (32785752352, "43bdc1b0cb764b5531d320816fb6004245256a414bfd55f1fdb69e3db42eaa57"),
                              "mmproj-F16.gguf":
                              (908724544, "39db176176a904b101f5173a4f03e785990f9279f94ab373c4fd629ae7011817")}},
+    # Edge0-145B: a latent-MoE model served by Edge0's own engine (engine-edge0/, Edge0's build of its Strata fork,
+    # edge0-strata).  "engine": "edge0" gives it edge0_setup's steps.  Its files are a Strata pack folder, not GGUF
+    # shards, so they are listed in EDGE0_FILES rather than by FAMILIES' "file" pattern (docs/EDGE0.md).
+    "edge0": {"title": "Edge0-145B", "by": "Edge0 (edge0-strata, a Strata fork) on Qwen3.8-Flash-Next",
+              "about": "145B total, 10.12B active latent MoE: a 106 GB download, ~38 GB of RAM; its own engine, and "
+                       "the model list switches to it like any other model",
+              "tag": "edge0-", "name": "edge0-145b", "engine": "edge0", "vision": False, "windows": True,
+              "experimental": True, "ran_on_gb": 16,
+              "license": "Edge0 Community Model License 1.0 (personal and internal use; commercial model services "
+                         "need written permission from Edge0): https://huggingface.co/Edge0/Edge0-145B-q3k",
+              "models": {"Q3_K": {"about": "3-bit latent experts (Q3_K gate/up, IQ4_NL down), Q8 dense projections",
+                                  "download_gb": 106.3, "ram_gb": 38, "arena_gb": 40.1, "vram_beside_gb": 4.6}}},
 }
+# Edge0-145B (docs/EDGE0.md): Edge0's engine is their own build of edge0-strata, which they ship inside the Windows
+# desktop bundle - its two files are unpacked into engine-edge0/ beside the other engines, so an update of the Strata
+# engine beside it cannot touch it.  The model is a Strata pack index: one folder of files, each pinned here by size and
+# (for the Hub's LFS files) SHA-256, since FAMILIES' "file"/"shards" pattern describes GGUF shards.  The engine reads a
+# pack folder named by --pack; nothing is packed, so the files land in the folder the engine reads in place.
+EDGE0_DIR = "engine-edge0"
+EDGE0_NAME = "edge0-145b"
+EDGE0_MODEL_REPO = "Edge0/Edge0-145B-q3k"
+EDGE0_MODEL_LABEL = "Edge0-145B-q3k"
+EDGE0_CONTEXT = 131072                 # Edge0's own config: what their 16 GB card was measured at (the pack: 262,144)
+EDGE0_ENGINE_ASSET = ("edge0-chat-0.3.0-windows-x64.zip", 279838161,
+                      "3a14c033b8a8334f38e7c54caeb2335809b3b32a3cc0adb2ee23499dc2dc2560")
+EDGE0_ENGINE_URL = os.environ.get("STRATA_EDGE0_URL", "https://github.com/Edge0-AI/Edge0/releases/download/v0.3.0/")
+EDGE0_ENGINE_FILES = ("edge0-strata/build/strata.exe", "edge0-strata/build/strata_kq.dll")
+# path in the pack folder -> (bytes, sha256 or None): the Hub's LFS files carry a hash, the small ones are size-checked
+EDGE0_FILES = {
+    "ple-fp8.gguf": (51200246112, "c7615c59b060277ddf6f84729fa8f7469cfc82c7fb983d6e7eab5a2f7446f170"),
+    "experts.bin": (40076574720, "947d15f3d69ecdb45d602a62bc84803451da779a22294e1db5b3568290b42879"),
+    "model-skeleton.gguf": (5991569248, "ab49fbe7590cdcda45d7a2bcae4be0bd42c6a70b951d594a00eb158d7df0b72f"),
+    "latent_dense_q8.bin": (3743416320, "fbb25caaa0dcf45ef62f1a4945dcf98a53a166934a3b461b166fbafa831d87ca"),
+    "latent_dense_q4.bin": (1981808640, "e31e11f36c7e5a23c82550b524fd44fb28cfa821ef59fd688b8d2339137ab287"),
+    "dense.bin": (1538625024, "f9bcc7f36eac4e59a7b1cb1962e038ba12dc831a41fb193761f1d1e72657fb62"),
+    "mmproj-BF16.gguf": (907543008, "b1a82259702816a5330d7bd7607cd9676b11780e79ff7348c21103ff3ce49bd0"),
+    "mtp/experts.bin": (707788800, "09398406be61f1f54c93861f449e48b8df0bfccbc9ec9b2b7636775a6ea9244f"),
+    "mtp/dense.bin": (116099072, "c724dc0b0822ada5d2977bf5bde821605feabaa64ea2e0045b67ca656329070a"),
+    "mtp/dense.txt": (1851, None),
+    "mtp/draft_vocab.bin": (425196, "b1e1d3a7a9e4bf862dcd5923ce661fb59bbd07907e594df5cf86a62ac235cb91"),
+    "labels.bin": (98304, "ce9b4a20b92c5c866e65d84a3884c104986522471cf11cc5f797a153affbcc06"),
+    "profile.bin": (196632, "543f8a364c8dbfef909ecd1a1d7adbc177d3db18ceecdca1fc568f3eaeb8c655"),
+    "LICENSE": (13059, None), "NOTICE": (2560, None), "README.md": (44475, None),
+    "third-party/Qwen-LICENSE.txt": (3235, None),
+    "index.txt": (117464, None), "native_experts.txt": (1463, None), "model.json": (1531, None),
+    "model-bench.json": (1248, None), "release-scope.json": (2534, None), "start.sh": (1058, None),
+    "tokenizer/chat_template.jinja": (8952, None), "tokenizer/merges.txt": (3353258, None),
+    "tokenizer/token_type.json": (744960, None), "tokenizer/tokenizer.json": (541, None),
+    "tokenizer/vocab.json": (5737005, None),
+    **{f"scales/l{i}.f32": (7168, None) for i in range(48)},
+}
+# The fork's latent-MoE switches, relative to the pack folder: its dense projections stay in Q8, the experts and the
+# fused kernels are the ones this pack was written for (the model's own model.json lists the same ones).
+EDGE0_ENV = {"STRATA_LATENT_DENSE": "latent_dense_q8.bin", "STRATA_LATENT_DENSE_FMT": "8",
+             "STRATA_LATENT_A": "experts.bin", "STRATA_LATENT_LABELS": "labels.bin", "STRATA_EMBED_VRAM": "1",
+             "STRATA_LATENT_FUSED": "1", "STRATA_LATENT_FUSED_DU": "1", "STRATA_LATENT_U_GPU": "1",
+             "STRATA_LAT_FUSED_Q3K": "1"}
 MMPROJ = "mmproj-Qwen3.8-Flash-Next-BF16.gguf"
 # Qwen3.6-35B-A3B (GGUF architecture qwen35moe), Unsloth's GGUFs with the MTP block: a family with an engine path of its
 # own (src/qwen35; `strata` switches to it from the file's architecture).  No pack, no expert profile, no separate MTP
@@ -3016,9 +3073,11 @@ def unsloth_default_env(family: str, model: str, hip: bool, in_budget: bool) -> 
 
 
 def menu_families(hip: bool) -> list:
-    """The families the model menu lists, in menu order.  The NVFP4 packs run on NVIDIA cards only (the AMD and Intel
-    engines have no NVFP4 kernels), so on those the menu does not offer them; `--family nvfp4` still says why not."""
-    return [f for f in FAMILIES if not (hip and FAMILIES[f].get("ready"))]
+    """The families the model menu lists, in menu order.  The NVFP4 packs and Edge0-145B run on NVIDIA cards only (the
+    AMD and Intel engines have no NVFP4 kernels, and Edge0's engine is a CUDA build), so on those the menu does not
+    offer them; `--family nvfp4` / `--family edge0` still says why not."""
+    return [f for f in FAMILIES
+            if not (hip and (FAMILIES[f].get("ready") or FAMILIES[f].get("engine") == "edge0"))]
 
 
 def nvfp4_card_note(gpu) -> str:
@@ -3053,6 +3112,10 @@ def family_menu_note(family: str, hip: bool, gpu, avx2: bool = True, avx512: boo
                 "expert in RAM" + (f"; {cpu}" if cpu else "") + "]")
     if family == "unsloth" and hip:
         return "   [UD-IQ4_XS is the 4-bit choice on AMD and Intel cards; NVFP4 runs on NVIDIA only]"
+    if family == "edge0":
+        m = FAMILIES["edge0"]["models"]["Q3_K"]
+        return (f"   [{m['download_gb']:.0f} GB download, its own engine in engine-edge0/, the model list switches "
+                "to it]")
     return ""
 
 
@@ -5510,6 +5573,26 @@ def own_path_config(cfg: dict) -> bool:
     return cfg.get("arch") in {d["arch"] for d in OWN_PATH_FAMILIES.values()}
 
 
+def third_party_engine(cfg: dict) -> bool:
+    """A config whose engine is not this checkout's Strata build (Edge0's fork in engine-edge0/, written by
+    edge0_setup with engine_kind): setup must not rewrite that model's pack, refresh this checkout's draft subset
+    into it, or move it onto the CUDA 12 engine - its MTP head and token subset are the model's own, and its engine
+    is a CUDA 13 build for the cards it names."""
+    return bool(cfg.get("engine_kind"))
+
+
+def third_party_pack_missing(cfg: dict) -> list[str]:
+    """The files a --pack model's folder cannot start without (setup's missing-file check only knows .gguf, and a
+    pack's expert tables are not .gguf files)."""
+    args = cfg.get("args") or []
+    if "--pack" not in args[:-1]:
+        return []
+    pack = Path(args[args.index("--pack") + 1])
+    want = ["model-skeleton.gguf", "ple-fp8.gguf" if (pack / "ple-fp8.gguf").exists() else "index.txt",
+            "experts.bin", "index.txt", "profile.bin"]
+    return [str(pack / w) for w in want if not (pack / w).exists()]
+
+
 def choices_from_config(cfg_path: Path) -> dict:
     """The setup answers a config was written with (family, size, context, KV, images, projection, network)."""
     cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
@@ -5823,7 +5906,7 @@ def update_install(have: list, a) -> int:
             update_poly_engine(cfg, cfg_path=cfg_path)
             poly_tail_skip(cfg, cfg_path)
             poly_kv_whole(cfg, cfg_path)
-        if not own_path_config(cfg):
+        if not own_path_config(cfg) and not third_party_engine(cfg):
             refresh_shared_draft_vocab(cfg, mtp_done)
         if cfg.get("backend") == "hip" and WIN:
             hip_runtime_beside_exe(Path(cfg["exe"]).parent)   # #468 #461
@@ -5866,6 +5949,8 @@ def start(cfg_path: Path, port: int | None, gpu: int | list | None = None, open_
     --vram-reserve-mib)."""
     cfg = upgrade_config(cfg_path, json.loads(cfg_path.read_text(encoding="utf-8-sig")))
     missing = [p for p in [cfg["exe"], *[a for a in cfg["args"] if a.endswith(".gguf")]] if not Path(p).exists()]
+    if third_party_engine(cfg):                          # a pack's expert tables are not .gguf files
+        missing += third_party_pack_missing(cfg)
     if missing:
         fail(f"{cfg_path.name} refers to missing files: {missing[0]}", "run it again with --setup to repair")
     glm = poly_config(cfg)                              # a model of strata-poly: its own engine (engine-poly/)
@@ -5892,7 +5977,7 @@ def start(cfg_path: Path, port: int | None, gpu: int | list | None = None, open_
             "api key" if k == "api_key" else ("the browser opens" if v else "no browser") if k == "open_browser"
             else f"{k.replace('_', ' ')} {v}" for k, v in keep.items()))
     cfg_path.touch()                                     # the most recently used model
-    if "--mtp" in cfg["args"][:-1] and not own_path_config(cfg):
+    if "--mtp" in cfg["args"][:-1] and not own_path_config(cfg) and not third_party_engine(cfg):
         refresh_draft_vocab(Path(cfg["args"][cfg["args"].index("--mtp") + 1]), cfg.get("draft_vocab", "cjk"))
     cmd = [sys.executable, str(ROOT / "serve" / "server.py"), "--engine", "strata", "--config", str(cfg_path),
            "--port", str(port or cfg.get("port", 8080))]
@@ -5955,14 +6040,14 @@ def start(cfg_path: Path, port: int | None, gpu: int | list | None = None, open_
     elif isinstance(use, list):
         check_gpus(use, found, "(chosen for this model) ", yes=True, named=True)
         byid = {g["index"]: g for g in found}
-        if not glm:
+        if not glm and not third_party_engine(cfg):
             cfg = ensure_engine_for([byid[i] for i in use], cfg_path, cfg, yes)
         ok("GPUs: " + " + ".join(gpu_name(byid[i]) for i in use) + f" together (layers split {cfg.get('layer_split') or 'auto'})")
     elif found:
         g = next((x for x in found if x["index"] == use), None) if use is not None else max(
             found, key=lambda x: (round(x["vram_gb"]), -x["index"]))
         if g is not None:
-            if not glm:
+            if not glm and not third_party_engine(cfg):
                 cfg = ensure_engine_for([g], cfg_path, cfg, yes)
             ok("GPU: " + gpu_name(g))
     browser = open_browser and cfg.get("open_browser") is not False   # #609: "open_browser": false, --no-browser
@@ -7440,6 +7525,160 @@ def poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, 
 
 
 # ------------------------------------------------------------------------------------------------ main
+def edge0_have(dst: Path, size: int, sha: str | None) -> bool:
+    """A pack file that is already in place: the right size, and the pinned SHA-256 when the Hub publishes one.
+    A match is kept in the .done mark (sha256_matches does that), so the hash is spent once at most; a file whose
+    size is wrong or whose hash does not match is not reused, and setup downloads it again."""
+    if not dst.exists() or dst.stat().st_size != size:
+        return False
+    if sha:
+        if sha256_matches(dst, size, sha):
+            return True
+        dst.unlink()                                  # a damaged or truncated file: fetch it again
+        return False
+    if not done(dst):
+        mark(dst, f"size {size}")
+    return True
+
+
+def edge0_engine(data: Path) -> Path:
+    """Edge0's engine in engine-edge0/ (a folder of its own, like engine-poly/): Edge0 ships it inside their Windows
+    desktop bundle, so its two files are unpacked from that zip; install_unpacked() keeps the engine it replaces in
+    engine-edge0/.previous (`setup.py --rollback-engine` returns to it).  Edge0 publishes no Linux engine, so this is
+    Windows only - the model itself runs on their fork anywhere it builds."""
+    eng = ROOT / EDGE0_DIR
+    if (eng / "strata.exe").is_file() and (eng / "strata_kq.dll").is_file():
+        ok(f"engine: {eng}")
+        return eng
+    if not WIN:
+        fail("Edge0's engine is a Windows CUDA build: they publish no Linux engine to install",
+             "run setup on Windows, or build github.com/Edge0-AI/Edge0 yourself and point \"exe\" in "
+             f"strata-{EDGE0_NAME}.json at it")
+    name, size, sha = EDGE0_ENGINE_ASSET
+    z = data / "downloads" / name
+    download(EDGE0_ENGINE_URL + name, z, "Edge0's engine")
+    verify_sha256(z, size, sha)
+    tmp = data / "downloads" / f"{EDGE0_DIR}-unpacked"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    with zipfile.ZipFile(z) as f:
+        members = f.namelist()
+        for want in EDGE0_ENGINE_FILES:
+            hit = next((n for n in members if n.replace("\\", "/").endswith(want)), None)
+            if hit is None:                            # a bundle of another layout: say which file is missing
+                fail(f"{name} does not hold {want}",
+                     "download Edge0's release again, or install their engine by hand into " + str(eng))
+            (tmp / Path(want).name).write_bytes(f.read(hit))
+    eng.mkdir(parents=True, exist_ok=True)
+    install_unpacked(tmp, eng)
+    shutil.rmtree(tmp, ignore_errors=True)
+    ok(f"engine: {eng}")
+    return eng
+
+
+def edge0_setup(a, family, gpu, cuda_tk, multi, ram, data, elsewhere, port, adopted) -> int:
+    """Steps 3 to 5 for Edge0-145B (docs/EDGE0.md): its engine, its pack downloaded file by file (nothing is packed:
+    a pack folder is what the engine reads), then the run config and start script.  One size, one context: the model is
+    one Q3_K pack, and the server switches to it like to any other model's config."""
+    fam = FAMILIES[family]
+    title = fam["title"]
+    sizes = family_models(family)
+    names = list(sizes)
+    if a.model and a.model not in names:
+        fail(f"{title} has no {a.model} model file", "choose one of: " + ", ".join(names))
+    if a.gguf_dir or getattr(a, "_custom_gguf_shards", None):
+        fail(f"--gguf-dir and --custom-gguf do not apply to {title}: its files are a Strata pack folder, not GGUF "
+             "shards", "leave them out: setup downloads the pack")
+    model = a.model or names[0]
+    d = sizes[model]
+    if a.context:
+        ctx = a.context
+        if not 8192 <= ctx <= 262144:
+            fail(f"--context {ctx}: {title} takes 8,192 to 262,144 tokens")
+    else:
+        ctx = EDGE0_CONTEXT
+    need_ram = poly_ram_need(d, gpu["vram_gb"])
+    if gpu["vram_gb"] < poly_beside_gb(d) + 2:
+        warn(f"{title} takes about {poly_beside_gb(d)} GB of VRAM before any expert and {gpu_name(gpu)} has "
+             f"{gpu['vram_gb']:.0f}: most of its experts would run on the CPU (slower)")
+    if ram < need_ram - 4:
+        warn(f"RAM: {ram:.0f} GB. {title} keeps about {poly_held_gb(d, gpu['vram_gb']):.0f} GB of its experts on the "
+             f"card and reads the rest through the file cache: setup's estimate is {need_ram:.0f} GB, so expect it to "
+             "read from the SSD while it answers")
+    ok(f"model: {title} {model}, context {ctx:,} tokens")
+    if multi:
+        warn(f"{title} has only been run on one card: the config uses {gpu_name(gpu)} of the layer split")
+
+    step(3, "the Edge0 engine")
+    eng = edge0_engine(data)
+
+    step(4, f"downloading {title} {model}")
+    root = find_in([data, *elsewhere], f"models/{EDGE0_MODEL_LABEL}") or data / "models" / EDGE0_MODEL_LABEL
+    say(f"  Its pack is {len(EDGE0_FILES)} files, {d['download_gb']:.0f} GB together; each is resumed, and the big "
+        "ones are checked against the Hub's SHA-256.")
+    present = [rel for rel, (size, sha) in EDGE0_FILES.items() if edge0_have(root / rel, size, sha)]
+    if present:
+        ok(f"  {len(present)} of {len(EDGE0_FILES)} files were already there")
+    for rel, (size, sha) in EDGE0_FILES.items():
+        if rel in present:
+            continue
+        dst = root / rel
+        download(hf(EDGE0_MODEL_REPO) + rel, dst, f"{title} {rel}")
+        have = dst.stat().st_size if dst.exists() else -1
+        if have != size:
+            fail(f"{rel} is {have:,} bytes, not {size:,}",
+                 "delete it and run setup again (the download restarts)")
+        if sha:
+            verify_sha256(dst, size, sha)
+    ok(f"model: {root}")
+
+    step(5, "writing the start script")
+    args = ["--pack", str(root),
+            "--native", str(root / "model-skeleton.gguf"),
+            "--native-dense-gguf", str(root / "model-skeleton.gguf"),
+            "--ple-gguf", str(root / "ple-fp8.gguf"), "--ple-io", "direct",
+            "--expert-profile", str(root / "profile.bin"), "--expert-cache", "auto", "--prefill", "auto",
+            "--pcie-frac", "0.1", "--spec", "4", "--spec-min-p", "0.5", "--mtp", str(root / "mtp"),
+            "--max-context", str(ctx), "--kv", "int8", "--kv-resident", "32768",
+            "--vram-reserve-mib", str(700 if a.vram_reserve_mib is None else a.vram_reserve_mib),
+            "--pcie-mode", "dma"]
+    env = {k: (v if v.isdigit() else str(root / v)) for k, v in EDGE0_ENV.items()}
+    earlier = adopted if adopted is not None and adopted.name == f"strata-{EDGE0_NAME}.json" else None
+    cfg_path = ROOT / f"strata-{EDGE0_NAME}.json"
+    cfg = {"exe": str(eng / "strata.exe"), "args": args, "cwd": str(root),
+           # cwd is the pack folder: this fork opens labels.bin relative to cwd (it has no
+           # STRATA_LATENT_LABELS in its binary), and the DLLs come from the exe's own folder.
+           "tokenizer": str(root / "tokenizer"), "model_name": EDGE0_NAME,
+           "display_name": f"{title} ({model}, latent MoE)",
+           "log": str(ROOT / "local-data" / f"{EDGE0_NAME}-engine.log"),
+           "lib_dirs": [str(eng), *cuda_lib_dirs(cuda_tk)], "port": port, "env": env,
+           "engine_kind": "edge0"}                     # third_party_engine(): setup leaves this pack alone
+    if multi:
+        cfg["gpu"], cfg["gpus_asked"] = multi, True
+    elif gpu["count"] > 1 or a.gpu is not None:
+        cfg["gpu"], cfg["gpus_asked"] = gpu["index"], True
+    if a.host:
+        cfg["host"] = a.host
+    if a.api_key:
+        cfg["api_key"] = a.api_key
+    if a.browser is not None:
+        cfg["open_browser"] = a.browser
+    write_setup_config(cfg_path, cfg, earlier)
+    script = write_run_script(EDGE0_NAME, cfg_path, port, cfg.get("open_browser") is not False)
+    ok(f"start script: {script.name}")
+
+    say()
+    say("All set.")
+    say(f"  API (OpenAI):     http://127.0.0.1:{port}/v1   (any API key; model name: anything)")
+    say(f"  Model list:       {EDGE0_NAME} is beside the other models; switching to it stops the engine that is "
+        "running, and switching away stops this one")
+    say(f"  Next time:        just run {'START-HERE.bat' if WIN else './setup.sh'} (or {script.name}) - it starts "
+        "right away")
+    if a.no_start:
+        return 0
+    return start(cfg_path, port)
+
+
 def mac_setup(argv) -> int:
     """A Mac (Apple Silicon): the Metal engine, built from source on the Mac by metal/setup_mac.py (its own steps:
     the Mac check, the pack by unified memory, the engine build, the Metal defaults). Nothing of the CUDA / HIP paths
@@ -8487,6 +8726,11 @@ def main() -> int:
         say(f"  Its license: {fam['license']}")
     if fam.get("engine") == "poly":                     # another engine: its own questions and steps
         return poly_setup(a, family, gpu, hip, cuda_tk, multi, ram, data, elsewhere, port, adopted)
+    if fam.get("engine") == "edge0":                    # Edge0's engine: its own questions and steps
+        if hip:                                         # a CUDA build: there is no AMD path in it at all
+            fail(f"{fam['title']} runs on NVIDIA cards only: Edge0's engine is a CUDA build",
+                 "choose another family (--family qwen), or build github.com/Edge0-AI/Edge0 for your card")
+        return edge0_setup(a, family, gpu, cuda_tk, multi, ram, data, elsewhere, port, adopted)
     say()
     names = [m for m in MODELS if family in MODELS[m].get("families", ("qwen", "swift"))]
     names.sort(key=lambda m: bool(MODELS[m].get("experimental")))   # an experimental size last, never the default

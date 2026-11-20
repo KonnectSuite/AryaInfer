@@ -142,9 +142,10 @@ def describe(config: Path) -> dict | None:
         "multimodal": bool(cfg.get("vision")),
         "aliases": _aliases(cfg.get("aliases")),
         # --draft-model is the Arya engine's own draft; the poly and NInfer engines take
-        # --spec mtp/dflash2 and the MTP head from the model itself.
+        # --spec mtp/dflash2 and the MTP head from the model itself; the native engine takes the head
+        # from --mtp (Edge0-145B's pack ships one).
         "mtp": (bool(_arg(args, "--draft-model")) or _arg(args, "--spec") in {"mtp", "dflash", "dflash2"}
-                or "--lm-head-draft" in args) and "--no-draft" not in args,
+                or "--lm-head-draft" in args or "--mtp" in args) and "--no-draft" not in args,
         "ram_gb": None, "vram_gb": None,
         "status": "available", "problem": None,
     }

@@ -1,6 +1,6 @@
 # Engines
 
-AryaInfer is one inference space with four engine backends behind it. You start
+AryaInfer is one inference space with five engine backends behind it. You start
 one server, open one web app, and use one OpenAI- or Anthropic-compatible API;
 the model you pick decides which backend runs. Switching models is a config
 change (`switch_on_request`), not a different program to learn.
@@ -12,7 +12,7 @@ ids into new token ids, over the same line protocol. That is why a GGUF MoE
 runner, the native Qwen engine, our AQ3 build and a ported NInfer core can sit
 in the same roster.
 
-## The four backends
+## The five backends
 
 | Backend | Binary | Source | Models on this host | Context | Vision |
 | --- | --- | --- | --- | ---: | --- |
@@ -20,6 +20,7 @@ in the same roster.
 | **PolyStrata** (`strata-poly`) | `engine-poly\strata-poly.exe` | `src/poly`, from [VecSzn/PolyStrata](https://github.com/simplexai-labs/PolyStrata) | Qwen3.6-35B-A3B UD-Q4_K_XL and abliterated, Ornith 1.5 APEX, and the GGUF families in [BACKENDS.md](BACKENDS.md) | 262,144, q8_0 KV | `strata-vision.exe` + mmproj, GPU |
 | **AryaInfer** (fork build) | `C:\AI\Strata-data\engines\arya-infer\aryainfer.exe` (repo build: `build-poly\aryainfer.exe`) | `src/poly` fork target, CUDA `sm_89`; AQ3 kernels in `src/poly/prefill_f16.cu` | Qwen3.8-27B AQ3 (GSQ 3-bit), Qwen3.8-27B Turbo IQ3_XXS, Qwen3.5-4B Q4_K_M | 131,072 (27B), 65,536 (4B), q4_0 KV | `strata-vision.exe` + mmproj, CPU |
 | **NInfer** (ported) | `engine-ninfer\ninfer-engine.exe` | [roofkid/ninfer-4080](https://github.com/roofkid/ninfer-4080) at `rtx4080-port` commit `2469b57`, plus `engine-ninfer/shim/main.cpp` | Qwen3.8-27B GSQ3 `.ninfer` | 131,072, rk4v4-e8 KV | external `.sve` embeddings from `strata-vision.exe`, CPU |
+| **Edge0** (latent MoE) | `engine-edge0\strata.exe` (installed by `setup.py --family edge0`) | [Edge0-AI/Edge0](https://github.com/Edge0-AI/Edge0)'s `edge0-strata`, a Strata fork; engine 0.3.0, CUDA `sm_75+` | Edge0-145B Q3_K (latent MoE; [EDGE0.md](EDGE0.md)) | 131,072, int8 KV | no (the pack has an mmproj; the fork's config does not wire images) |
 
 All four are configured per model in a `strata-*.json` run config: `exe`,
 `args`, `tokenizer`, `sampling`, `reasoning_effort`, `reasoning_budget_by_effort`,
@@ -64,6 +65,7 @@ The roster is the `strata-*.json` files next to the config you start with
 | `swift-1.5-iq3_xxs` | Strata 0.1.59 | 262,144 | Token-efficient Qwen3.8 variant, 262K vision |
 | `swift-1.5-abliterated-iq3_xxs` | Strata 0.1.59 | 262,144 | Unrestricted Swift 1.5 |
 | `qwen3.5-4b` | AryaInfer | 65,536 | Small, fast, vision-capable |
+| `edge0-145b` | Edge0 0.3.0 | 131,072 | Latent MoE, 10.12B active, 106 GB pack; its own engine, installed by setup ([EDGE0.md](EDGE0.md)) |
 
 ## Measured on this host
 
@@ -196,6 +198,11 @@ license; see [CREDITS.md](../CREDITS.md) and `LICENSE`.
    appears in `/api/models` and `/v1/models` immediately.
 4. Measure it on this host before calling it a host result, and record the build
    hash, config, workload and raw output under `bench/results/`.
+
+A backend that only exists as someone else's binary is the NInfer route: a
+folder of its own (`engine-ninfer/`, `engine-edge0/`), installed by setup, with
+the config's `exe` pointing into it. [EDGE0.md](EDGE0.md) walks through the
+newest one, Edge0's fork of Strata and its 145B latent-MoE pack.
 
 [Back to the README](../README.md) - [Host setup](ARYAINFER.md) -
 [Model roster](MODELS.md)

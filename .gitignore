@@ -54,6 +54,7 @@ build-vision-cuda12.bat
 /engine/
 /engine-cuda12/
 /engine-poly/
+/engine-edge0/
 /build-strata-poly.bat
 /build-vision-poly.bat
 /engine-glm/
