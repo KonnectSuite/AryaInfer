@@ -169,6 +169,10 @@ a{color:var(--st-accent-text);text-decoration:none} a:hover{text-decoration:unde
 .st-btn--danger{background:var(--st-danger-tint);color:var(--st-danger-text)}
 .st-btn--icon{width:36px;height:36px;padding:0;border-radius:10px;background:transparent;color:var(--st-ink-muted)}
 .st-btn--icon:hover{background:var(--st-surface-2);color:var(--st-ink)}
+/* a text button carries a small action beside a title or under a row: no fill of its own, because a
+   button element keeps the browser's grey face when the class sets no background */
+.st-btn--text{height:30px;padding:0 10px;background:transparent;color:var(--st-accent);font-weight:600;border-radius:var(--st-r-sm)}
+.st-btn--text:hover{background:var(--st-accent-tint)}
 .st-btn:disabled{opacity:.45;cursor:not-allowed}
 
 /* form controls */

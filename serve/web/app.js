@@ -2114,6 +2114,20 @@ function cfgResetField(field) {
   if (!field || field.dataset.base == null) return;
   const base = field.dataset.base ?? "";
   const tgl = field.querySelector(".st-toggle");
+  // The engine picker is two controls over one value (an installed engine, or a typed path), so put both
+  // back and let the select decide whether the path box shows at all.
+  const sel = field.querySelector(`select[id$="-sel"]`);
+  if (sel) {
+    const opt = [...sel.options].find((o) => o.value === base);
+    sel.value = opt ? base : "custom";
+    const inp = field.querySelector("input.st-input");
+    const wrap = field.querySelector(".cfg-path");
+    if (inp) inp.value = base;
+    if (wrap) wrap.hidden = sel.value !== "custom";
+    cfgExeTouched = false;
+    cfgSyncPill(sel);
+    return;
+  }
   const box = field.querySelector("select") || field.querySelector("input[type=number]") || field.querySelector("input[type=text]");
   if (tgl) tgl.setAttribute("aria-checked", String(base === "true"));
   if (box) box.value = base;
@@ -2338,14 +2352,17 @@ function exeFieldHtml(k) {
       `${esc(e.title || e.key)} — ${esc(val)}${e.installed_version ? ` (${esc(e.installed_version)})` : ""}</option>`;
   }).join("");
   const custom = !matched;
-  return `<div class="cfg-field" data-key="exe">
-    <label class="st-label" for="${id}-sel">Engine executable<code>exe</code></label>
-    <select class="st-input" id="${id}-sel" aria-label="Engine executable">${options}<option value="custom"${custom ? " selected" : ""}>Custom path…</option></select>
+  const control = `<select class="st-input" id="${id}-sel" aria-label="Engine executable">${options}<option value="custom"${custom ? " selected" : ""}>Custom path…</option></select>
     <span class="cfg-path" id="${id}-wrap"${custom ? "" : " hidden"}>
       <input class="st-input" id="${id}" type="text" value="${esc(cur)}" placeholder="engine/strata.exe" autocomplete="off" spellcheck="false" aria-label="Engine executable path">
       <button class="st-btn st-btn--secondary" type="button" data-browse="${id}" data-want="file" data-ext=".exe" aria-label="Browse for the engine executable">${icon("folder", "st-icon st-icon--sm")}</button>
-    </span>
-  </div>`;
+    </span>`;
+  return fieldShell({
+    id: `${id}-sel`, label: "Engine executable", tag: "exe", base: cur, def: null,
+    help: "Which engine binary runs this model. Pick one of the installed engines, or a path of your own.",
+    control,
+    tip: cfgTip({tag: "exe", kind: "path", base: cur}),
+  }).replace('class="cfg-field"', 'class="cfg-field" data-key="exe"');
 }
 function engineCard() {
   const g = (cfgView.groups || []).find((x) => x.key === "engine");
@@ -2362,7 +2379,7 @@ function engineCard() {
   return `<section class="cfg-card" id="cfg-engine">
     ${cfgCardTitle("cfg-engine", "cpu", g.label)}
     ${byKey.exe ? exeFieldHtml(byKey.exe) : ""}
-    ${args ? `<div class="cfg-field" data-key="args"><label class="st-label">Engine flags<code>args</code></label>${groups}</div>` : ""}
+    ${args ? `<div class="cfg-args-head" data-key="args"><span class="cfg-name">Engine flags</span></div>${groups}` : ""}
     ${envSection(false)}
     <div class="cfg-fields">${rest.map(cfgFieldHtml).join("")}</div>
   </section>`;
@@ -2382,17 +2399,19 @@ function advancedCard() {
   const byKey = Object.fromEntries((g.keys || []).map((k) => [k.key, k]));
   const fields = ["cwd", "lib_dirs"].map((n) => byKey[n]).filter(Boolean).map(cfgFieldHtml).join("");
   const other = byKey.args && (byKey.args.other || []).length
-    ? `<div class="cfg-field"><label class="st-label">Other arguments<code>args</code></label>` +
+    ? `<div class="cfg-field"><div class="cfg-head"><span class="st-label"><span class="cfg-name">Other arguments</span><code>args</code></span>` +
+      `<span class="cfg-tools"><span class="st-tip" tabindex="0" role="note" aria-label="About other arguments" ` +
+      `data-tip="Flags this editor has no row for. They are passed to the engine unchanged; edit them in the file.">?</span></span></div>` +
       `<div class="other-args">${byKey.args.other.map((o) => `<code>${esc(o)}</code>`).join(" ")}</div>` +
-      `<span class="cfg-note">Arguments this editor does not know; they pass through unchanged. Edit them in the file.</span></div>` : "";
+      `<p class="cfg-hint">Arguments this editor does not know; they pass through unchanged. Edit them in the file.</p></div>` : "";
   return `<details class="st-collapse" id="cfg-advanced">
     <summary>Advanced${icon("chevron", "st-icon st-icon--sm st-chev")}</summary>
     <div class="st-collapse__body"><div class="cfg-fields">${fields}${other}</div>
       ${envSection(true)}
-      <div class="cfg-fields"><div class="cfg-field"><label class="st-label" for="config-raw">Raw run config<code>${esc(cfgView.file || "")}</code></label>
+      <div class="cfg-fields"><div class="cfg-field"><div class="cfg-head"><label class="st-label" for="config-raw"><span class="cfg-name">Raw run config</span><code>${esc(cfgView.file || "")}</code></label><span class="cfg-tools"><span class="st-tip" tabindex="0" role="note" aria-label="About the raw config" data-tip="Read-only view of the file on disk. Every edit above is checked by the server before it is written, and the earlier file is kept as .bak.">?</span></span></div>
       <textarea class="st-input" id="config-raw" rows="14" readonly spellcheck="false">${esc(cfgView.raw || "")}</textarea>
-      <span class="cfg-note">The file as stored. Every edit above is checked by the server before it is written, and the
-        earlier file is kept as <code>.bak</code>.</span></div></div>
+      <p class="cfg-hint">The file as stored. Every edit above is checked by the server before it is written, and the
+        earlier file is kept as <code>.bak</code>.</p></div></div>
     </div></div>
   </details>`;
 }
@@ -2597,7 +2616,12 @@ function collectSet() {
       if (!sameEnv(v, k.value)) set.env = Object.keys(v).length ? v : null;
       continue;
     }
-    const v = cfgValue(k, cfgId(k.key));
+    const id = cfgId(k.key);
+    // A field that is not on the page cannot have been edited.  Without this, cfgValue() answers with the
+    // stored value (null for an unset key) and an unset bool reads as "false -> default" - a phantom diff
+    // that lit the Changes rail and enabled Save with nothing touched.
+    if (k.kind !== "object" && k.kind !== "list" && !$(id)) continue;
+    const v = cfgValue(k, id);
     const old = k.kind === "bool" ? k.value === true : k.value;       // absent and false are the same setting
     if (JSON.stringify(v) !== JSON.stringify(old ?? null)) set[k.key] = v;
   }

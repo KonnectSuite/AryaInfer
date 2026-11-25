@@ -52,7 +52,7 @@ GROUPS: list[tuple[str, str, list[tuple]]] = [
         ("vision.elastic", "bool", "Start the encoder with the first picture instead of the model", (), True),
     ]),
     ("sampling", "Sampling defaults", [
-        ("sampling.temperature", "num>=0", "Default temperature (0 = greedy; without it the model card's: 1.0 thinking, 0.7 not)", (), False),
+        ("sampling.temperature", "num>=0", "Default temperature for a request that leaves it out. 0 means greedy: the model always takes the most likely token.", (), False),
         ("sampling.top_p", "0<x<=1", "Default top_p for requests that send none", (), False),
         ("sampling.top_k", "1..64", "Default top_k (1-64)", (), False),
         ("sampling.min_p", "0<=x<=1", "Default min_p", (), False),
