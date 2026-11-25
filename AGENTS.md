@@ -20,7 +20,7 @@ A second engine, `strata-poly` (`src/poly/`), runs GLM 5.3 Flash, DeepSeek V4 Fl
 from their GGUF files. The six smaller families have Windows and Linux paths; larger models and other backends
 have separate limits: [docs/GLM.md](docs/GLM.md), [docs/BACKENDS.md](docs/BACKENDS.md).
 A third path, `aryainfer` (also built from `src/poly/`), runs the dense Qwen3.8-27B AQ3 and Turbo quants; a fourth,
-`engine-ninfer/`, is a ported NInfer core behind a shim for the GSQ3 `.ninfer` artifact. All four answer the same
+`engine-ninfer/`, is a ported NInfer core behind a shim for the GSQ3 `.ninfer` artifact. All five answer the same
 engine protocol and are served by the same Python server: [docs/ENGINES.md](docs/ENGINES.md).
 Qwen3.6 also has a native Strata path with vision and MTP (`--family qwen36-strata`): [docs/QWEN36.md](docs/QWEN36.md).
 The Qwen engine, the installer, the server and the web app come from
@@ -44,6 +44,10 @@ offers the same steps as tools.
 - Text taken from the Strata project names that project. After merging from it,
   `python tools/polystrata_names.py` checks current AryaInfer branding in code files, and
   `python tools/aryainfer_names.py --check` the docs; each one's first lines say what it leaves alone.
+- `src/` and `src/poly/` are a merged snapshot of Strata and PolyStrata, not a checkout that follows upstream:
+  `upstream.json` records the release each came from, setup prints that line before a build, and
+  `python tools/upstream_status.py --check` exits 1 while either project has released since. A merge brings
+  the sources and the pin in one commit.
 - Setup's own tests run without a GPU or downloads: `python tools/test_setup_<name>.py` (for example
   `tools/test_setup_amd.py`, `tools/test_setup_choices.py`).
 - Keep the docs' style: plain words, measured numbers with what they were measured on, no claims without a

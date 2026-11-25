@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ENGINES = Path(r"C:\AI\Strata-data\engines\strata-0.1.54")
+ENGINES = Path(r"C:\AI\Strata-data\engines\strata-0.1.59")
 
 
 def encode(exe: Path, mmproj: Path, model: Path, image: Path, out: Path, max_tokens: int = 1024,

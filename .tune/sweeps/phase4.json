@@ -1,0 +1,9 @@
+[
+ {"tag": "p4-old", "overrides": {}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.59\\strata.exe"},
+ {"tag": "p4-new", "overrides": {}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"},
+ {"tag": "p4-new-lookup0", "overrides": {"--lookup-max-t": 0}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"},
+ {"tag": "p4-new-lookup4", "overrides": {"--lookup-max-t": 4}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"},
+ {"tag": "p4-new-cap8", "overrides": {"--draft-cap": 8}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"},
+ {"tag": "p4-new-minp50", "overrides": {"--spec-min-p": 0.50}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"},
+ {"tag": "p4-old2", "overrides": {}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.59\\strata.exe"}
+]

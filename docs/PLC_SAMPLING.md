@@ -70,6 +70,26 @@ It misses the same three fixtures as every other Qwen entry (`ld_rung`, `hmi_vis
 `hmi_alarm`), and `coding-0.5` measures identical to `coding` because its sampler
 ignores the presence penalty; the config ships `precise`.
 
+The Coder arrived after that (installed 2026-11-09 on the RTX 4070 Ti SUPER host) and is
+reported the same way:
+
+| model | coding | coding-0.5 | family | precise |
+| --- | ---: | ---: | ---: | ---: |
+| Qwen3.8 Flash Next Coder IQ1_M | 4 | 3 | 2 | 2 |
+
+It is weaker here than IQ3_XXS (5/4/5/6) and misses the same three vendor-dialect
+fixtures plus `l5x_xml` in every set and `st_seal_in` / `st_scale` at some sets; the
+config ships `coding`, its best measured set. On this suite the Coder does not replace
+IQ3_XXS for PLC/HMI work.
+
+The Coder's files — model shards, expert pack and run config — were uninstalled on
+November 9, 2026; the measurements above remain as the record.
+
+Swift 1.5 Abliterated IQ3_XXS was uninstalled on November 25, 2026: 72.8 GiB of two
+GGUF shards, its expert pack, its MTP draft block and its run config were removed.
+The eight-model table above is still the record of the pass as it ran; seven of
+those eight are installed here now.
+
 Per fixture, across the eight models:
 
 | fixture | coding | coding-0.5 | family | precise |
@@ -126,6 +146,7 @@ was right.
 | Qwen3.8 27B AQ3 | 0 ok | 1,432 ok | 1,481 ok | 1,650 no | 1,467 ok (medium) |
 | Qwen3.8 27B Turbo | 0 no | 1,527 ok | 1,478 no | 1,759 ok | 1,462 ok (medium) |
 | Qwen3.8 Flash Next IQ3_XXS | 0 ok | 692 ok | 1,451 ok | 1,672 ok | 1,595 ok (medium) |
+| Qwen3.8 Flash Next Coder IQ1_M | 0 ok | 1,476 no | 1,484 ok | 1,681 ok | 1,539 ok (medium) |
 | Swift 1.5 Abliterated | 0 ok | 1,512 ok | 1,084 ok | 1,747 ok | 1,376 ok (medium) |
 | Swift 1.5 IQ3_XXS | 0 no | 1,110 ok | 1,335 ok | 1,610 no | 1,549 ok (medium) |
 | Qwen3.8 27B NInfer GSQ3 | 0 | 1,384 | 1,483 | 1,651 | not measured |
@@ -155,6 +176,7 @@ controller starts) and the tracked copies in `docs/host-tuning` carry:
 | Qwen3.6 35B Abliterated Q4_K_M | 0.3 | 0.9 | 20 | 0.0 | none (off) |
 | Ornith 1.5 35B APEX | 0.6 | 0.95 | 20 | 0.5 | medium |
 | Qwen3.8 Flash Next IQ3_XXS | 0.3 | 0.9 | 20 | 0.0 | medium |
+| Qwen3.8 Flash Next Coder IQ1_M | 0.6 | 0.95 | 20 | 0.0 | medium |
 | Swift 1.5 IQ3_XXS | 0.3 | 0.9 | 20 | 0.0 | medium |
 | Swift 1.5 Abliterated IQ3_XXS | 0.3 | 0.9 | 20 | 0.0 | medium |
 | Qwen3.8 27B NInfer GSQ3 | 0.3 | 0.9 | 20 | 0.0 | medium |

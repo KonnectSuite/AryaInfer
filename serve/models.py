@@ -31,7 +31,7 @@ BACKENDS = {
     "flint": "flint",
     "kolibri1": "kolibri1",
     "qwen4exp": "qwen4exp",        # Qwen3.8-Flash-Next MoE: the Coder, Gyro and Unsloth UD-* files
-    "inkling2_loop": "inkling2",   # Inkling-2-Mini: its own engine binary (strata-inkling), same line protocol
+    "inkling2_loop": "inkling2_loop",
 }
 # a routed expert's tensors: they stay in the file and are held in VRAM as far as it has room
 EXPERT = re.compile(r"\.ffn_(gate|up|down|gate_up)_exps\.weight$")
@@ -72,7 +72,7 @@ def _gguf(path: Path) -> dict:
         "experts": m.get(arch + ".expert_count"),
         "experts_used": m.get(arch + ".expert_used_count"),
         "mtp": bool(m.get(arch + ".nextn_predict_layers")),
-        "dense_bytes": dense, "expert_bytes": experts, "parts": parts,
+        "dense_bytes": dense, "expert_bytes": experts, "parts": parts, "file_bytes": st.st_size,
         "types": g.by_type(),
     }
     _seen[key] = out
@@ -178,17 +178,20 @@ def describe(config: Path) -> dict | None:
                 if g["parts"] == 1:
                     # the file is read in place: all of it is file cache at most, and VRAM holds the dense
                     # weights whole and the experts as far as the card has room
-                    e["ram_gb"] = round((g["dense_bytes"] + g["expert_bytes"]) / 1e9, 1)
-                    e["vram_gb"] = {"least": round(g["dense_bytes"] / 1e9 + 1.0, 1),
-                                    "all": round((g["dense_bytes"] + g["expert_bytes"]) / 1e9 + 1.0, 1)}
+                    dense, experts = g["dense_bytes"], g["expert_bytes"]
+                    if dense + experts < g["file_bytes"] * 0.98:
+                        # a tensor type BLOCK_GEOMETRY cannot size (the Arya engine's I8 containers): the
+                        # file itself is then the measure, and without experts all of it is dense
+                        dense, experts = (g["file_bytes"], 0) if not experts else (dense, g["file_bytes"] - dense)
+                    e["ram_gb"] = round((dense + experts) / 1e9, 1)
+                    e["vram_gb"] = {"least": round(dense / 1e9 + 1.0, 1),
+                                    "all": round((dense + experts) / 1e9 + 1.0, 1)}
                 if not g["runnable"]:
                     e["status"], e["problem"] = "unavailable", f"no engine here runs a '{g['backend']}' model"
     elif path is not None:
         # a pack directory or a .strata file: the engine's own artifact, so the config's "arch" says its family
         if not path.exists():
             e["status"], e["problem"] = "unavailable", f"the model file is missing ({path})"
-        elif e["backend"] not in BACKENDS.values():
-            e["status"], e["problem"] = "unavailable", f"no engine here runs a '{e['backend']}' model"
     # the name setup gave it, else the file's own (a file's can be a converter's leftover), else the id
     e["display_name"] = cfg.get("display_name") or e["display_name"] or e["id"]
     return e

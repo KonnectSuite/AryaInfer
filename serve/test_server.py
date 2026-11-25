@@ -3288,6 +3288,16 @@ class JoinedEngineArgs(unittest.TestCase):
             self.assertEqual(read_config(p), {"args": ["--ple-io", "mmap"]})
 
 
+class EngineIdentity(unittest.TestCase):
+    """The same poly line protocol without SAVE/RESTORE: AryaInfer and AryaNInfer must not be sent disk sessions."""
+
+    def test_no_disk_sessions_for_poly_family(self):
+        from serve.server import StrataEngine
+        for exe in ("x/aryainfer.exe", "x/arya-ninfer.exe", "x/ninfer-engine.exe", "x/strata-poly.exe"):
+            self.assertFalse(StrataEngine(exe, [], lazy=True).disk_sessions, exe)
+        self.assertTrue(StrataEngine("x/strata.exe", [], lazy=True).disk_sessions)
+
+
 class SharedSettings(unittest.TestCase):
     """The web app's "Use for other apps too": POST /settings makes its Chat settings every client's defaults."""
 
@@ -5846,7 +5856,8 @@ class VisionArgs(unittest.TestCase):
             return Proc()
 
         with mock.patch.object(server.subprocess, "Popen", popen), mock.patch.object(server, "contain"):
-            server.Vision({"exe": "strata-vision", "mmproj": "m.gguf", "model": "t.gguf", **cfg})
+            # kept running: on the CPU an encoder starts with the first picture by default
+            server.Vision({"exe": "strata-vision", "mmproj": "m.gguf", "model": "t.gguf", "elastic": False, **cfg})
         return seen[0]
 
     def test_min_tokens_is_passed_only_when_set(self):

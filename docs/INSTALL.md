@@ -162,8 +162,23 @@ ready-made engine has no code for, sources you changed, or your own build option
 engine into `engine/` and the image encoder with it, and does everything else exactly as above. A compiled engine is
 compiled again after a `git pull` that touched its sources (a minute or two for the changed files).
 
+The default install does not compile this checkout and does not use its old `v0.1.45` tag. It reads `engines.json`,
+which pins the current upstream binaries - Strata 0.1.67, PolyStrata 0.1.66 - and downloads each one from its own
+project's release with a recorded size and SHA-256. Strata Inkling is the exception: it is `"manual": true` and this
+checkout builds it from the vendored 0.1.68 sources instead of downloading it, so setup prints the two commands and
+points at [INKLING.md](INKLING.md). `--check-engines` reports what is installed and
+exits 1 if a required engine is missing or older than the pin; `--repair-engines` installs or upgrades the missing ones
+and exits. The fork's `aryainfer` engine is pinned by the same file.
+
+A build is different on purpose: it compiles the sources in this checkout and downloads nothing, so the engine it
+compiles is as new as the last merge of Strata and PolyStrata into this repository. `upstream.json` records that merge
+- each project's release, tag and commit - and setup prints it before the first compile of a run:
+`engine source: Strata v0.1.45 (477ac13c) + PolyStrata 0.1.45-poly.9 (83a7a332)`. `python tools/upstream_status.py
+--check` compares the pin with both projects' newest release and exits 1 while either is ahead; the merge and the
+`upstream.json` update belong in the same commit. Until that merge happens, treat `--build` as a 0.1.45 build.
+
 The engine is one CMake project, `CMakeLists.txt`, with one target per backend in this repository
-([ENGINES.md](ENGINES.md#the-four-backends); which model each one runs: [BACKENDS.md](BACKENDS.md#what-runs)).
+([ENGINES.md](ENGINES.md#the-five-backends); which model each one runs: [BACKENDS.md](BACKENDS.md#what-runs)).
 These are the commands setup itself runs:
 
 ```
@@ -187,13 +202,14 @@ cmake --build build --target aryainfer     # the same src/poly tree with this fo
 - The image encoder is a separate target: `cmake -S tools/vision -B build-vision -G Ninja` and
   `cmake --build build-vision --target strata-vision`.
 - The engine binary goes wherever your run config's `"exe"` points; setup looks in `engine/`
-  (`engine-poly/` for `strata-poly`).
+  (`engine-poly/` for `strata-poly`, `engine-arya/` for `aryainfer`, `engine-inkling/` for Inkling, built by
+  `engine-inkling\build.ps1` - see [INKLING.md](INKLING.md)).
 
 Every other platform and card family has its own build page, with the toolchain and the flags that family needs -
 they are not covered here: [AMD (HIP)](AMD_HIP.md), [Apple Silicon Mac](MAC.md), [Intel Arc (SYCL)](INTEL_ARC.md),
 [Ryzen AI Max / Strix Halo](STRIX_HALO.md), [Radeon 780M / 760M](RADEON_780M.md), [Pascal and Volta](OLDER_GPUS.md),
 [V100](NVIDIA_V100.md), [older CPUs](#older-cpus-experimental), and the `strata-poly` build without setup in
-[GLM.md](GLM.md#without-setup). The fourth backend, NInfer, is not built by setup and not a target of this CMake
+[GLM.md](GLM.md#without-setup). The fifth backend, AryaNInfer, is not built by setup and not a target of this CMake
 project: it is a pinned upstream port with this fork's patches and a shim - [NINFER.md](NINFER.md#patches).
 
 ## Older CPUs (experimental)
@@ -219,7 +235,8 @@ What differs in that build (`STRATA_ISA_FLOOR=avx` or `none`, chosen from the CP
   token as the normal build (ggml-cpu rounds the CPU experts differently, as the AVX2 kernel does from the AVX-512
   one). Contributors ran earlier versions of the same approach on a Xeon E5-2680 (2.87 tok/s with a GTX 1080 Ti)
   and on Xeon E5-2687W / X5690 machines.
-- AMD cards: Linux only (setup compiles the AMD engine there anyway); NVIDIA on Windows and Linux.
+- AMD cards: Linux, and Windows with the ready-made engine (or one compiled there with `--build`) on an AVX2 CPU;
+  the older-CPU engine below is compiled on Linux only. NVIDIA on Windows and Linux.
 - Two-socket Xeons: memory on the other socket is slow; keep the RAM on one CPU if you can.
 
 By hand: `cmake ... -DSTRATA_ISA_FLOOR=avx` (or `none`) builds it; `STRATA_ISA_FLOOR=avx` set for setup builds it on

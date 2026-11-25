@@ -20,12 +20,12 @@
  "lib_dirs": [
   "$DATA\\cuda\\13.1.2\\bin\\x64",
   "$DATA\\cuda\\13.1.2\\bin",
-  "$DATA\\engines\\strata-0.1.54"
+  "$DATA\\engines\\strata-0.1.59"
  ],
  "port": 8082,
  "gpu": 0,
  "vision": {
-  "exe": "$DATA\\engines\\strata-0.1.54\\strata-vision.exe",
+  "exe": "$DATA\\engines\\strata-0.1.59\\strata-vision.exe",
   "mmproj": "$DATA\\models\\qwen38-27b\\mmproj-Qwen3.8-27B-BF16.gguf",
   "model": "$DATA\\models\\qwen38-27b\\Qwen3.8-27B-GSQ3-AQ3-mtp.gguf",
   "gpu": false,

@@ -51,6 +51,12 @@
       <button class="st-nav" type="button" id="nav-monitor" data-tab="monitor" aria-controls="view-monitor" title="Monitor">
         <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-activity"/></svg>
         <span class="st-sidebar__label">Monitor</span></button>
+      <button class="st-nav" type="button" id="nav-models" data-tab="models" aria-controls="view-models" title="Models">
+        <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-cube"/></svg>
+        <span class="st-sidebar__label">Models</span></button>
+      <button class="st-nav" type="button" id="nav-engines" data-tab="engines" aria-controls="view-engines" title="Engines">
+        <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-gpu"/></svg>
+        <span class="st-sidebar__label">Engines</span></button>
       <button class="st-nav" type="button" id="nav-about" data-tab="about" aria-controls="view-about" title="About">
         <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-info"/></svg>
         <span class="st-sidebar__label">About</span></button>
@@ -399,6 +405,73 @@
           </div>
         </div>
       </section>
+
+      <!-- ============================ Models ============================ -->
+      <section class="view view--models" id="view-models" hidden>
+        <div class="models">
+          <div class="req-head models-head">
+            <span class="card-title">Installed models</span>
+            <span class="muted small" id="models-note"></span>
+          </div>
+          <p class="muted small">One model is in memory at a time. <b>Load</b> stops the current one first;
+            <b>Settings</b> opens that model's settings page (engine, flags, thinking, sampling, vision, lifecycle).</p>
+          <div class="model-cards" id="models-cards"></div>
+        </div>
+      </section>
+
+      <!-- ============================ Engines ============================ -->
+      <section class="view view--engines" id="view-engines" hidden>
+        <div class="engines">
+          <div class="req-head">
+            <span class="card-title">Engines</span>
+            <span class="muted small" id="engines-note"></span>
+          </div>
+          <p class="muted small">Each model runs on one engine. Strata, Inkling and the poly engine are built and
+            released by their upstream projects; <code>aryainfer</code> and AryaNInfer are this fork's own builds.</p>
+          <div class="engine-cards" id="engines-cards"></div>
+          <div class="st-card engines-repair-card">
+            <div class="cfg-actions">
+              <button class="st-btn st-btn--secondary" id="engines-repair" type="button">Repair engines</button>
+              <span class="muted small" id="engines-msg" role="status"></span>
+            </div>
+            <p class="muted small">Repair downloads or refreshes the engines from the pinned release
+              (<code>engines.json</code>). The server must be started with <code>--allow-engine-repair</code>, and the
+              model must not be loaded.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================ Model settings page ============================ -->
+      <section class="view view--config" id="view-config" hidden>
+        <div class="config-page">
+          <header class="cfg-head">
+            <button class="st-btn st-btn--ghost cfg-back" id="cfg-back" type="button">
+              <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-chevron"/></svg> Models</button>
+            <span class="cfg-head__titles">
+              <span class="card-title" id="cfg-title">Model settings</span>
+              <span class="muted small" id="cfg-file"></span>
+            </span>
+            <span class="cfg-dirty" id="cfg-dirty-dot" hidden title="Unsaved changes"></span>
+          </header>
+          <div class="cfg-panes">
+            <aside class="cfg-rail" id="cfg-rail" aria-label="Models"></aside>
+            <main class="cfg-sections" id="cfg-sections" aria-label="Model settings"></main>
+            <aside class="cfg-side" id="cfg-side" aria-label="Changes">
+              <div class="side-card">
+                <h3 class="set-card__title">
+                  <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-refresh"/></svg> Changes</h3>
+                <div class="changes-list" id="cfg-changes"></div>
+                <div class="side-actions">
+                  <button type="button" class="st-btn st-btn--secondary" id="cfg-revert" disabled>Revert</button>
+                  <button type="button" class="st-btn st-btn--primary" id="cfg-save" disabled>Save</button>
+                </div>
+                <p class="cfg-note" id="cfg-msg" role="status"></p>
+              </div>
+              <div class="side-card" id="cfg-facts"></div>
+            </aside>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 </div>
@@ -434,15 +507,6 @@
       <label class="st-label" for="api-key">API key <output>only if the server was started with one</output></label>
       <input class="st-input" id="api-key" type="password" autocomplete="off" placeholder="Not needed">
       <span class="muted small">Kept in this browser only, like the chats.</span>
-    </section>
-    <section class="st-pop__section cfg-card" id="cfg-card" hidden>
-      <span class="st-label">Model settings</span>
-      <span class="muted small cfg-file" id="cfg-file"></span>
-      <p class="muted small">Kept in the model's run config for every client. An empty field is the default. They
-        take effect the next time the model starts (close AryaInfer's window and start it again).</p>
-      <form class="cfg-form" id="cfg-form"></form>
-      <div class="cfg-actions"><button class="st-btn st-btn--primary" id="cfg-save" type="button">Save</button>
-        <span class="muted small" id="cfg-msg" role="status"></span></div>
     </section>
     <section class="st-pop__section">
       <span class="st-label">Tools</span>
@@ -902,6 +966,30 @@
   </footer>
 </dialog>
 <div class="st-menu" id="model-menu" role="menu" aria-label="Models" hidden></div>
+
+<!-- ============================ File browser ============================ -->
+<dialog class="st-dialog st-dialog--wide fs-dialog" id="fs-dialog" aria-labelledby="fs-title">
+  <header class="st-dialog__head set-dialog__head">
+    <span class="set-dialog__badge"><svg class="st-icon"><use href="web/sprite.svg#i-folder"/></svg></span>
+    <span class="set-dialog__titles">
+      <span class="card-title" id="fs-title">Choose a file</span>
+      <span class="set-hint" id="fs-cwd"></span>
+    </span>
+    <span class="st-dialog__spacer"></span>
+    <button class="st-btn st-btn--icon" id="fs-close" type="button" aria-label="Close">
+      <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-x"/></svg></button>
+  </header>
+  <div class="st-dialog__body fs-body">
+    <nav class="fs-pathbar" id="fs-pathbar" aria-label="Path"></nav>
+    <div class="fs-list" id="fs-list" role="listbox" aria-label="Files and folders" tabindex="0"></div>
+  </div>
+  <footer class="st-dialog__foot set-dialog__foot">
+    <input class="st-input fs-name" id="fs-name" type="text" placeholder="Selected path" autocomplete="off" spellcheck="false">
+    <span class="st-dialog__spacer"></span>
+    <button class="st-btn st-btn--secondary" type="button" id="fs-cancel">Cancel</button>
+    <button class="st-btn st-btn--primary" id="fs-select" type="button">Select</button>
+  </footer>
+</dialog>
 
 <!-- ============================ Chat row menu ============================ -->
 <div class="st-menu" id="chat-menu" role="menu" aria-label="Chat options" hidden>

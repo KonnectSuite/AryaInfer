@@ -1,9 +1,12 @@
-# NInfer engine (experimental)
+# AryaNInfer engine (experimental)
 
-A second backend next to `aryainfer` and `strata-poly`: the pinned
-[roofkid/ninfer-4080](https://github.com/roofkid/ninfer-4080) engine
+A second backend next to `aryainfer` and `strata-poly`: **AryaNInfer**
+(`arya-ninfer.exe`, version 0.1.0), this fork's name and build of the pinned
+[roofkid/ninfer-4080](https://github.com/roofkid/ninfer-4080) core
 (branch `rtx4080-port`, commit `2469b5752672ad597055af61fe28e8e7ced20056`)
-with a small shim that speaks AryaInfer's engine line protocol. The Python
+with a small shim that speaks AryaInfer's engine line protocol. The core keeps
+its own name in `INFO core=ninfer-4080`; the shim and patches are this fork's.
+The Python
 server still renders the chat template, applies the thinking budget, parses
 tool calls and serves the web app; the engine only turns prompt ids into
 generated ids.
@@ -11,7 +14,7 @@ generated ids.
 Status: opt-in. Text and image input both work (image turns take the server's
 `.sve` embeddings through `GENI`; see [Vision](#vision)). The stock `aryainfer`
 and `strata-poly` paths are unchanged; nothing in `serve/` changed for this
-backend. [ENGINES.md](ENGINES.md) places it next to the other three backends.
+backend. [ENGINES.md](ENGINES.md) places it next to the other four backends.
 
 ## What it needs
 
@@ -20,9 +23,10 @@ backend. [ENGINES.md](ENGINES.md) places it next to the other three backends.
   from `roofkid/Qwen3.8-27B-GSQ3-NInfer`, put in
   `C:\AI\Strata-data\models\qwen3_8_27b_gsq3.ninfer`.
 - The Qwen3.8 tokenizer folder, `C:\AI\Strata-data\models\qwen38-27b\tokenizer`.
-- `engine-ninfer/ninfer-engine.exe`, built by `engine-ninfer/build.ps1`
+- `engine-ninfer/arya-ninfer.exe`, built by `engine-ninfer/build.ps1`
   (Visual Studio 2022, CUDA 13.1, vcpkg with ffmpeg and curl, and the
-  vendored NVTX v3.1.0 headers).
+  vendored NVTX v3.1.0 headers). The old `ninfer-engine.exe` name is still
+  recognized by the server and setup, but new builds use `arya-ninfer.exe`.
 - The run config `strata-qwen3.8-27b-ninfer.json` (port 8088, 131072 context,
   `rk4v4-e8` KV, MTP with three drafts).
 
@@ -208,8 +212,8 @@ on this host:
    a prompt whose prefix is still cached can reuse it.
 7. CUDA Graph re-instantiation when `cudaGraphExecUpdate` fails on a
    speculative round whose topology changed.
-8. `NINFER_ARYAINFER_SHIM` in `apps/CMakeLists.txt`, which builds
-   `ninfer-engine` from `engine-ninfer/shim/main.cpp`.
+8. `NINFER_ARYAINFER_SHIM` in `apps/CMakeLists.txt`, which builds the
+   `arya-ninfer` target from `engine-ninfer/shim/main.cpp`.
 9. External vision: `ExternalVisionItem` and `prepare_tokens_with_vision` in
    the public API; the frontend fills `vision_items` from the `image_pad`
    runs, the plan check accepts media with no tower payloads, and
@@ -230,7 +234,9 @@ no-ops unless the API is exported.
 
 ## Credits
 
-NInfer is Apache-2.0, from `roofkid/ninfer-4080` (commit above); the GSQ3
-artifact is published at `roofkid/Qwen3.8-27B-GSQ3-NInfer` and derives from
-`ISTA-DASLab/Qwen3.8-27B-3Bit-GSQ`. NVTX is Apache-2.0, from NVIDIA. The
-shim, patch and this note are part of AryaInfer and keep its MIT notice.
+The core, [roofkid/ninfer-4080](https://github.com/roofkid/ninfer-4080) (commit
+above), is Apache-2.0 and keeps its own name and commit. The GSQ3 artifact is
+published at [roofkid/Qwen3.8-27B-GSQ3-NInfer](https://huggingface.co/roofkid/Qwen3.8-27B-GSQ3-NInfer)
+and derives from [ISTA-DASLab/Qwen3.8-27B-3Bit-GSQ](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-3Bit-GSQ).
+NVTX is Apache-2.0, from NVIDIA. The shim, patch, the AryaNInfer name and this
+note are part of AryaInfer and keep its MIT notice.

@@ -54,13 +54,13 @@ document or code base is read at over 1,000 tokens per second. The experts of th
 PCIe while the current layer's attention runs. After the first message, AryaInfer keeps the conversation and reads only
 what is new, so follow-ups start in seconds.
 
-## Four engines, one program
+## Five engines, one program
 
 AryaInfer is not tied to one inference engine. The same server, chat page, API,
-tools and settings serve four backends, and the model you pick decides which one
+tools and settings serve five backends, and the model you pick decides which one
 runs:
 
-- **Strata** (`strata.exe`, upstream 0.1.58): the native Qwen engine for
+- **Strata** (`strata.exe`, upstream 0.1.59): the native Qwen engine for
   Flash-Next, Swift 1.5 and the 262K MoE profiles.
 - **PolyStrata** (`strata-poly`): the GGUF engine for Qwen3.6-35B-A3B, Ornith,
   GLM 5.3 Flash, DeepSeek V4 Flash and the other families in
@@ -72,7 +72,7 @@ runs:
 
 The engine never sees the chat template or the thinking rules: the server owns
 those and sends token ids. That is what lets a model roster mix engines without
-changing how you use it. The measured tables for all four are in
+changing how you use it. The measured tables for all five are in
 [ENGINES.md](ENGINES.md).
 
 ## More

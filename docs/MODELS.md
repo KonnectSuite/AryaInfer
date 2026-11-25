@@ -4,29 +4,46 @@
 
 ## Measured on the AryaInfer host, October 17, 2026
 
-> The native engine has since moved to **0.1.58** (November 7, 2026) and the roster
-> to ten profiles on four backends. Current tables: [ENGINES.md](ENGINES.md).
+> The native engine has since moved to **0.1.67** (November 24, 2026) and the roster
+> to ten profiles on five backends. Current tables: [ENGINES.md](ENGINES.md).
 > The numbers below are the October 0.1.45 record and are kept as such.
 
 ## What is installed on this host (November 2026)
 
-The RAM advice below is the upstream Flash-Next sizing guide. The ten profiles
+The RAM advice below is the upstream Flash-Next sizing guide. The nine profiles
 actually running on this machine are:
 
 | Profile | Backend | Context |
 | --- | --- | ---: |
-| Qwen3.8 Flash Next IQ3_XXS | Strata 0.1.58 | 262,144 |
-| Swift 1.5 IQ3_XXS | Strata 0.1.58 | 262,144 |
-| Swift 1.5 Abliterated IQ3_XXS | Strata 0.1.58 | 262,144 |
+| Qwen3.8 Flash Next IQ3_XXS | Strata 0.1.67 | 262,144 |
+| Swift 1.5 IQ3_XXS | Strata 0.1.67 | 262,144 |
 | Qwen3.8-27B AQ3 | AryaInfer | 131,072 |
 | Qwen3.8-27B Turbo IQ3_XXS | AryaInfer | 131,072 |
-| Qwen3.8-27B GSQ3 `.ninfer` | NInfer | 131,072 |
+| Qwen3.8-27B GSQ3 `.ninfer` | AryaNInfer | 131,072 |
 | Qwen3.6-35B-A3B UD-Q4_K_XL | PolyStrata | 262,144 |
 | Qwen3.6-35B-A3B Abliterated Q4_K_M | PolyStrata | 262,144 |
 | Ornith 1.5 35B APEX I-Quality | PolyStrata | 262,144 |
 | Qwen3.5-4B Q4_K_M | AryaInfer | 65,536 |
 
-Per-profile numbers and the four-backend comparison: [ENGINES.md](ENGINES.md).
+Per-profile numbers and the five-backend comparison: [ENGINES.md](ENGINES.md).
+Swift 1.5 Abliterated IQ3_XXS is no longer one of them: its shards, expert pack,
+MTP layer and run config were uninstalled on November 25, 2026 (72.8 GiB freed);
+its measured settings stay in [host-tuning](host-tuning/README.md) and
+[PLC_SAMPLING.md](PLC_SAMPLING.md).
+
+**Where the files come from.** The base Qwen3.8 models are the
+[Qwen team's](https://huggingface.co/Qwen/Qwen3.8-27B); the Flash-Next quants are
+[ISTA-DASLab's GSQ-RCO](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF),
+with Coder and Swift 1.5 kept in their own ISTA-DASLab/UkisAI repositories. The
+27B IQ2_S/IQ3_XXS files and the mmproj are
+[ISTA-DASLab's 27B GSQ-RCO](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF);
+the AQ3 file is converted from
+[ISTA-DASLab's 3-bit GSQ](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-3Bit-GSQ) by
+`tools/aryainfer_gsq3_convert.py`, and AryaNInfer's `.ninfer` is
+[roofkid's GSQ3 repack](https://huggingface.co/roofkid/Qwen3.8-27B-GSQ3-NInfer) of
+that checkpoint. The model repositories keep their own licenses (ISTA-DASLab's
+27B pages are Apache-2.0); AryaInfer's MIT license covers this repository, not the
+weights.
 
 On the **i9-14900KF / RTX 4070 Ti SUPER 16 GB / 64 GB RAM / Windows 11** host,
 Qwen3.8 Flash Next **IQ3_XXS**, engine **0.1.45**, measured **86.1 tokens/s** for

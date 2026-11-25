@@ -85,7 +85,10 @@ class Templates(unittest.TestCase):
         self.assertTrue(template.supports_enable_thinking)
 
     def test_flint_template_reads_neither(self):
-        template = self._template(r"C:\AI\Strata-data\packs\flint-ud-q4_k_xl\tokenizer\chat_template.jinja")
+        path = r"C:\AI\Strata-data\packs\flint-ud-q4_k_xl\tokenizer\chat_template.jinja"
+        if not Path(path).is_file():
+            self.skipTest("Flint is not installed on this machine")
+        template = self._template(path)
         self.assertFalse(template.supports_reasoning_effort)
         self.assertFalse(template.supports_enable_thinking)
 
@@ -93,7 +96,7 @@ class Templates(unittest.TestCase):
 class Registry(unittest.TestCase):
     """What /api/models and /v1/models publish, per installed model, from the config's own tokenizer."""
 
-    ROOT = Path(r"C:\AryaStrata")
+    ROOT = Path(__file__).resolve().parent.parent  # the repo this test lives in
 
     def _efforts(self, model_id):
         for path in sorted(self.ROOT.glob("strata-*.json")):

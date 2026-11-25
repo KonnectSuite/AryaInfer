@@ -18,7 +18,7 @@ The 27B path running on this host today is **Qwen3.8-27B AQ3** on `aryainfer.exe
 
 The roster also carries **Qwen3.8-27B Turbo IQ3_XXS** (`qwen3.8-27b-turbo-iq3xxs`, same
 engine, 131,072 context): installed and in daily use, with no speed table measured on this
-host yet. Roster-wide numbers for all four backends: [ENGINES.md](ENGINES.md).
+host yet. Roster-wide numbers for all five backends: [ENGINES.md](ENGINES.md).
 
 A dense Qwen3.8 model for AryaInfer's second engine.  It is Qwen35's model with one dense FFN where the routed
 experts are (llama.cpp calls the architecture `qwen35`), so the engine runs it through the same layers, the same
@@ -28,6 +28,16 @@ Everything below marked "measured" was read off this host; everything marked "pr
 measurements and has not been run.
 
 ## The files
+
+The base model is [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B). The
+IQ2_S/IQ3_XXS/Turbo GGUF files and the mmproj below are
+[ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF)
+(ISTA-DASLab is IST Austria's Distributed Algorithms and Systems Lab). AQ3 comes from
+[ISTA-DASLab/Qwen3.8-27B-3Bit-GSQ](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-3Bit-GSQ)
+through `tools/aryainfer_gsq3_convert.py`; AryaNInfer's `.ninfer` is
+[roofkid/Qwen3.8-27B-GSQ3-NInfer](https://huggingface.co/roofkid/Qwen3.8-27B-GSQ3-NInfer),
+a repack of that 3-bit checkpoint. The ISTA-DASLab model pages are Apache-2.0; the
+weights keep their own license.
 
 Measured 2026-11-02 from the Hugging Face tree API (revision `d562806dbafae37109975e970aae91b43e73b440`) and the
 downloaded files' SHA-256 on this host.
@@ -674,7 +684,7 @@ engine, so the same numbers as strata-poly within run-to-run noise (8K standalon
 
 `aryainfer` (poly) does not run it: the model is a `qwen4exp` family, and the poly engine answers "a 'qwen4exp' model,
 which this engine does not run", whatever the cache format (q8_0 is qwen35moe/kolibri1's, int8/int8k are Gemma 4's).
-Flash Next runs on the native Strata engine (`strata.exe` 0.1.56, its pack and PLE, dflash2 draft, int8 cache).  On
+Flash Next runs on the native Strata engine (`strata.exe` 0.1.59, its pack and PLE, dflash2 draft, int8 cache).  On
 this host, through the server, a 14,019-token prompt read at 1,578.4 tok/s and wrote 33 tokens at 64.0 tok/s (17 of
 19 drafts), with the expert cache at 69.7% and 15,509 MiB of VRAM used - the engine warned it had 487 MiB free at the
 start of the request (below its 1,024 MiB floor), which is the spill state to watch.

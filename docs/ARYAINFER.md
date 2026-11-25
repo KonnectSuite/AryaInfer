@@ -10,18 +10,19 @@ The run config this host uses for each installed model - context, KV format, dra
 budget, with the machine's paths replaced by two placeholders - is kept in [host tuning](host-tuning/README.md), so the
 settings survive a fresh clone onto another folder.
 
-## Four engines, one server
+## Five engines, one server
 
-AryaInfer serves four engine backends from `serve/server.py`; the run config
+AryaInfer serves five engine backends from `serve/server.py`; the run config
 names the executable and the arguments, and everything else (template, thinking
 budget, tools, images, API, web app) is shared:
 
 | Backend | Binary here | Runs | Context |
 | --- | --- | --- | ---: |
-| Strata (native Qwen engine, upstream 0.1.58) | `C:\AI\Strata-data\engines\strata-0.1.58\strata.exe` | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5, Swift abliterated | 262,144 |
-| PolyStrata (`strata-poly`) | `engine-poly\strata-poly.exe` (0.1.45, src `7bc1d82f`) | Qwen3.6-35B-A3B UD-Q4, abliterated, Ornith 1.5, and the GGUF families | 262,144 |
-| AryaInfer build (`aryainfer`) | `build-poly\aryainfer.exe` (2026-11-03) | Qwen3.8-27B AQ3, 27B Turbo IQ3_XXS, Qwen3.5-4B | 131,072 / 65,536 |
-| NInfer (ported) | `engine-ninfer\ninfer-engine.exe` (pinned `2469b57` + shim) | Qwen3.8-27B GSQ3 `.ninfer` | 131,072; the entry ships 114,688 to fit a 16 GiB card |
+| Strata (native Qwen engine, upstream 0.1.67) | `engine\strata.exe` | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5 | 262,144 |
+| Strata Inkling (built here from 0.1.68) | `engine-inkling\strata-inkling.exe` | Inkling 2 Mini | 65,536 |
+| PolyStrata (`strata-poly`, upstream 0.1.66) | `engine-poly\strata-poly.exe` | Qwen3.6-35B-A3B UD-Q4, abliterated, Ornith 1.5, and the GGUF families | 262,144 |
+| AryaInfer build (`aryainfer`, 0.1.45) | `engine-arya\aryainfer.exe` | Qwen3.8-27B AQ3, 27B Turbo IQ3_XXS, Qwen3.5-4B | 131,072 / 65,536 |
+| AryaNInfer (ported core 0.1.0) | `engine-ninfer\arya-ninfer.exe` (pinned `2469b57` + shim) | Qwen3.8-27B GSQ3 `.ninfer` | 131,072; the entry ships 114,688 to fit a 16 GiB card |
 
 The split, the protocol each one speaks and the measured tables are in
 [ENGINES.md](ENGINES.md). The short version: the server tokenizes, applies the
@@ -302,9 +303,9 @@ source integrations are not standalone installed inference engines.
 ## Engine 0.1.56 and DFlash2 (2026-11-02)
 
 The native Strata engine was updated to **0.1.56** from the v0.2.10 release, installed side by side in
-`C:\AI\Strata-data\engines\strata-0.1.56` (0.1.54 kept for rollback).  The three native Flash-Next run configs
-(base, Swift 1.5 and Swift 1.5 abliterated) point at 0.1.56 and keep a `.bak-0.1.54` copy.  DFlash2 is on for them
-with `--draft dflash2 --draft-model C:\AI\Strata-data\models\dflash2-flash-next\Qwen3.8-Flash-Next.dflash2.pack`,
+`C:\AI\Strata-data\engines\strata-0.1.56` (0.1.54 kept for rollback at the time; both folders were deleted on
+2026-11-13, see Engine 0.1.59).  The three native Flash-Next run configs (base, Swift 1.5 and Swift 1.5
+abliterated) pointed at 0.1.56 then.  DFlash2 is on for them with `--draft dflash2 --draft-model C:\AI\Strata-data\models\dflash2-flash-next\Qwen3.8-Flash-Next.dflash2.pack`,
 a pack built by `tools/dflash2_pack.py` from `incoai/Qwen3.8-Flash-Next-DFlash2` (Q8_0, 81 tensors, 760 MiB).  The
 engine reports a 106,299-token draft head (178.4 MiB) and the drafter at 992 MiB of VRAM, windows up to 6 tokens and
 no MTP layer.
@@ -320,15 +321,15 @@ Within noise at that length: the update's value here is the 0.1.56 fix list (too
 Responses routes, the sampling-penalty window, parked conversations, the dequantizer NaN fix), not decode.  A
 longer-context A/B has not been run.
 
-Rollback: restore the `.bak-0.1.54` configs and restart.
-
 Known follow-ups: `setup.py` still expects the prebuilt asset `strata-windows-x64.zip`, while v0.2.10 publishes
 `strata-engine-0.1.56-windows-x86_64-cuda-cuda13.tar.gz`, so a fresh setup needs the new asset naming; and the fork's
 engine source (0.1.45) still needs the source merge to the 0.1.56 commit `06698c674`.
 
 ## Engine 0.1.58 (2026-11-07)
 
-The native Strata engine was updated to **0.1.58** from the v0.2.12 release (`strata-engine-0.1.58-windows-x86_64-cuda-cuda13.tar.gz`, build commit `8a42a9457db6`, SHA-256 `3311443b...`), installed side by side in `C:\AI\Strata-data\engines\strata-0.1.58` (0.1.56 kept for rollback).  The three native Flash-Next run configs (base, Swift 1.5 and Swift 1.5 abliterated) now point at it, vision included.
+The native Strata engine was updated to **0.1.58** from the v0.2.12 release (`strata-engine-0.1.58-windows-x86_64-cuda-cuda13.tar.gz`, build commit `8a42a9457db6`, SHA-256 `3311443b...`), installed side by side in `C:\AI\Strata-data\engines\strata-0.1.58` (0.1.56 kept for rollback at the time; both since deleted, see Engine 0.1.59).
+The three native Flash-Next run configs (base, Swift 1.5 and Swift 1.5 abliterated) point at it, vision
+included.
 
 Measured on this host after the update, base Flash-Next IQ3_XXS, 262144 context, DFlash2, temperature 0.3:
 
@@ -340,4 +341,66 @@ Measured on this host after the update, base Flash-Next IQ3_XXS, 262144 context,
 
 The same model on 0.1.56, at about 15K tokens, was seen at 52.8 tok/s decode, and its log shows prompt reads of 491-523 tok/s.  The v0.2.12 notes explain the single-card gain: the CPU/upload share for missed experts follows the measured CPU pool (ceiling 0.95 instead of 0.60), and a bare `--prefill auto` takes an 8192-token chunk here (the RAM guard keeps it below 16384).  Both matter on a 16 GB card that keeps most experts in system RAM.
 
-The Swift rows were not re-measured; they share the same engine and flags.  Rollback: point the three configs at `strata-0.1.56` and restart.  `--pcie-frac`, `--adapt-decay` and `--vram-reserve-mib` are still accepted by 0.1.58 even though the engine no longer lists them in `--help`.
+The Swift rows were not re-measured; they share the same engine and flags.  `--pcie-frac`, `--adapt-decay` and `--vram-reserve-mib` are still accepted by 0.1.58 even though the engine no longer lists them in `--help`.
+
+## Engine 0.1.59 (2026-11-13)
+
+The native Strata engine is now **0.1.59**, the engine in the v0.2.13 release
+(`strata-engine-0.1.59-windows-x86_64-cuda-cuda13.tar.gz`, 630,783,433 bytes, build commit `712fec6b4297`,
+SHA-256 `3f071a7ccbbf3dcdefed8bff777896d8dd0b580417a078154a7d2c2402ec4158` - the hash in the release's
+`SHA256SUMS.txt`).  It is unpacked in `C:\AI\Strata-data\engines\strata-0.1.59` with its own `cublas` DLLs, and
+the three native Flash-Next run configs (base, Swift 1.5 and Swift 1.5 abliterated) point at it.  0.1.59 is the only native engine left here: the 0.1.54, 0.1.56 and 0.1.58 folders were
+deleted on 2026-11-13.
+
+This is a drop-in engine swap, not a source merge: the engine is a separate binary speaking the same protocol, so
+`src/` here stays at PolyStrata's Strata 0.1.45 base and the other three backends are untouched.
+
+Checked on this host after the swap (base Flash-Next IQ3_XXS, 32768 context, int8 KV, DFlash2, `--expert-cache
+auto`, prompt tokens `9707,11,220`, `--max-new 8`): 0.1.59 and 0.1.58 wrote the same eight tokens
+(`248046 11 220 248044 13 220 79790 400`), at 13.52 and 13.70 tok/s decode in that single 8-token run.  Eight
+tokens is a smoke check, not a measurement of the engine's speed: the 262144-context numbers above were taken on
+0.1.58 and have not been repeated on 0.1.59.  `--pcie-frac`, `--adapt-decay` and `--vram-reserve-mib` are still
+accepted by 0.1.59 although its `--help` does not list them; `--fit-max-tokens` is a server flag, not an engine
+one.
+
+All four backends now take their vision encoder from the same folder.  The aryainfer and ninfer run configs (27B
+AQ3, 27B Turbo IQ3_XXS, Qwen3.5-4B) had been reading `strata-vision.exe` from `strata-0.1.54`; they now read it
+from `strata-0.1.59`.  Measured before switching, 27B mmproj, one screenshot, CPU (`gpu: false`): 0.1.54 and
+0.1.59 both reported `READY 5120` and `OK 1024` and wrote byte-identical embeddings (20,971,540 bytes, the same
+SHA-256), so the `.sve` files NInfer reads are unchanged and nothing downstream can tell the builds apart.  The
+same encoder also loaded the other two mmproj files here (5120 and 2560 wide) and encoded the same image in 6-9 s
+each.  The `strata-0.1.54` folder was then deleted (0.88 GiB), and so were `strata-0.1.56` and `strata-0.1.58`
+(0.90 and 0.91 GiB): `strata-0.1.59` is the only native engine on this host.
+
+## Swift 1.5 Abliterated uninstalled (2026-11-25)
+
+The user asked to remove the uncensored Swift profile.  Everything installed for
+`swift-1.5-abliterated-iq3_xxs` is gone:
+
+| Removed | Size |
+| --- | ---: |
+| `C:\AI\Strata-data\models\sc117-swift-abliterated-IQ3_XXS` (the two GGUF shards, 39,771,812,960 + 36,056,143,040 bytes) | 70.62 GiB |
+| `C:\AI\Strata-data\packs\sc117-swift-abliterated-iq3_xxs` (`dense.bin` 1,538,035,200 bytes, `conversions.json`, `index.txt`, `native_experts.txt`, the tokenizer pack) | 1.44 GiB |
+| `C:\AI\Strata-data\mtp\sc117-swift-rt` (its MTP draft block) | 0.77 GiB |
+| `strata-swift-abliterated-iq3_xxs.json`, its `.json.bak` and its engine log beside the server | 4 KB |
+
+72.83 GiB freed: `C:` went from 583.2 to 656.0 GiB free (`Win32_LogicalDisk`), the sum of the four rows above.
+No process held any of it - the running engine was the IQ3_S one (`--pack C:\AI\Strata-data\packs\iq3_s`) and the
+server on 127.0.0.1:8080 was started with `--config strata-gyro-m` - so nothing had to be stopped and no other
+profile lost a file.  The config is not deleted from the record: `serve/models.py` lists models with
+`root.glob("strata-*.json")`, so the removed entry is simply absent, and the last two versions are kept as
+`run-config-backups/strata-swift-abliterated-iq3_xxs.json.uninstalled` and
+`...json.bak.uninstalled`.
+
+Left here because none of it is specific to the abliterated file: `models\mmproj-Swift-Qwen3.8-Flash-Next-BF16.gguf`
+(0.85 GiB, also named by the plain Swift 1.5 profile), `packs\swift-iq3_xxs` (1.44 GiB, the plain Swift pack) and
+`mtp\sc117-rt` (0.77 GiB, which no run config on this host names).  Removing those three more would free another
+3.06 GiB.
+
+Worth recording: the live config had been rewritten at 00:06 on 2026-11-25 down to
+`--kv-resident 32768 --conversation-cache-mib 4096 --draft-cap 8` - no `--pack`, `--native`, `--ple-gguf`,
+`--mtp` or `--max-context` - so as it stood it could not have started an engine.  Its full 0.1.67 argument list is
+in the archived copies above and its measured settings in [host-tuning/README.md](host-tuning/README.md); the
+8-fixture scores are in [PLC_SAMPLING.md](PLC_SAMPLING.md).  Reinstalling means the abliterated IQ3_XXS shards from
+[UkisAI's Swift 1.5 repository](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF) and a pack
+build; `setup.py` still offers the Swift family (`--family swift`), not the abliterated files.

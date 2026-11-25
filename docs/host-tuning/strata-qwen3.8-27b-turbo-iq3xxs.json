@@ -20,12 +20,12 @@
  "lib_dirs": [
   "$DATA\\cuda\\13.1.2\\bin\\x64",
   "$DATA\\cuda\\13.1.2\\bin",
-  "$DATA\\engines\\strata-0.1.54"
+  "$DATA\\engines\\strata-0.1.59"
  ],
  "port": 8080,
  "gpu": 0,
  "vision": {
-  "exe": "$DATA\\engines\\strata-0.1.54\\strata-vision.exe",
+  "exe": "$DATA\\engines\\strata-0.1.59\\strata-vision.exe",
   "mmproj": "$DATA\\models\\qwen38-27b-turbo-iq3xxs\\mmproj-F16.gguf",
   "model": "$DATA\\models\\qwen38-27b-turbo-iq3xxs\\Qwen3.8-27B-Turbo-Brilliance-50X-RI-GSQ-RCO-IQ3_XXS-mtp.gguf",
   "gpu": false,

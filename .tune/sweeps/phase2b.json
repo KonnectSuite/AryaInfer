@@ -1,0 +1,6 @@
+[
+ {"tag": "p2-new-ple512", "overrides": {"--ple-inflight": 512}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"},
+ {"tag": "p2-new-plecache8m", "overrides": {"--ple-row-cache": 8388608}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"},
+ {"tag": "p2-old2", "overrides": {}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.59\\strata.exe"},
+ {"tag": "p2-new2", "overrides": {}, "exe": "C:\\AI\\Strata-data\\engines\\strata-0.1.62\\strata.exe"}
+]

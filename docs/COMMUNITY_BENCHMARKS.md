@@ -4,8 +4,8 @@
 
 ## Measured on the AryaInfer host, October 17, 2026
 
-> The native engine has since moved to **0.1.58** (November 7, 2026) and the roster
-> to ten profiles on four backends. Current tables: [ENGINES.md](ENGINES.md).
+> The native engine has since moved to **0.1.67** (November 24, 2026) and the roster
+> to ten profiles on five backends. Current tables: [ENGINES.md](ENGINES.md).
 > The numbers below are the October 0.1.45 record and are kept as such.
 
 On the **i9-14900KF / RTX 4070 Ti SUPER 16 GB / 64 GB RAM / Windows 11** host,

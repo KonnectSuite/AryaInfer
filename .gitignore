@@ -41,6 +41,7 @@ td.log
 /strata-*.warm-start
 /build-strata.bat
 /build-strata-cuda12.bat
+/build-strata-hip-win.bat
 /build-cuda12/
 /.strata-mcp/
 
@@ -53,6 +54,9 @@ build-vision-cuda12.bat
 /engine/
 /engine-cuda12/
 /engine-poly/
+/engine-arya/
+# /engine-inkling/ is not ignored as a whole: engine-inkling/build.ps1 is the recipe that builds the
+# Inkling engine here, so the lane ignores its inputs and outputs one by one, further down.
 /build-strata-poly.bat
 /build-vision-poly.bat
 /engine-glm/
@@ -61,6 +65,7 @@ build-vision-cuda12.bat
 /dist/
 *.done
 /third_party/*.zip
+/third_party/metal-cpp/
 
 # IDEs
 /local-data/
@@ -98,3 +103,13 @@ dist-hip/
 # NInfer backend: the built engine binary (engine-ninfer/build.ps1 writes it)
 /engine-ninfer/*.exe
 /engine-ninfer/*.pdb
+/engine-ninfer/BUILD.json
+# Inkling backend: the vendored source, the build tree and the built engine (engine-inkling/build.ps1)
+/engine-inkling/src/
+/engine-inkling/build/
+/engine-inkling/scratch/
+/engine-inkling/*.exe
+/engine-inkling/*.pdb
+/engine-inkling/*.dll
+/engine-inkling/*.log
+/engine-inkling/BUILD.json

@@ -4,8 +4,8 @@
 
 ## Measured on the AryaInfer host, October 17, 2026
 
-> The native engine has since moved to **0.1.58** (November 7, 2026) and the roster
-> to ten profiles on four backends. Current tables: [ENGINES.md](ENGINES.md).
+> The native engine has since moved to **0.1.67** (November 24, 2026) and the roster
+> to ten profiles on five backends. Current tables: [ENGINES.md](ENGINES.md).
 > The numbers below are the October 0.1.45 record and are kept as such.
 
 On the **i9-14900KF / RTX 4070 Ti SUPER 16 GB / 64 GB RAM / Windows 11** host,
@@ -866,6 +866,15 @@ print(r.choices[0].message.content)
   `high`) in `strata-<model>.json`, outside `"args"` (#1641): the engine has no such option, and `--reasoning-effort` in
   `"args"` is moved to this key with a note at startup. The web app's shared Chat settings ("Use for other apps too") and a
   request's own level win over it.
+- **What a thinking level actually changes.** A level does exactly three things, and nothing else: `none` turns thinking
+  off; each level puts its own instruction sentence into the prompt (the sentences the model was trained with — the
+  graded levels are told to think briefly, `high` to think longer; the template spells `high` as its own top level,
+  which is why API clients may also write `xhigh` for it); and, when the config has `reasoning_budget_by_effort`, the
+  level picks the thinking cap. Sampling is never touched by a level — but thinking itself is: the model card's sampling
+  defaults differ between thinking on and thinking off (Qwen3.8: 1.0/0.95/20 thinking, 0.7 not), so choosing `none`
+  changes those defaults the same way a request that disables thinking does. The web app's Settings page (a model's
+  card → Settings → Thinking) shows every level with its sentence and its cap, so what a level does is visible instead
+  of implied.
 - **Keep Windows awake while it works (opt-in, #1727).** `"prevent_sleep": true` in `strata-<model>.json` keeps the PC
   from going to sleep while at least one request is running or waiting (Windows' `SetThreadExecutionState` with
   `ES_SYSTEM_REQUIRED`; the screen may still turn off), and gives the normal sleep rules back when the server is idle

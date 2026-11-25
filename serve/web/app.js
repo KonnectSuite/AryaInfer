@@ -109,8 +109,9 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
 });
 
 // ------------------------------------------------------------------ views, sidebar, overlays
-const VIEWS = ["chat", "images", "monitor", "about"];
-const VIEW_TITLES = {chat: "Chat", images: "Images", monitor: "Monitor", about: "About"};
+const VIEWS = ["chat", "images", "monitor", "models", "engines", "config", "about"];
+const VIEW_TITLES = {chat: "Chat", images: "Images", monitor: "Monitor", models: "Models", engines: "Engines",
+                     config: "Settings", about: "About"};
 let tab = "chat";
 function showTab(name) {
   tab = VIEWS.includes(name) ? name : "chat";
@@ -125,6 +126,9 @@ function showTab(name) {
   if (location.hash.slice(1) !== tab) history.replaceState(null, "", tab === "chat" ? location.pathname : `#${tab}`);
   if (tab === "chat") $("input").focus();
   if (tab === "monitor") loadMcp();
+  if (tab === "models") loadModelsView();
+  if (tab === "engines") loadEngines();
+  if (tab === "config" && !cfgView) openConfigPage(null);
   if (lastMetrics) render(lastMetrics);
   closeSidebar();
   closeSettings();
@@ -195,7 +199,6 @@ function openSettings(open) {
   $("settings-btn").setAttribute("aria-expanded", String(open));
   if (!open) { closeOverlay("settings"); return; }
   closeModelMenu();
-  loadConfig();
   loadMcp();                                       // the Tools rows: how many servers, and their state
   loadSearch();
   openOverlay("settings");
@@ -302,6 +305,7 @@ async function switchModel(name) {
   $("model-btn").disabled = false;
   await loadHealth();
   await loadModels();
+  if (tab === "models") loadModelsView();
   if (message) { toast("error", "The model was not switched", message, 10000); return; }
   newChat();                                   // the other model answers from a fresh chat, as before
   toast("success", `${name} is loaded`, "A new chat was started.");
@@ -1686,61 +1690,796 @@ $("image-url").oninput = () => {
     : "Start with http:// or https://, and leave out ?query and #hash.";
 };
 
-// ------------------------------------------------------------------ Model settings (GET / POST /config, #564)
-// A few documented keys of the run config (strata-<model>.json), for every client, from the next start on.  The
-// server lists them, checks every value and keeps every other key of the file as it is.
-let cfgKeys = [];
-async function loadConfig() {
-  let r;
-  try { r = await fetch("config", {headers: headers()}); } catch (e) { return; }
-  if (!r.ok) { $("cfg-card").hidden = true; return; }       // no run config, an older server, or no key yet
-  const c = await r.json();
-  cfgKeys = c.keys || [];
-  $("cfg-file").textContent = c.file || "";
-  $("cfg-form").innerHTML = cfgKeys.map((k, i) => {
-    const id = `cfg-${i}`, v = k.value;
-    let input;
-    if (k.kind === "bool" || k.kind === "enum") {
-      const opts = k.kind === "bool" ? [["true", "on"], ["false", "off"]] : k.choices.map((x) => [x, x]);
-      const cur = v == null ? "" : String(v);
-      input = `<select class="st-input" id="${id}"><option value=""${cur === "" ? " selected" : ""}>default</option>` +
-        opts.map(([val, text]) => `<option value="${esc(val)}"${cur === val ? " selected" : ""}>${esc(text)}</option>`).join("") + `</select>`;
-    } else {
-      const text = v == null ? "" : Array.isArray(v) ? v.join(", ") : String(v);
-      input = `<input class="st-input" id="${id}" ${k.kind === "number" ? 'type="number" step="any" min="0"' : 'type="text"'} ` +
-        `value="${esc(text)}" placeholder="default" autocomplete="off">`;
-    }
-    return `<label for="${id}" title="${esc(k.help)}">${esc(k.help)}<code>${esc(k.key)}</code></label>${input}`;
-  }).join("");
-  $("cfg-card").hidden = false;
+// ------------------------------------------------------------------ Models view (GET /api/models)
+// One card per installed run config: what the model is, what it needs, and its actions — Load/Unload (the engine in
+// memory) and Settings (the full-page editor below). The composer's chip and menu still switch quickly.
+function paramsText(n) {
+  if (n == null) return "";
+  return n >= 1e9 ? (n / 1e9).toFixed(1) + "B" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : String(n);
 }
-function configValue(k, el) {
-  const s = el.value.trim();
-  if (s === "") return null;
-  if (k.kind === "bool") return s === "true";
-  if (k.kind === "number") return Number(s);
-  return s;                                         // enum, or names (the server splits them at commas)
-}
-$("cfg-save").addEventListener("click", async () => {
-  const set = {};
-  cfgKeys.forEach((k, i) => {
-    const v = configValue(k, $(`cfg-${i}`));
-    const old = Array.isArray(k.value) ? k.value.join(", ") : k.value;
-    if (JSON.stringify(v) !== JSON.stringify(old ?? null)) set[k.key] = v;
-  });
-  if (!Object.keys(set).length) { $("cfg-msg").textContent = "Nothing changed."; return; }
+let modelList = [];
+async function loadModelsView() {
+  const wrap = $("models-cards");
   try {
-    const r = await fetch("config", {method: "POST", headers: headers(true), body: JSON.stringify({set})});
+    const r = await fetch("api/models", {headers: headers()});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    modelList = (await r.json()).models || [];
+  } catch (e) {
+    $("models-note").textContent = "";
+    wrap.innerHTML = `<p class="muted">Could not load models: ${esc(e.message || e)}</p>`;
+    return;
+  }
+  $("models-note").textContent = `${modelList.length} model${modelList.length === 1 ? "" : "s"}`;
+  if (!modelList.length) {
+    wrap.innerHTML = `<p class="muted">No models found. Setup writes a run config (strata-*.json) beside the server when it installs a model.</p>`;
+    return;
+  }
+  wrap.innerHTML = modelList.map((m) => {
+    const bad = m.status === "unavailable";
+    const badge = m.current ? "st-badge st-badge--generating" : bad ? "st-badge st-badge--error" : "st-badge st-badge--reading";
+    const stat = m.current ? (m.status === "loading" ? "loading" : m.status === "loaded" ? "loaded" : "unloaded")
+                           : bad ? "unavailable" : "ready";
+    const chips = [];
+    if (m.backend) chips.push(`<span class="chip-info">${icon("cpu", "st-icon st-icon--sm")} ${esc(m.backend)}</span>`);
+    if (m.quantization) chips.push(`<span class="chip-info"><b>${esc(m.quantization)}</b></span>`);
+    if (m.params_active != null) chips.push(`<span class="chip-info">${icon("experts", "st-icon st-icon--sm")} <b>${paramsText(m.params_active)}</b> active</span>`);
+    else if (m.params_total != null) chips.push(`<span class="chip-info"><b>${paramsText(m.params_total)}</b></span>`);
+    if (m.context) chips.push(`<span class="chip-info">${icon("layers", "st-icon st-icon--sm")} <b>${ctxfmt(m.context)}</b></span>`);
+    if (m.multimodal) chips.push(`<span class="chip-info">${icon("image", "st-icon st-icon--sm")} vision</span>`);
+    if (m.mtp) chips.push(`<span class="chip-info">${icon("bolt", "st-icon st-icon--sm")} MTP</span>`);
+    const actions = [];
+    if (m.current) {
+      if (m.status === "loaded") actions.push(`<button class="st-btn st-btn--secondary" type="button" data-unload="${esc(m.id)}">${icon("stop", "st-icon st-icon--sm")} Unload</button>`);
+    } else {
+      actions.push(`<button class="st-btn st-btn--primary" type="button" data-load="${esc(m.id)}"${bad ? " disabled" : ""}>${icon("play", "st-icon st-icon--sm")} Load</button>`);
+    }
+    actions.push(`<button class="st-btn st-btn--secondary" type="button" data-configure="${esc(m.id)}">${icon("settings", "st-icon st-icon--sm")} Settings</button>`);
+    return `<article class="model-card" data-current="${m.current ? "true" : "false"}">
+      <div class="card-head"><div class="card-head__titles">
+        <span class="card-title-lg">${esc(m.display_name || m.id)}</span>
+        <span class="card-sub">${esc(m.id)}</span></div>
+        <span class="${badge}">${stat}</span></div>
+      <div class="card-chips">${chips.join("")}</div>
+      ${m.problem ? `<p class="cfg-note">${esc(m.problem)}</p>` : ""}
+      <div class="card-actions">${actions.join("")}</div></article>`;
+  }).join("");
+}
+async function unloadModel() {
+  if (busy) { toast("warn", "Still writing", "Stop the answer first."); return; }
+  try {
+    const r = await fetch("api/models/unload", {method: "POST", headers: headers(true), body: "{}"});
     const b = await r.json();
     if (!r.ok) throw new Error((b.error || {}).message || `HTTP ${r.status}`);
-    $("cfg-msg").textContent = b.changed.length
-      ? `Saved (${b.changed.join(", ")}); the earlier file is ${b.file}.bak. Start the model again to use it.` : "Nothing changed.";
-    loadConfig();
+    toast("success", "Model unloaded", "The next request — or Load — starts it again.");
+  } catch (e) { toast("error", "Not unloaded", String(e.message || e), 9000); }
+  await loadHealth(); await loadModels(); await loadModelsView();
+}
+async function loadModelNow(id) {
+  // the current model, unloaded: start it again (switchModel refuses a "switch" to the model that is already selected)
+  if (busy) { toast("warn", "Still writing", "Stop the answer first."); return; }
+  toast("info", `Loading ${id}`, "The engine starts …", 8000);
+  let message = "";
+  try {
+    const r = await fetch("api/models/load", {method: "POST", headers: headers(true), body: JSON.stringify({model: id})});
+    if (!r.ok) message = ((await r.json()).error || {}).message || `the server answered ${r.status}`;
+  } catch (e) { message = String(e); }
+  await loadHealth(); await loadModels(); await loadModelsView();
+  if (message) toast("error", "The model was not loaded", message, 10000);
+  else toast("success", `${id} is loaded`, "");
+}
+$("models-cards").addEventListener("click", (e) => {
+  const load = e.target.closest("[data-load]");
+  if (load && !load.disabled) {
+    if (load.dataset.load === $("model-select").dataset.current) loadModelNow(load.dataset.load);
+    else switchModel(load.dataset.load);
+    return;
+  }
+  const un = e.target.closest("[data-unload]");
+  if (un) { unloadModel(); return; }
+  const conf = e.target.closest("[data-configure]");
+  if (conf) openConfigPage(conf.dataset.configure);
+});
+
+// ------------------------------------------------------------------ Engines view (GET /api/engines)
+// One card per engine of engines.json: pinned and installed version, CUDA archs, provenance links, and the run
+// configs that use it. Repair runs setup.py --repair-engines in the background, only when the server was started
+// with --allow-engine-repair.
+function engStatusLabel(s) { return {current: "current", outdated: "outdated", missing: "missing", manual: "manual", unknown: "unknown"}[s] || s; }
+function engBadge(s) {
+  return s === "current" ? "st-badge st-badge--generating" : s === "outdated" ? "st-badge st-badge--queued"
+    : s === "missing" ? "st-badge st-badge--error" : "st-badge";
+}
+async function loadEngines() {
+  const wrap = $("engines-cards");
+  let data;
+  try {
+    const r = await fetch("api/engines", {headers: headers()});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    data = await r.json();
   } catch (e) {
-    $("cfg-msg").textContent = "";
-    toast("error", "Not saved", String(e.message || e), 6000);
+    $("engines-note").textContent = "";
+    wrap.innerHTML = `<p class="muted">Could not load engines: ${esc(e.message || e)}</p>`;
+    return;
+  }
+  const engs = data.engines || [];
+  const used = data.used_by || {};
+  $("engines-note").textContent = data.release ? `pinned release ${data.release}` : "";
+  if (!engs.length) { wrap.innerHTML = `<p class="muted">No engines</p>`; return; }
+  wrap.innerHTML = engs.map((e) => {
+    const users = used[e.key] || [];
+    const links = [];
+    if (e.upstream) links.push(`<a href="${esc(e.upstream)}" target="_blank" rel="noopener noreferrer">source ${icon("external", "st-icon st-icon--sm")}</a>`);
+    if (e.release) links.push(`<a href="${esc(e.release)}" target="_blank" rel="noopener noreferrer">releases ${icon("external", "st-icon st-icon--sm")}</a>`);
+    const rows = [
+      `<div class="kv-line"><b>binary</b> <code>${esc(e.dir)}/${esc(e.binary)}</code></div>`,
+      `<div class="kv-line"><b>pinned</b> <span>${esc(e.version || "—")}${e.required ? " · required" : ""}${e.manual ? " · manual build" : ""}</span></div>`,
+      `<div class="kv-line"><b>installed</b> <span>${esc(e.installed_version || "—")}</span></div>`,
+    ];
+    if (Array.isArray(e.archs) && e.archs.length) rows.push(`<div class="kv-line"><b>cuda archs</b> <span>${esc(e.archs.join(", "))}</span></div>`);
+    if (e.cuda) rows.push(`<div class="kv-line"><b>cuda</b> <span>${esc(String(e.cuda))}</span></div>`);
+    if (e.core) rows.push(`<div class="kv-line"><b>core</b> <span>${esc(e.core)}${e.core_commit ? ` @ ${esc(String(e.core_commit).slice(0, 7))}` : ""}</span></div>`);
+    if (e.source) rows.push(`<div class="kv-line"><b>source</b> <span>${esc(e.source)}</span></div>`);
+    return `<article class="engine-card">
+      <div class="card-head"><div class="card-head__titles">
+        <span class="card-title-lg">${esc(e.title || e.key)}</span><span class="card-sub">${esc(e.key)}</span></div>
+        <span class="${engBadge(e.status)} eng-status">${esc(engStatusLabel(e.status))}</span></div>
+      ${rows.join("")}
+      ${links.length ? `<div class="engine-links">${links.join("")}</div>` : ""}
+      <div class="kv-line"><b>used by</b> <span class="used-by">${users.length ? users.map((u) => `<span class="chip-info">${esc(u)}</span>`).join("") : "—"}</span></div>
+    </article>`;
+  }).join("");
+}
+$("engines-repair").addEventListener("click", async () => {
+  $("engines-msg").textContent = "";
+  try {
+    const r = await fetch("api/engines/repair", {method: "POST", headers: headers(true), body: "{}"});
+    const b = await r.json();
+    if (!r.ok) throw new Error((b.error || {}).message || `HTTP ${r.status}`);
+    $("engines-msg").textContent = b.note || "Repair started.";
+    toast("info", "Repair started", "The engines download and install in the background.", 8000);
+  } catch (e) {
+    $("engines-msg").textContent = "";
+    toast("error", "Repair not started", String(e.message || e), 8000);
   }
 });
+
+// ------------------------------------------------------------------ Model settings page (GET/POST /api/models/config)
+// A whole view for one model's run config: a rail to switch model, section cards for every knob the schema knows
+// (sliders where a range is known, a file browser for every path), and a Changes rail with the pending diff.
+// Saving is all-or-nothing: the server checks every value before the file is written, and keeps the old one as .bak.
+let cfgModel = null;             // the model id being edited (null: the server's current run config)
+let cfgView = null;              // the last view: {file, groups, note, raw, efforts}
+let cfgEngines = [];             // engine inventory, for the exe picker
+let cfgExeTouched = false;       // exe is only sent after the user moved the picker (a legacy path must survive)
+let cfgThinkTouched = false;     // reasoning_effort only after a row was clicked
+let cfgBudgetTouched = false;    // reasoning_budget_by_effort only after a cap was edited
+const cfgId = (key) => `cfgk-${String(key).replace(/[^a-zA-Z0-9]/g, "-")}`;
+const cfgFlagId = (key, flag) => `${cfgId(key)}-f-${String(flag).replace(/[^a-zA-Z0-9]/g, "-")}`;
+const NUMERIC_KIND = /^(int>=0|num>=0|0<x<=1|0<=x<=1|1\.\.64|num>0|int>0|int|num)$/;
+const INT_KIND = /^(int>=0|int>0|int)$/;
+const SAMPLING_PRESETS = [{name: "Precise", temperature: 0.3}, {name: "Balanced", temperature: 0.7},
+                          {name: "Creative", temperature: 1.0}];
+const PATH_BROWSE = {                                    // string keys that get a Browse… button
+  "vision.exe": {want: "file", ext: ".exe"},
+  "vision.mmproj": {want: "file", ext: ".gguf"},
+  "vision.model": {want: "file", ext: ""},
+  "cwd": {want: "dir", ext: ""},
+};
+
+// one control for one kind; the label (with its live <output>) is added by cfgFieldHtml
+function sliderNumber(id, range, value, label, anyStep) {
+  const [min, max, step] = range;
+  const has = value != null && value !== "";
+  const pos = has ? Math.min(max, Math.max(min, Number(value))) : min;
+  return `<span class="cfg-slider">` +
+    `<input class="st-slider" type="range" id="${id}-r" min="${min}" max="${max}" step="${step}" value="${pos}" aria-label="${esc(label)} slider">` +
+    `<input class="st-input" type="number" id="${id}" min="${min}" max="${max}" step="${anyStep ? "any" : step}" ` +
+    `value="${has ? esc(String(value)) : ""}" placeholder="default" autocomplete="off" aria-label="${esc(label)}"></span>`;
+}
+function cfgControl(k, id) {
+  const v = k.value;
+  const label = k.help || k.key;
+  if (k.kind === "bool") {
+    return `<button class="st-toggle" type="button" role="switch" id="${id}" aria-checked="${v === true}" aria-label="${esc(label)}"></button>`;
+  }
+  if (k.kind === "enum") {
+    const cur = v == null ? "" : String(v);
+    return `<select class="st-input" id="${id}" aria-label="${esc(label)}"><option value=""${cur === "" ? " selected" : ""}>default</option>` +
+      (k.choices || []).map((x) => `<option value="${esc(x)}"${cur === x ? " selected" : ""}>${esc(x)}</option>`).join("") + `</select>`;
+  }
+  if (k.kind === "object") {
+    const pairs = v == null ? [] : Object.entries(v);
+    return `<div class="kv-grid">` + pairs.map(([kk, vv]) =>
+      `<div class="kv-row"><input class="st-input" type="text" value="${esc(kk)}" data-kv-key="${id}" aria-label="Name">` +
+      `<input class="st-input" type="text" value="${esc(vv ?? "")}" data-kv-val="${id}" aria-label="Value">` +
+      `<button class="st-btn st-btn--icon" type="button" data-kv-del="${id}" aria-label="Remove">${icon("x")}</button></div>`).join("") +
+      `<button class="st-btn st-btn--secondary" type="button" data-kv-add="${id}">Add</button></div>`;
+  }
+  if (k.kind === "list") {
+    const rows = (v || []).map((vv) =>
+      `<div class="list-row"><input class="st-input" type="text" value="${esc(vv ?? "")}" data-list-val="${id}" aria-label="Entry">` +
+      `<button class="st-btn st-btn--icon" type="button" data-list-del="${id}" aria-label="Remove">${icon("x")}</button></div>`).join("");
+    return `<div class="kv-grid">${rows}<button class="st-btn st-btn--secondary" type="button" data-list-add="${id}">Add</button></div>`;
+  }
+  if (k.kind === "readonly") {
+    return `<div class="cfg-readonly" id="${id}">${v == null || v === "" ? "—" : esc(String(v))}</div>`;
+  }
+  if (NUMERIC_KIND.test(k.kind)) {
+    if (k.range) return sliderNumber(id, k.range, v, label, !INT_KIND.test(k.kind));
+    return `<input class="st-input" id="${id}" type="number" step="any" value="${v == null ? "" : esc(String(v))}" placeholder="default" autocomplete="off" aria-label="${esc(label)}">`;
+  }
+  const text = v == null ? "" : Array.isArray(v) ? v.join(", ") : String(v);
+  const inp = `<input class="st-input" id="${id}" type="text" value="${esc(text)}" placeholder="default" autocomplete="off" spellcheck="false" aria-label="${esc(label)}">`;
+  const br = PATH_BROWSE[k.key];
+  if (br && k.kind === "string") {
+    return `<span class="cfg-path">${inp}<button class="st-btn st-btn--secondary" type="button" data-browse="${id}" ` +
+      `data-want="${br.want}" data-ext="${br.ext}" aria-label="Browse for ${esc(label)}">${icon("folder", "st-icon st-icon--sm")}</button></span>`;
+  }
+  return inp;
+}
+function cfgFieldHtml(k) {
+  const id = cfgId(k.key);
+  const out = k.range && NUMERIC_KIND.test(k.kind) ? ` <output id="${id}-o">${k.value == null ? "" : esc(String(k.value))}</output>` : "";
+  return `<div class="cfg-field" data-key="${esc(k.key)}" data-advanced="${k.advanced ? "true" : "false"}" data-hidden="${k.advanced ? "true" : "false"}">
+    <label class="st-label" for="${id}">${esc(k.help || k.key)}<code>${esc(k.key)}</code>${out}</label>${cfgControl(k, id)}</div>`;
+}
+function flagControl(f, id) {
+  const label = f.help || f.flag;
+  if (f.kind === "bool") {
+    return `<button class="st-toggle" type="button" role="switch" id="${id}" aria-checked="${f.value === true}" aria-label="${esc(label)}"></button>`;
+  }
+  if (f.kind === "enum") {
+    const cur = f.value == null ? "" : String(f.value);
+    return `<select class="st-input" id="${id}" aria-label="${esc(label)}"><option value=""${cur === "" ? " selected" : ""}>default</option>` +
+      (f.choices || []).map((x) => `<option value="${esc(x)}"${cur === x ? " selected" : ""}>${esc(x)}</option>`).join("") + `</select>`;
+  }
+  if (f.kind === "int" || f.kind === "num") {
+    if (f.range) return sliderNumber(id, f.range, f.value, label, f.kind === "num");
+    return `<input class="st-input" id="${id}" type="number" step="any" value="${f.value == null ? "" : esc(String(f.value))}" placeholder="default" autocomplete="off" aria-label="${esc(label)}">`;
+  }
+  const inp = `<input class="st-input" id="${id}" type="text" value="${f.value == null ? "" : esc(String(f.value))}" placeholder="default" autocomplete="off" spellcheck="false" aria-label="${esc(label)}">`;
+  if (f.kind === "path") {
+    return `<span class="cfg-path">${inp}<button class="st-btn st-btn--secondary" type="button" data-browse="${id}" ` +
+      `data-want="file" data-ext="" aria-label="Browse for ${esc(label)}">${icon("folder", "st-icon st-icon--sm")}</button></span>`;
+  }
+  return inp;
+}
+function flagFieldHtml(f, key) {
+  const id = cfgFlagId(key, f.flag);
+  const out = f.range && (f.kind === "int" || f.kind === "num") ? ` <output id="${id}-o">${f.value == null ? "" : esc(String(f.value))}</output>` : "";
+  return `<div class="cfg-field" data-flag="${esc(f.flag)}">
+    <label class="st-label" for="${id}">${esc(f.help || f.flag)}<code>${esc(f.flag)}</code>${out}</label>${flagControl(f, id)}</div>`;
+}
+
+// The Thinking card is the honest effort knob: one row per level with the sentence it puts in the prompt and the
+// cap it applies. A row click picks the default level; the caps edit reasoning_budget_by_effort.
+function thinkCard() {
+  const findKey = (key) => {
+    for (const g of cfgView.groups || []) for (const it of g.keys || []) if (it.key === key) return it;
+    return null;
+  };
+  const eff = findKey("reasoning_effort") || {value: null};
+  const auto = `<div class="think-row" role="radio" tabindex="0" aria-checked="${eff.value == null || eff.value === ""}" data-level="" data-open="true" data-plain="true">
+    <span class="think-row__level" data-name="Auto">Auto</span>
+    <span class="think-row__text">Not pinned here: every request picks its own level (the chat drawer and API calls decide).</span>
+    <span class="think-row__budget"></span></div>`;
+  const rows = (cfgView.efforts || []).map((e) => {
+    const sel = eff.value === e.level;
+    const budget = e.level === "none" ? `<span class="cfg-note">no cap — thinking off</span>`
+      : sliderNumber(`think-${e.level}`, [0, 65536, 256], e.budget, `${e.level} thinking cap`, true);
+    return `<div class="think-row" role="radio" tabindex="0" aria-checked="${sel}" data-level="${esc(e.level)}"${e.level === "none" ? ` data-open="true"` : ""}>
+      <span class="think-row__level" data-name="${esc(e.level)}">${esc(e.level)}${sel ? ` ${icon("check", "st-icon st-icon--sm")}` : ""}</span>
+      <span class="think-row__text">${esc(e.instruction || "")}</span>
+      <span class="think-row__budget">${budget}</span></div>`;
+  }).join("");
+  const g = (cfgView.groups || []).find((x) => x.key === "reasoning") || {keys: []};
+  const skip = new Set(["reasoning_effort", "reasoning_budget_by_effort"]);
+  const rest = (g.keys || []).filter((k) => !skip.has(k.key));
+  return `<section class="cfg-card" id="cfg-think">
+    <h3 class="set-card__title">${icon("thinking", "st-icon st-icon--sm")} Thinking</h3>
+    <p class="cfg-note">The level a request uses when it does not ask for one. It picks the instruction sentence below and
+      the thinking cap — nothing else: your sampling settings stay exactly as they are. Click a sentence to read it in full.</p>
+    <div class="think-rows" role="radiogroup" aria-label="Default thinking level">${auto}${rows}</div>
+    <div class="cfg-fields">${rest.map(cfgFieldHtml).join("")}</div>
+  </section>`;
+}
+function samplingCard() {
+  const g = (cfgView.groups || []).find((x) => x.key === "sampling");
+  if (!g) return "";
+  const temp = (g.keys || []).find((k) => k.key === "sampling.temperature");
+  const cur = temp && temp.value != null ? Number(temp.value) : null;
+  const chips = SAMPLING_PRESETS.map((p) =>
+    `<button type="button" class="chip" data-preset-temp="${p.temperature}" aria-pressed="${cur === p.temperature}">${esc(p.name)} ${p.temperature}</button>`).join("");
+  return `<section class="cfg-card" id="cfg-sampling">
+    <h3 class="set-card__title">${icon("gauge", "st-icon st-icon--sm")} ${esc(g.label)}</h3>
+    <p class="cfg-note">Defaults for every request; the chat drawer and API calls override them per request.</p>
+    <div class="chips" role="group" aria-label="Temperature presets">${chips}</div>
+    <div class="cfg-fields">${(g.keys || []).map(cfgFieldHtml).join("")}</div>
+  </section>`;
+}
+function exeFieldHtml(k) {
+  const id = cfgId("exe");
+  const cur = k.value == null ? "" : String(k.value);
+  const norm = cur.replace(/\\/g, "/").toLowerCase();
+  const opts = cfgEngines.filter((e) => e.status !== "missing");
+  let matched = "";
+  for (const e of opts) {
+    const p = `${e.dir}/${e.binary}`.replace(/\\/g, "/").toLowerCase();
+    if (norm === p) { matched = `${e.dir}/${e.binary}`; break; }
+  }
+  const options = opts.map((e) => {
+    const val = `${e.dir}/${e.binary}`;
+    return `<option value="${esc(val)}"${matched.toLowerCase() === val.toLowerCase() ? " selected" : ""}>` +
+      `${esc(e.title || e.key)} — ${esc(val)}${e.installed_version ? ` (${esc(e.installed_version)})` : ""}</option>`;
+  }).join("");
+  const custom = !matched;
+  return `<div class="cfg-field" data-key="exe">
+    <label class="st-label" for="${id}-sel">Engine executable<code>exe</code></label>
+    <select class="st-input" id="${id}-sel" aria-label="Engine executable">${options}<option value="custom"${custom ? " selected" : ""}>Custom path…</option></select>
+    <span class="cfg-path" id="${id}-wrap"${custom ? "" : " hidden"}>
+      <input class="st-input" id="${id}" type="text" value="${esc(cur)}" placeholder="engine/strata.exe" autocomplete="off" spellcheck="false" aria-label="Engine executable path">
+      <button class="st-btn st-btn--secondary" type="button" data-browse="${id}" data-want="file" data-ext=".exe" aria-label="Browse for the engine executable">${icon("folder", "st-icon st-icon--sm")}</button>
+    </span>
+  </div>`;
+}
+function engineCard() {
+  const g = (cfgView.groups || []).find((x) => x.key === "engine");
+  if (!g) return "";
+  const byKey = Object.fromEntries((g.keys || []).map((k) => [k.key, k]));
+  const advanced = new Set(["env", "lib_dirs", "cwd"]);           // those live in the Advanced collapse
+  const rest = (g.keys || []).filter((k) => !advanced.has(k.key) && k.key !== "exe" && k.key !== "args");
+  const args = byKey.args;
+  const fgroups = args && args.flag_groups && args.flag_groups.length ? args.flag_groups
+    : (args && args.flags ? [{key: "flags", label: "Engine flags", flags: args.flags}] : []);   // older server: no groups, render flat
+  const groups = fgroups.map((fg) =>
+    `<div class="flag-group"><div class="flag-group__title">${esc(fg.label)}</div>` +
+    (fg.flags || []).map((f) => flagFieldHtml(f, args.key)).join("") + `</div>`).join("");
+  return `<section class="cfg-card" id="cfg-engine">
+    <h3 class="set-card__title">${icon("cpu", "st-icon st-icon--sm")} ${esc(g.label)}</h3>
+    ${byKey.exe ? exeFieldHtml(byKey.exe) : ""}
+    ${args ? `<div class="cfg-field" data-key="args"><label class="st-label">Engine flags<code>args</code></label>${groups}</div>` : ""}
+    <div class="cfg-fields">${rest.map(cfgFieldHtml).join("")}</div>
+  </section>`;
+}
+function groupCard(key, iconName, note) {
+  const g = (cfgView.groups || []).find((x) => x.key === key);
+  if (!g || !(g.keys || []).length) return "";
+  return `<section class="cfg-card">
+    <h3 class="set-card__title">${icon(iconName, "st-icon st-icon--sm")} ${esc(g.label)}</h3>
+    ${note ? `<p class="cfg-note">${note}</p>` : ""}
+    <div class="cfg-fields">${g.keys.map(cfgFieldHtml).join("")}</div>
+  </section>`;
+}
+function advancedCard() {
+  const g = (cfgView.groups || []).find((x) => x.key === "engine") || {keys: []};
+  const byKey = Object.fromEntries((g.keys || []).map((k) => [k.key, k]));
+  const fields = ["cwd", "env", "lib_dirs"].map((n) => byKey[n]).filter(Boolean).map(cfgFieldHtml).join("");
+  const other = byKey.args && (byKey.args.other || []).length
+    ? `<div class="cfg-field"><label class="st-label">Other arguments<code>args</code></label>` +
+      `<div class="other-args">${byKey.args.other.map((o) => `<code>${esc(o)}</code>`).join(" ")}</div>` +
+      `<span class="cfg-note">Arguments this editor does not know; they pass through unchanged. Edit them in the file.</span></div>` : "";
+  return `<details class="st-collapse" id="cfg-advanced">
+    <summary>Advanced${icon("chevron", "st-icon st-icon--sm st-chev")}</summary>
+    <div class="st-collapse__body"><div class="cfg-fields">${fields}${other}
+      <div class="cfg-field"><label class="st-label" for="config-raw">Raw run config<code>${esc(cfgView.file || "")}</code></label>
+      <textarea class="st-input" id="config-raw" rows="14" readonly spellcheck="false">${esc(cfgView.raw || "")}</textarea>
+      <span class="cfg-note">The file as stored. Every edit above is checked by the server before it is written, and the
+        earlier file is kept as <code>.bak</code>.</span></div>
+    </div></div>
+  </details>`;
+}
+function renderFacts() {
+  const g = (cfgView.groups || []).find((x) => x.key === "info");
+  const rows = ((g && g.keys) || []).map((k) =>
+    `<dt>${esc(k.key)}</dt><dd>${k.value == null || k.value === "" ? "—" : esc(String(k.value))}</dd>`).join("");
+  $("cfg-facts").innerHTML = `<h3 class="set-card__title">${icon("info", "st-icon st-icon--sm")} Model facts</h3>
+    <dl class="facts-grid">${rows || `<dt>—</dt><dd>nothing detected</dd>`}</dl>
+    <p class="cfg-note">Detected from the run config and the model file; not editable.</p>`;
+}
+function renderSide() {
+  // the Changes card is static markup (index.html); only the list, the facts and the button states are rendered
+  renderFacts();
+  cfgMarkDirty();
+}
+function renderRail() {
+  $("cfg-rail").innerHTML = `<div class="rail-head">Run configs</div>` + modelList.map((m) =>
+    `<button type="button" class="rail-card" data-cfg-model="${esc(m.id)}" aria-current="${m.id === cfgModel ? "true" : "false"}">
+      <strong>${esc(m.display_name || m.id)}</strong><span>${esc(m.id)}</span>
+      ${m.current ? `<span class="st-badge st-badge--generating rail-badge">${m.status === "loaded" ? "loaded" : "current"}</span>` : ""}
+    </button>`).join("");
+}
+function renderSections() {
+  $("cfg-sections").innerHTML = thinkCard() + samplingCard() + engineCard() +
+    groupCard("vision", "image", "The external encoder for picture inputs; empty when the model has no vision.") +
+    groupCard("behavior", "bolt") + groupCard("lifecycle", "clock") + groupCard("identity", "cube") + advancedCard();
+  cfgMarkDirty();
+}
+$("cfg-save").addEventListener("click", cfgSave);
+$("cfg-revert").addEventListener("click", () => {
+  cfgExeTouched = cfgThinkTouched = cfgBudgetTouched = false;
+  renderSections();                                   // rebuild from cfgView: every pending edit is dropped
+});
+function renderConfigPage() {
+  const m = modelList.find((x) => x.id === cfgModel);
+  $("cfg-title").textContent = m ? (m.display_name || m.id) : "Model settings";
+  $("cfg-file").textContent = cfgView.file || "";
+  renderRail();
+  renderSections();
+  renderSide();
+}
+async function openConfigPage(modelId) {
+  try {
+    const q = modelId ? `?model=${encodeURIComponent(modelId)}` : "";
+    const [modelsR, cfgR, engR] = await Promise.all([
+      fetch("api/models", {headers: headers()}),
+      fetch(`api/models/config${q}`, {headers: headers()}),
+      fetch("api/engines", {headers: headers()}),
+    ]);
+    if (modelsR.ok) modelList = (await modelsR.json()).models || [];
+    const b = await cfgR.json();
+    if (!cfgR.ok) throw new Error((b.error || {}).message || `HTTP ${cfgR.status}`);
+    try { cfgEngines = ((await engR.json()).engines) || []; } catch (e) { cfgEngines = []; }
+    cfgView = b;
+    cfgModel = modelId || (modelList.find((m) => m.current) || {}).id || null;
+    cfgExeTouched = cfgThinkTouched = cfgBudgetTouched = false;
+    renderConfigPage();
+    showTab("config");
+  } catch (e) {
+    toast("error", "Settings not opened", String(e.message || e), 10000);
+  }
+}
+function cfgDiscardOk() {
+  try {
+    if (cfgView && Object.keys(collectSet()).length) return confirm("This editor has unsaved changes. Discard them?");
+  } catch (e) { /* a form that cannot be read is no reason to trap the user on this page */ }
+  return true;
+}
+$("cfg-back").addEventListener("click", () => { if (cfgDiscardOk()) showTab("models"); });
+$("cfg-rail").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-cfg-model]");
+  if (!b || b.dataset.cfgModel === cfgModel) return;
+  if (!cfgDiscardOk()) return;
+  openConfigPage(b.dataset.cfgModel);
+});
+
+// ---- reading the form back into a change set --------------------------------------------------------------
+function cfgValue(k, id) {
+  // one non-args field → the value the server understands (null = remove / keep the default)
+  if (k.kind === "readonly") return k.value ?? null;
+  if (k.kind === "object") {
+    const numeric = k.key === "reasoning_budget_by_effort";       // level: token counts; env keeps strings
+    const out = {};
+    document.querySelectorAll(`[data-kv-key="${id}"]`).forEach((keyEl, i) => {
+      const valEl = document.querySelectorAll(`[data-kv-val="${id}"]`)[i];
+      const key = keyEl.value.trim();
+      if (!key) return;
+      const s = valEl.value.trim();
+      if (s === "") { out[key] = null; return; }                  // an empty value removes that entry
+      if (numeric && /^-?\d+(\.\d+)?$/.test(s)) out[key] = Number(s);
+      else out[key] = s;
+    });
+    if (!Object.keys(out).length && (k.value == null || !Object.keys(k.value).length)) return k.value ?? null;
+    return out;
+  }
+  if (k.kind === "list") {
+    const out = [];
+    document.querySelectorAll(`[data-list-val="${id}"]`).forEach((el) => { const s = el.value.trim(); if (s !== "") out.push(s); });
+    if (!out.length && (k.value == null || (Array.isArray(k.value) && !k.value.length))) return k.value ?? null;
+    return out;
+  }
+  const el = $(id);
+  if (!el) return k.value ?? null;
+  if (k.kind === "bool") return el.getAttribute("aria-checked") === "true";
+  if (k.kind === "names") {
+    const s = el.value.trim();
+    return s === "" ? null : s.split(",").map((x) => x.trim()).filter(Boolean);
+  }
+  const s = el.value.trim();
+  if (s === "") return null;
+  if (INT_KIND.test(k.kind)) return parseInt(s, 10);
+  if (NUMERIC_KIND.test(k.kind)) return Number(s);
+  return s;
+}
+function readFlag(f, key) {
+  const el = $(cfgFlagId(key, f.flag));
+  if (!el) return null;
+  if (f.kind === "bool") return el.getAttribute("aria-checked") === "true";
+  const s = el.value.trim();
+  if (s === "") return null;                                      // empty = remove (the server drops the flag)
+  return (f.kind === "int" || f.kind === "num") ? Number(s) : s;
+}
+function normFlag(f, v) {
+  // args store every value as a string; a slider reads a number. Compare the same way both sides arrive.
+  if (v == null || v === "") return null;
+  if (f.kind === "bool") return v === true;
+  if (f.kind === "int" || f.kind === "num") { const n = Number(v); return Number.isNaN(n) ? String(v) : n; }
+  return String(v);
+}
+function collectSet() {
+  const set = {};
+  for (const g of cfgView.groups || []) for (const k of g.keys || []) {
+    if (k.kind === "readonly") continue;
+    if (k.key === "exe") {
+      if (!cfgExeTouched) continue;                               // untouched: the stored path stays, however it looks
+      const sel = $(cfgId("exe") + "-sel");
+      const inp = $(cfgId("exe"));
+      const v = sel && sel.value !== "custom" ? sel.value : (inp ? inp.value.trim() || null : null);
+      if ((v ?? null) !== (k.value ?? null)) set.exe = v;
+      continue;
+    }
+    if (k.key === "reasoning_effort") {
+      if (!cfgThinkTouched) continue;
+      const row = document.querySelector(`#cfg-think .think-row[aria-checked="true"]`);
+      const v = row && row.dataset.level ? row.dataset.level : null;
+      if ((v ?? null) !== (k.value ?? null)) set.reasoning_effort = v;
+      continue;
+    }
+    if (k.key === "reasoning_budget_by_effort") {
+      if (!cfgBudgetTouched) continue;                            // untouched: the stored caps stay (they may be empty)
+      // merge into the stored caps: only a level whose slider moved is written; an emptied slider removes that cap
+      const obj = Object.assign({}, k.value || {});
+      for (const e of cfgView.efforts || []) {
+        const lv = e.level;
+        if (lv === "none") continue;
+        const el = $(`think-${lv}`);
+        if (!el) continue;
+        const s = el.value.trim();
+        if (s === "") delete obj[lv];
+        else if (Number(s) !== (e.budget == null ? null : Number(e.budget))) obj[lv] = Number(s);
+      }
+      if (JSON.stringify(obj) !== JSON.stringify(k.value ?? null)) set.reasoning_budget_by_effort = obj;
+      continue;
+    }
+    if (k.kind === "args") {
+      for (const f of k.flags || []) {
+        if (!$(cfgFlagId(k.key, f.flag))) continue;               // not rendered (old server): never a change
+        const v = readFlag(f, k.key);
+        if (JSON.stringify(v) !== JSON.stringify(normFlag(f, f.value))) set[`arg:${f.flag}`] = v;   // an off switch is the same as no flag
+      }
+      continue;
+    }
+    const v = cfgValue(k, cfgId(k.key));
+    const old = k.kind === "bool" ? k.value === true : k.value;       // absent and false are the same setting
+    if (JSON.stringify(v) !== JSON.stringify(old ?? null)) set[k.key] = v;
+  }
+  return set;
+}
+function cfgOldValue(key) {
+  if (key.startsWith("arg:")) {
+    const flag = key.slice(4);
+    for (const g of cfgView.groups || []) for (const k of g.keys || []) if (k.kind === "args") {
+      const f = (k.flags || []).find((x) => x.flag === flag);
+      if (f) return f.kind === "bool" ? f.value === true : f.value ?? null;
+    }
+    return null;
+  }
+  for (const g of cfgView.groups || []) for (const k of g.keys || [])
+    if (k.key === key) return k.kind === "bool" ? k.value === true : k.value ?? null;
+  return null;
+}
+function fmtVal(v) {
+  if (v == null) return "default";
+  if (typeof v === "object") return JSON.stringify(v);
+  const s = String(v);
+  return s.length > 44 ? s.slice(0, 44) + "…" : s;
+}
+function cfgMarkDirty() {
+  if (!cfgView) return;
+  let set = {};
+  try { set = collectSet(); } catch (e) { set = {}; }
+  const keys = Object.keys(set);
+  $("cfg-dirty-dot").hidden = !keys.length;
+  const list = $("cfg-changes");
+  if (list) {
+    list.innerHTML = keys.length ? keys.map((k) =>
+      `<div class="change-row"><code>${esc(k)}</code><span class="change-vals">${esc(fmtVal(cfgOldValue(k)))} → <b>${esc(fmtVal(set[k]))}</b></span></div>`).join("")
+      : `<p class="cfg-note">Nothing has changed in this editor.</p>`;
+  }
+  const save = $("cfg-save"), rev = $("cfg-revert");
+  if (save) save.disabled = !keys.length;
+  if (rev) rev.disabled = !keys.length;
+}
+async function cfgSave() {
+  if (!cfgView) return;
+  let set;
+  try { set = collectSet(); }
+  catch (e) { toast("error", "Not saved", `Could not read the form: ${e.message || e}`, 9000); return; }
+  if (!Object.keys(set).length) { $("cfg-msg").textContent = "Nothing changed."; return; }
+  $("cfg-msg").textContent = "Saving…";
+  try {
+    const q = cfgModel ? `?model=${encodeURIComponent(cfgModel)}` : "";
+    const r = await fetch(`api/models/config${q}`, {method: "POST", headers: headers(true), body: JSON.stringify({set})});
+    const b = await r.json();
+    if (!r.ok) throw new Error((b.error || {}).message || `HTTP ${r.status}`);
+    cfgView = b;
+    cfgExeTouched = cfgThinkTouched = cfgBudgetTouched = false;
+    renderConfigPage();
+    $("cfg-msg").textContent = (b.changed || []).length
+      ? `Saved ${b.changed.join(", ")}. The earlier file is kept as .bak; start or switch the model to run with it.`
+      : "Nothing changed.";
+    toast("success", "Settings saved", (b.changed || []).join(", ") || "No changes", 8000);
+    loadModels();                                                  // a display_name may have changed
+    if (tab === "models") loadModelsView();
+  } catch (e) {
+    const m = $("cfg-msg");
+    if (m) m.textContent = "";
+    toast("error", "Not saved", String(e.message || e), 10000);
+  }
+}
+
+// ---- delegated editing on the sections container ------------------------------------------------------------
+$("cfg-sections").addEventListener("click", (e) => {
+  const br = e.target.closest("[data-browse]");
+  if (br) {
+    const inp = $(br.dataset.browse);
+    const cur = inp ? inp.value.trim() : "";
+    const start = cur ? cur.replace(/[\\/][^\\/]*$/, "") : "";     // the file's folder, when the field has a path
+    openBrowser({want: br.dataset.want || "file", ext: br.dataset.ext || "", start,
+                 onPick: (p) => { if (inp) { inp.value = p; inp.dispatchEvent(new Event("input", {bubbles: true})); } }});
+    return;
+  }
+  const add = e.target.closest("[data-kv-add], [data-list-add]");
+  if (add) {
+    const grid = add.parentElement;
+    const id = add.dataset.kvAdd || add.dataset.listAdd;
+    const row = add.dataset.listAdd != null
+      ? `<div class="list-row"><input class="st-input" type="text" data-list-val="${id}" aria-label="Entry"><button class="st-btn st-btn--icon" type="button" data-list-del="${id}" aria-label="Remove">${icon("x")}</button></div>`
+      : `<div class="kv-row"><input class="st-input" type="text" placeholder="key" data-kv-key="${id}" aria-label="Name"><input class="st-input" type="text" placeholder="value" data-kv-val="${id}" aria-label="Value"><button class="st-btn st-btn--icon" type="button" data-kv-del="${id}" aria-label="Remove">${icon("x")}</button></div>`;
+    grid.insertAdjacentHTML("beforeend", row);
+    cfgMarkDirty();
+    return;
+  }
+  const del = e.target.closest("[data-kv-del], [data-list-del]");
+  if (del) { del.closest(".kv-row, .list-row").remove(); cfgMarkDirty(); return; }
+  const chip = e.target.closest("[data-preset-temp]");
+  if (chip) {
+    const id = cfgId("sampling.temperature");
+    const v = chip.dataset.presetTemp;
+    const n = $(id), r = $(id + "-r"), o = $(id + "-o");
+    if (n) n.value = v;
+    if (r) r.value = v;
+    if (o) o.textContent = v;
+    chip.parentElement.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", String(c === chip)));
+    cfgMarkDirty();
+    return;
+  }
+  const tgl = e.target.closest(".st-toggle");
+  if (tgl) { tgl.setAttribute("aria-checked", String(tgl.getAttribute("aria-checked") !== "true")); cfgMarkDirty(); return; }
+  const row = e.target.closest(".think-row");
+  if (row && !e.target.closest(".cfg-slider")) {                   // slider/number clicks do not pick the level
+    const txt = e.target.closest(".think-row__text");
+    if (txt) row.dataset.open = row.dataset.open === "true" ? "false" : "true";
+    row.parentElement.querySelectorAll(".think-row").forEach((r) => {
+      const on = r === row;
+      r.setAttribute("aria-checked", String(on));
+      const lvl = r.querySelector(".think-row__level");
+      if (lvl) lvl.innerHTML = esc(lvl.dataset.name) + (on ? ` ${icon("check", "st-icon st-icon--sm")}` : "");
+    });
+    cfgThinkTouched = true;
+    cfgMarkDirty();
+  }
+});
+$("cfg-sections").addEventListener("input", (e) => {
+  const t = e.target;
+  if (t.type === "range") {
+    const base = t.id.replace(/-r$/, "");
+    const n = $(base);
+    if (n) n.value = t.value;
+    const o = $(base + "-o");
+    if (o) o.textContent = t.value;
+    if (base.startsWith("think-")) cfgBudgetTouched = true;
+  } else if (t.type === "number") {
+    const r = $(t.id + "-r");
+    if (r && t.value !== "") r.value = t.value;
+    const o = $(t.id + "-o");
+    if (o) o.textContent = t.value;
+    if (t.id.startsWith("think-")) cfgBudgetTouched = true;
+  } else if (t.id === cfgId("exe")) {
+    cfgExeTouched = true;                                          // typing a custom path is a picked exe
+  }
+  cfgMarkDirty();
+});
+$("cfg-sections").addEventListener("change", (e) => {
+  if (e.target.id === cfgId("exe") + "-sel") {
+    const wrap = $(cfgId("exe") + "-wrap");
+    if (wrap) wrap.hidden = e.target.value !== "custom";
+    cfgExeTouched = true;
+  }
+  cfgMarkDirty();
+});
+$("cfg-sections").addEventListener("keydown", (e) => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("think-row")) {
+    e.preventDefault();
+    e.target.click();
+  }
+});
+
+// ------------------------------------------------------------------ file browser (GET /api/fs/list)
+// A read-only picker behind every path field: folders to walk, an ending filter, click a file to select it (double
+// click takes it at once) or type a path. The server lists directories; it never reads file contents.
+let fsPick = null;                 // callback(path) for the field that opened the browser
+let fsWant = "file";
+let fsExt = "";
+let fsState = {path: "", entries: [], selected: ""};
+function fsQuery(path) {
+  const q = new URLSearchParams();
+  if (path) q.set("path", path);
+  if (fsWant === "dir") q.set("want", "dir");
+  if (fsExt) q.set("ext", fsExt);
+  return `api/fs/list?${q.toString()}`;
+}
+async function fsLoad(path) {
+  $("fs-list").innerHTML = `<div class="fs-empty">Loading…</div>`;
+  try {
+    const r = await fetch(fsQuery(path), {headers: headers()});
+    const b = await r.json();
+    if (!r.ok) throw new Error((b.error || {}).message || `HTTP ${r.status}`);
+    fsState = {path: b.path || "", entries: b.entries || [], selected: ""};
+    fsRender();
+  } catch (e) {
+    $("fs-list").innerHTML = `<div class="fs-empty">${esc(e.message || e)}</div>`;
+  }
+}
+function fsRender() {
+  $("fs-cwd").textContent = fsState.path || "This PC";
+  const segs = [{label: "This PC", path: ""}];
+  const norm = String(fsState.path || "").replace(/\\/g, "/");
+  if (norm) {
+    const win = /^[A-Za-z]:/.test(norm);
+    let acc = win ? "" : "/";
+    norm.split("/").filter(Boolean).forEach((part, i) => {
+      acc = win ? (i === 0 ? part : `${acc}/${part}`) : `${acc}${i ? "/" : ""}${part}`;
+      segs.push({label: part, path: acc});
+    });
+  }
+  $("fs-pathbar").innerHTML = segs.map((s, i) =>
+    `${i ? `<span class="fs-sep">/</span>` : ""}<button type="button" class="fs-seg" data-fs-goto="${esc(s.path)}">${esc(s.label)}</button>`).join("");
+  $("fs-list").innerHTML = fsState.entries.length ? fsState.entries.map((ent, i) =>
+    `<button type="button" class="fs-item" role="option" aria-selected="false" data-fs-i="${i}">` +
+    `${icon(ent.dir ? "folder" : "file", "st-icon st-icon--sm")}<span>${esc(ent.name)}</span></button>`).join("")
+    : `<div class="fs-empty">Nothing here${fsWant === "file" && fsExt ? ` ending in ${esc(fsExt)}` : ""}.</div>`;
+  $("fs-name").value = fsState.selected;
+}
+$("fs-pathbar").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-fs-goto]");
+  if (b) fsLoad(b.dataset.fsGoto);
+});
+$("fs-list").addEventListener("click", (e) => {
+  const item = e.target.closest("[data-fs-i]");
+  if (!item) return;
+  const ent = fsState.entries[Number(item.dataset.fsI)];
+  if (!ent) return;
+  if (ent.dir) { fsLoad(ent.path); return; }
+  fsState.selected = ent.path;
+  $("fs-list").querySelectorAll(".fs-item").forEach((x) => x.setAttribute("aria-selected", String(x === item)));
+  $("fs-name").value = ent.path;
+});
+$("fs-list").addEventListener("dblclick", (e) => {
+  const item = e.target.closest("[data-fs-i]");
+  const ent = item ? fsState.entries[Number(item.dataset.fsI)] : null;
+  if (ent && !ent.dir) fsChoose();
+});
+function fsChoose() {
+  const v = $("fs-name").value.trim() || (fsWant === "dir" ? fsState.path : "");
+  if (!v) return;
+  const cb = fsPick;
+  fsPick = null;
+  $("fs-dialog").close();
+  if (cb) cb(v);
+}
+function openBrowser(opts) {
+  fsPick = opts.onPick || null;
+  fsWant = opts.want === "dir" ? "dir" : "file";
+  fsExt = opts.ext || "";
+  $("fs-title").textContent = opts.title || (fsWant === "dir" ? "Choose a folder" : "Choose a file");
+  $("fs-name").value = "";
+  $("fs-dialog").showModal();
+  fsLoad(opts.start || "");
+}
+$("fs-select").addEventListener("click", fsChoose);
+$("fs-cancel").addEventListener("click", () => $("fs-dialog").close());
+$("fs-close").addEventListener("click", () => $("fs-dialog").close());
+$("fs-name").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); fsChoose(); } });
 
 // ------------------------------------------------------------------ Markdown (escaped first, then formatted)
 function inline(s) {

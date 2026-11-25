@@ -1,5 +1,5 @@
 {
-  "exe": "$DATA\\engines\\strata-0.1.58\\strata.exe",
+  "exe": "$DATA\\engines\\strata-0.1.59\\strata.exe",
   "args": [
     "--pack",
     "$DATA\\packs\\iq3_xxs",
@@ -48,7 +48,7 @@
   "model_name": "qwen3.8-flash-next-iq3_xxs",
   "log": "$INSTALL\\local-data\\tuned262-engine.log",
   "lib_dirs": [
-    "$DATA\\engines\\strata-0.1.58",
+    "$DATA\\engines\\strata-0.1.59",
     "$INSTALL\\.venv\\Lib\\site-packages\\nvidia\\cu13\\bin\\x86_64"
   ],
   "port": 8080,
@@ -58,7 +58,7 @@
   "fit_max_tokens": true,
   "env": {},
   "vision": {
-    "exe": "$DATA\\engines\\strata-0.1.58\\strata-vision.exe",
+    "exe": "$DATA\\engines\\strata-0.1.59\\strata-vision.exe",
     "mmproj": "$DATA\\models\\mmproj-Qwen3.8-Flash-Next-BF16.gguf",
     "model": "$DATA\\models\\IQ3_XXS\\Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS-00001-of-00002.gguf",
     "gpu": true,

@@ -27,7 +27,7 @@ import threading
 import time
 from pathlib import Path
 
-ROOT = Path(r"C:\AryaStrata")
+ROOT = Path(__file__).resolve().parent.parent  # repository root (this file lives in .tune/)
 CONFIG = ROOT / "strata-iq3_xxs.json"
 DLL_DIR = ROOT / ".venv" / "Lib" / "site-packages" / "nvidia" / "cu13" / "bin" / "x86_64"
 OUT = ROOT / ".tune" / "results"
@@ -40,24 +40,93 @@ READY_TIMEOUT_S = 420.0
 
 # ---------------------------------------------------------------- prompt fixtures
 
-FILLER = (
-    "The motor control sequence must latch the run output only after the start "
-    "pushbutton is held, the safety interlock chain is closed, and the drive reports "
-    "no fault. Each scan the routine evaluates the permissive bits, the seal-in "
-    "contact, and the fault timer, then writes the coil state and the diagnostic "
-    "word the HMI reads back. Adding a diagnostic requires a new tag and a matching "
-    "faceplate block, so the sequence and the display must be changed together.\n"
-)
+# Varied prose, not one paragraph repeated: a repetitive fixture makes prompt lookup
+# draft itself (100% acceptance, ~160 tok/s) and hides every spec/cache arm.
+SENTS = [
+    "The motor control sequence latches the run output only after the start pushbutton is held.",
+    "Each scan evaluates the permissive bits, the seal-in contact, and the fault timer in order.",
+    "A drive that reports a fault over the network must be reset from the HMI faceplate.",
+    "Adding a diagnostic tag requires a matching faceplate block, so both change together.",
+    "The conveyor starts only when the upstream photoeye sees a part and the gate is open.",
+    "Operators asked for a longer acknowledge window because the alarm banner cleared too fast.",
+    "We replaced the analog input card after it drifted three counts below the calibrated zero.",
+    "The recipe download writes twenty-two setpoints and then verifies each one by readback.",
+    "A jam at the transfer station stops the line and lights the amber stack light.",
+    "Inspection rejects are counted in a shift register that clears at the end of second shift.",
+    "The safety relay drops the contactor coils whenever either gate switch opens.",
+    "Trending the hydraulic pressure showed a slow rise that matched a clogged return filter.",
+    "Commissioning notes for line four record the actual scan time as eleven milliseconds.",
+    "The panel builder moved the disconnect to the left door so the cable tray would clear.",
+    "Every batch record keeps the operator id, the start time, and the final reject count.",
+    "A brief power dip restarted the panel but the drive kept its fault code until cleared.",
+    "The flow meter pulses arrive faster than the counter can debounce without a filter.",
+    "We documented the interlock matrix so the next technician can trace each permissive.",
+]
+
+
+def load_corpus() -> list[str]:
+    """Paragraphs of real documentation/source from this repo.
+
+    A prompt built by repeating a handful of sentences lets the prompt-lookup drafter hit
+    far more often than real text does (acceptance 0.99 instead of ~0.7), which hides a
+    decode regression and flatters every speculative arm. Real paragraphs keep the fixture
+    honest at the cost of a few seconds of setup.
+    """
+    paras: list[str] = []
+    for pattern in ("docs/**/*.md", "src/**/*.cpp", "src/**/*.h", "engine/*.cpp",
+                    "README.md", "AGENTS.md"):
+        for p in sorted(ROOT.glob(pattern)):
+            try:
+                text = p.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            for chunk in text.split("\n\n"):
+                chunk = chunk.strip()
+                if 200 <= len(chunk) <= 4000:
+                    paras.append(chunk)
+            if len(paras) >= 400:
+                break
+        if len(paras) >= 400:
+            break
+    return paras or SENTS
+
+
+_PARAS: list[str] | None = None
+_PARA_TOKS: list[list[int]] | None = None
 
 
 def prompt_ids(tok: ST.Tokenizer, target_tokens: int, tag: str = "") -> list[int]:
-    """A fixed prompt of roughly `target_tokens` tokens, stable for a given (target, tag)."""
-    text = f"# Maintenance note {tag}\n" + FILLER
-    ids = tok.encode(text)
+    """A fixed realistic prompt of exactly `target_tokens` tokens, stable per (target, tag).
+
+    Paragraphs are drawn in a seeded order from the repo's own text, so the prompt has no
+    repeated block for prompt lookup to draft from and is identical for every config with
+    the same tag.
+    """
+    global _PARAS, _PARA_TOKS
+    if _PARAS is None:
+        _PARAS = load_corpus()
+    if _PARA_TOKS is None:
+        _PARA_TOKS = [tok.encode(p + "\n\n") for p in _PARAS]
+
+    seed = 0
+    for ch in tag:
+        seed = (seed * 131 + ord(ch)) & 0x7FFFFFFF
+    order = list(range(len(_PARA_TOKS)))
+    for i in range(len(order) - 1, 0, -1):
+        seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+        j = seed % (i + 1)
+        order[i], order[j] = order[j], order[i]
+
+    ids = tok.encode(f"# Maintenance note {tag}\n")
+    for i in order:
+        ids.extend(_PARA_TOKS[i])
+        if len(ids) >= target_tokens:
+            break
+    # top up from the sentence list only if the corpus is smaller than the prompt
     while len(ids) < target_tokens:
-        text += FILLER
-        ids = tok.encode(text)
-    # trim to the requested length so the prompt is byte-identical across configs
+        for _ in range(16):
+            seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+            ids.extend(tok.encode(SENTS[seed % len(SENTS)] + " "))
     return ids[:target_tokens]
 
 
@@ -116,7 +185,8 @@ def engine_env(base: dict) -> dict:
 # ---------------------------------------------------------------- one engine run
 
 class Engine:
-    def __init__(self, args: list[str], tag: str, env_extra: dict | None = None):
+    def __init__(self, args: list[str], tag: str, env_extra: dict | None = None,
+                 exe: str | None = None):
         base = load_base()
         if env_extra:
             base = {**base, "env": {**(base.get("env") or {}), **env_extra}}
@@ -125,7 +195,7 @@ class Engine:
         self.log = open(self.log_path, "w", encoding="utf-8", errors="replace")
         t0 = time.monotonic()
         self.proc = subprocess.Popen(
-            [base["exe"], "--serve", *args],
+            [exe or base["exe"], "--serve", *args],
             cwd=base.get("cwd") or str(ROOT),
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.log,
             text=True, encoding="utf-8", errors="replace", bufsize=1,
@@ -244,21 +314,26 @@ def parse_done(line: str, seen_tokens: int, pp_lines: int) -> dict:
 
 # ---------------------------------------------------------------- one arm
 
-def run_arm(tag: str, overrides: dict, cases: list[dict], reps: int, keep_raw: bool = True) -> dict:
+def run_arm(tag: str, overrides: dict, cases: list[dict], reps: int, keep_raw: bool = True,
+            env_extra: dict | None = None, exe: str | None = None) -> dict:
     base = load_base()
     args = apply_overrides(base["args"], overrides)
-    eng = Engine(args, tag)
+    eng = Engine(args, tag, env_extra=env_extra, exe=exe)
     result = {
         "tag": tag, "overrides": overrides, "args": args,
+        "exe": exe or base["exe"], "env": env_extra or {},
         "load_s": round(eng.load_s, 2), "max_context": eng.max_context,
         "engine_info": dict(eng.info), "cases": {},
     }
     try:
         for case in cases:
-            ids = case["ids"]
             samples = []
+            # Warm-up request, discarded: the first request after load pays the prompt-path
+            # cache borrow and adaptive-tier admission, which is not the config under test.
+            # Its text is unique, so it cannot prime the cache for the measured reps.
+            eng.generate(case["warm"], min(case["max_new"], 64))
             for r in range(reps):
-                m = eng.generate(ids, case["max_new"])
+                m = eng.generate(case["ids"][r], case["max_new"])
                 m["rep"] = r
                 samples.append(m)
             dec = [s["decode_tok_s"] for s in samples if s.get("decode_tok_s")]
@@ -273,6 +348,7 @@ def run_arm(tag: str, overrides: dict, cases: list[dict], reps: int, keep_raw: b
                 "draft_accept": round(median([s["draft_accept"] for s in samples if "draft_accept" in s] or [0]), 3),
                 "hits": samples[-1].get("hits"), "lookups": samples[-1].get("lookups"),
                 "file_mb": samples[-1].get("file_mb"), "offloaded": samples[-1].get("offloaded"),
+                "prompt_read": samples[-1].get("prompt_read"),
                 "chunk": samples[-1].get("chunk"),
                 "samples": samples if keep_raw else None,
             }
@@ -295,12 +371,21 @@ def median(xs: list[float]) -> float:
 
 # ---------------------------------------------------------------- cases
 
-def build_cases(tok: ST.Tokenizer, sizes: list[int], max_new: int, tag: str) -> list[dict]:
+def build_cases(tok: ST.Tokenizer, sizes: list[int], max_new: int, reps: int) -> list[dict]:
+    """One fresh prompt per measured rep, plus one for the discarded warm-up.
+
+    A repeated prompt is served from the conversation cache: the engine then reads only
+    the uncached tail (a 32K prompt reported prompt_read 3072), so prefill tok/s would
+    describe a cache hit rather than a cold read. Every rep therefore gets its own text
+    of the same length, identical across arms so decode and acceptance stay comparable.
+    """
     cases = []
     for n in sizes:
-        ids = prompt_ids(tok, n, tag=tag)
+        warm = prompt_ids(tok, n, tag=f"{n}-warm")
+        ids = [prompt_ids(tok, n, tag=f"{n}-r{r}") for r in range(reps)]
         cases.append({"name": f"{n // 1024}k" if n >= 1024 else str(n),
-                      "prompt_tokens": len(ids), "max_new": max_new, "ids": ids})
+                      "prompt_tokens": len(ids[0]), "max_new": max_new,
+                      "warm": warm, "ids": ids})
     return cases
 
 
@@ -314,6 +399,7 @@ def main() -> int:
     ap.add_argument("--override", action="append", default=[],
                     help="flag=value (or flag= for a bare switch); repeatable")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--exe", help="engine executable to test instead of the config's own")
     ap.add_argument("--tokenizer", default=r"C:\AI\Strata-data\packs\iq3_xxs\tokenizer")
     args = ap.parse_args()
 
@@ -326,7 +412,7 @@ def main() -> int:
 
     sizes = [int(s) for s in args.sizes.split(",") if s.strip()]
     tag = args.config.replace(" ", "_")
-    cases = build_cases(tok, sizes, args.max_new, tag)
+    cases = build_cases(tok, sizes, args.max_new, args.reps)
     print("cases: " + ", ".join(f"{c['name']}={c['prompt_tokens']}tok" for c in cases), flush=True)
 
     if args.sweep:
@@ -338,15 +424,28 @@ def main() -> int:
             ov[flag] = True if value == "" else value
         arms = [{"tag": tag, "overrides": ov}]
 
+    out_path = Path(args.out) if args.out else OUT / f"{tag}-{int(time.time())}.json"
+
+    def save(arms_done: list[dict], complete: bool) -> None:
+        """Rewrite the result file after every arm: a killed process costs one arm, not the run."""
+        payload = {"when": time.strftime("%Y-%m-%dT%H:%M:%S"), "reps": args.reps,
+                   "sizes": sizes, "max_new": args.max_new,
+                   "complete": complete, "arms": arms_done}
+        out_path.write_text(json.dumps(payload, indent=1), encoding="utf-8")
+        print(f"  saved {len(arms_done)} arm(s) -> {out_path}", flush=True)
+
     results = []
     for arm in arms:
         print(f"\n=== arm {arm['tag']}  {arm['overrides']} ===", flush=True)
-        results.append(run_arm(arm["tag"], arm["overrides"], cases, args.reps))
-
-    out_path = Path(args.out) if args.out else OUT / f"{tag}-{int(time.time())}.json"
-    payload = {"when": time.strftime("%Y-%m-%dT%H:%M:%S"), "reps": args.reps,
-               "sizes": sizes, "max_new": args.max_new, "arms": results}
-    out_path.write_text(json.dumps(payload, indent=1), encoding="utf-8")
+        try:
+            results.append(run_arm(arm["tag"], arm.get("overrides") or {}, cases, args.reps,
+                                   env_extra=arm.get("env"),
+                                   exe=arm.get("exe") or args.exe))
+        except BaseException:
+            save(results, complete=False)          # every finished arm survives the failure
+            raise
+        save(results, complete=False)
+    save(results, complete=True)
     print(f"\nwrote {out_path}", flush=True)
     return 0
 

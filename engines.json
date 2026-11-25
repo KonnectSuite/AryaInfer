@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "release": "engines-2026.11",
+  "updated": "2026-11-24",
+  "engines": {
+    "strata": {
+      "title": "Strata",
+      "binary": "strata.exe",
+      "dir": "engine",
+      "min_version": "0.1.67",
+      "version": "0.1.67",
+      "upstream": "https://github.com/Niko1221/Strata",
+      "release": "https://github.com/Niko1221/Strata/releases/tag/v0.2.21",
+      "required": true,
+      "assets": {
+        "windows-cuda13": {
+          "url": "https://github.com/Niko1221/Strata/releases/download/v0.2.21/strata-engine-0.1.67-windows-x86_64-cuda-cuda13.tar.gz",
+          "asset": "strata-engine-0.1.67-windows-x86_64-cuda-cuda13.tar.gz",
+          "size": 494708745,
+          "sha256": "b0bdbed30de581f05e7ee0eeb16d7e35306740edfc16c8f8b2ea334541a19880"
+        },
+        "windows-cuda12": {
+          "url": "https://github.com/Niko1221/Strata/releases/download/v0.2.21/strata-engine-0.1.67-windows-x86_64-cuda12.tar.gz",
+          "asset": "strata-engine-0.1.67-windows-x86_64-cuda12.tar.gz",
+          "size": 754363448,
+          "sha256": "5c07349599b0a43791397129df8388553c1e29ddc5ada770f5c5470b8bd12b5c"
+        }
+      }
+    },
+    "inkling": {
+      "title": "Strata Inkling",
+      "binary": "strata-inkling.exe",
+      "dir": "engine-inkling",
+      "min_version": "0.1.68",
+      "version": "0.1.68",
+      "upstream": "https://github.com/Niko1221/Strata/releases/tag/v0.2.21",
+      "required": false,
+      "manual": true,
+      "assets": {}
+    },
+    "poly": {
+      "title": "PolyStrata",
+      "binary": "strata-poly.exe",
+      "dir": "engine-poly",
+      "min_version": "0.1.66",
+      "version": "0.1.66",
+      "upstream": "https://github.com/simplexai-labs/PolyStrata",
+      "release": "https://github.com/simplexai-labs/PolyStrata/releases/tag/v0.2.20-poly.4-hotfix",
+      "required": true,
+      "assets": {
+        "windows-cuda13": {
+          "url": "https://github.com/simplexai-labs/PolyStrata/releases/download/v0.2.20-poly.4-hotfix/strata-poly-windows-x64-e760a80a1ebd75f2.zip",
+          "asset": "strata-poly-windows-x64-e760a80a1ebd75f2.zip",
+          "size": 79380205,
+          "sha256": "c4099cc85011fda531853cb4aa2461c7e1596f3d790e1409035b5dd64179acd1"
+        }
+      }
+    },
+    "arya": {
+      "title": "AryaInfer",
+      "binary": "aryainfer.exe",
+      "dir": "engine-arya",
+      "min_version": "0.1.45",
+      "version": "0.1.45",
+      "upstream": "https://github.com/KonnectSuite/AryaInfer",
+      "release": "https://github.com/KonnectSuite/AryaInfer/releases/tag/engines-2026.11",
+      "required": true,
+      "assets": {
+        "windows-cuda13": {
+          "url": "https://github.com/KonnectSuite/AryaInfer/releases/download/engines-2026.11/aryainfer-windows-x64-cuda13.zip",
+          "asset": "aryainfer-windows-x64-cuda13.zip",
+          "size": 563955903,
+          "sha256": "1aa09a09622b858542cf6577bb5c7641911e32677ad0c193d44f2d0ae7a6f239"
+        }
+      }
+    },
+    "ninfer": {
+      "title": "AryaNInfer",
+      "binary": "arya-ninfer.exe",
+      "dir": "engine-ninfer",
+      "min_version": "0.1.0",
+      "version": "0.1.0",
+      "upstream": "https://github.com/roofkid/ninfer-4080",
+      "required": false,
+      "manual": true,
+      "assets": {}
+    }
+  }
+}
