@@ -409,36 +409,27 @@
       <!-- ============================ Models ============================ -->
       <section class="view view--models" id="view-models" hidden>
         <div class="models">
-          <div class="st-card">
-            <div class="req-head">
-              <span class="card-title">Installed models</span>
-              <span class="muted small" id="models-note"></span>
-            </div>
-            <p class="muted small">One model is in memory at a time. <b>Load</b> stops the current one first; <b>Configure</b>
-              edits that model's run config (engine, flags, sampling, reasoning, vision, lifecycle).</p>
-            <div class="table-wrap"><table class="st-table">
-              <thead><tr><th>Model</th><th>Backend</th><th class="num">Quant</th><th class="num">Active params</th>
-                <th class="num">Context</th><th>Status</th><th class="num">Actions</th></tr></thead>
-              <tbody id="models-body"><tr><td colspan="7" class="muted">No models found</td></tr></tbody>
-            </table></div>
+          <div class="req-head models-head">
+            <span class="card-title">Installed models</span>
+            <span class="muted small" id="models-note"></span>
           </div>
+          <p class="muted small">One model is in memory at a time. <b>Load</b> stops the current one first;
+            <b>Settings</b> opens that model's settings page (engine, flags, thinking, sampling, vision, lifecycle).</p>
+          <div class="model-cards" id="models-cards"></div>
         </div>
       </section>
 
       <!-- ============================ Engines ============================ -->
       <section class="view view--engines" id="view-engines" hidden>
         <div class="engines">
-          <div class="st-card">
-            <div class="req-head">
-              <span class="card-title">Engines</span>
-              <span class="muted small" id="engines-note"></span>
-            </div>
-            <p class="muted small">Each model picks one engine. Strata, Inkling and AryaInfer are built and released by
-              their upstream projects; AryaInfer and AryaNInfer are built from this fork.</p>
-            <div class="table-wrap"><table class="st-table">
-              <thead><tr><th>Engine</th><th>Binary</th><th>Version</th><th class="num">CUDA archs</th><th>Status</th></tr></thead>
-              <tbody id="engines-body"><tr><td colspan="5" class="muted">No engines</td></tr></tbody>
-            </table></div>
+          <div class="req-head">
+            <span class="card-title">Engines</span>
+            <span class="muted small" id="engines-note"></span>
+          </div>
+          <p class="muted small">Each model runs on one engine. Strata, Inkling and the poly engine are built and
+            released by their upstream projects; <code>aryainfer</code> and AryaNInfer are this fork's own builds.</p>
+          <div class="engine-cards" id="engines-cards"></div>
+          <div class="st-card engines-repair-card">
             <div class="cfg-actions">
               <button class="st-btn st-btn--secondary" id="engines-repair" type="button">Repair engines</button>
               <span class="muted small" id="engines-msg" role="status"></span>
@@ -446,6 +437,38 @@
             <p class="muted small">Repair downloads or refreshes the engines from the pinned release
               (<code>engines.json</code>). The server must be started with <code>--allow-engine-repair</code>, and the
               model must not be loaded.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================ Model settings page ============================ -->
+      <section class="view view--config" id="view-config" hidden>
+        <div class="config-page">
+          <header class="cfg-head">
+            <button class="st-btn st-btn--ghost cfg-back" id="cfg-back" type="button">
+              <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-chevron"/></svg> Models</button>
+            <span class="cfg-head__titles">
+              <span class="card-title" id="cfg-title">Model settings</span>
+              <span class="muted small" id="cfg-file"></span>
+            </span>
+            <span class="cfg-dirty" id="cfg-dirty-dot" hidden title="Unsaved changes"></span>
+          </header>
+          <div class="cfg-panes">
+            <aside class="cfg-rail" id="cfg-rail" aria-label="Models"></aside>
+            <main class="cfg-sections" id="cfg-sections" aria-label="Model settings"></main>
+            <aside class="cfg-side" id="cfg-side" aria-label="Changes">
+              <div class="side-card">
+                <h3 class="set-card__title">
+                  <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-refresh"/></svg> Changes</h3>
+                <div class="changes-list" id="cfg-changes"></div>
+                <div class="side-actions">
+                  <button type="button" class="st-btn st-btn--secondary" id="cfg-revert" disabled>Revert</button>
+                  <button type="button" class="st-btn st-btn--primary" id="cfg-save" disabled>Save</button>
+                </div>
+                <p class="cfg-note" id="cfg-msg" role="status"></p>
+              </div>
+              <div class="side-card" id="cfg-facts"></div>
+            </aside>
           </div>
         </div>
       </section>
@@ -944,39 +967,27 @@
 </dialog>
 <div class="st-menu" id="model-menu" role="menu" aria-label="Models" hidden></div>
 
-<!-- ============================ Model configuration ============================ -->
-<dialog class="st-dialog st-dialog--wide set-dialog" id="config-dialog" aria-labelledby="config-title">
+<!-- ============================ File browser ============================ -->
+<dialog class="st-dialog st-dialog--wide fs-dialog" id="fs-dialog" aria-labelledby="fs-title">
   <header class="st-dialog__head set-dialog__head">
-    <span class="set-dialog__badge"><svg class="st-icon"><use href="web/sprite.svg#i-settings"/></svg></span>
+    <span class="set-dialog__badge"><svg class="st-icon"><use href="web/sprite.svg#i-folder"/></svg></span>
     <span class="set-dialog__titles">
-      <span class="card-title" id="config-title">Model configuration</span>
-      <span class="set-hint" id="config-file"></span>
+      <span class="card-title" id="fs-title">Choose a file</span>
+      <span class="set-hint" id="fs-cwd"></span>
     </span>
     <span class="st-dialog__spacer"></span>
-    <button class="st-btn st-btn--icon" id="config-close" type="button" aria-label="Close">
+    <button class="st-btn st-btn--icon" id="fs-close" type="button" aria-label="Close">
       <svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-x"/></svg></button>
   </header>
-  <div class="st-dialog__body set-dialog__body">
-    <div class="set-dialog__cols">
-      <div class="set-dialog__col">
-        <div class="config-groups" id="config-groups"></div>
-      </div>
-      <div class="set-dialog__col">
-        <div class="set-card" id="config-raw-card">
-          <h3 class="set-card__title"><svg class="st-icon st-icon--sm"><use href="web/sprite.svg#i-code"/></svg>
-            Raw JSON</h3>
-          <p class="set-hint">The whole file, for anything the fields above do not show. Saved exactly as written;
-            the server checks that it is a JSON object.</p>
-          <textarea class="st-input" id="config-raw" rows="22" spellcheck="false"></textarea>
-        </div>
-      </div>
-    </div>
+  <div class="st-dialog__body fs-body">
+    <nav class="fs-pathbar" id="fs-pathbar" aria-label="Path"></nav>
+    <div class="fs-list" id="fs-list" role="listbox" aria-label="Files and folders" tabindex="0"></div>
   </div>
   <footer class="st-dialog__foot set-dialog__foot">
-    <span class="set-hint" id="config-msg" role="status"></span>
+    <input class="st-input fs-name" id="fs-name" type="text" placeholder="Selected path" autocomplete="off" spellcheck="false">
     <span class="st-dialog__spacer"></span>
-    <button class="st-btn st-btn--secondary" type="button" id="config-cancel">Cancel</button>
-    <button class="st-btn st-btn--primary" id="config-save" type="button">Save</button>
+    <button class="st-btn st-btn--secondary" type="button" id="fs-cancel">Cancel</button>
+    <button class="st-btn st-btn--primary" id="fs-select" type="button">Select</button>
   </footer>
 </dialog>
 

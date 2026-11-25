@@ -91,20 +91,24 @@ class Contract(unittest.TestCase):
             self.assertIn(name, self.page.by_id)
             self.assertTrue(inside(self.page, name, "settings-pop") or name == "settings-pop", name)
         self.assertFalse(inside(self.page, "api-key", "view-about"))
-        # the model settings moved out of the popover into a Models view and a full Configure dialog
-        for name in ("nav-models", "nav-engines", "view-models", "models-body", "models-note",
-                     "view-engines", "engines-body", "engines-repair", "engines-note"):
+        # the model settings moved out of the popover into a Models view, an Engines view and a whole Settings page
+        for name in ("nav-models", "nav-engines", "view-models", "models-cards", "models-note",
+                     "view-engines", "engines-cards", "engines-repair", "engines-note"):
             self.assertIn(name, self.page.by_id)
-        for name in ("config-dialog", "config-title", "config-file", "config-groups", "config-raw",
-                     "config-msg", "config-cancel", "config-save"):
+        for name in ("view-config", "cfg-back", "cfg-title", "cfg-file", "cfg-dirty-dot",
+                     "cfg-rail", "cfg-sections", "cfg-side"):
             self.assertIn(name, self.page.by_id)
-        self.assertIn("st-dialog", self.page.by_id["config-dialog"][1])       # a real dialog, not a popover
-        self.assertTrue(inside(self.page, "models-body", "view-models"), "models-body")
-        self.assertTrue(inside(self.page, "engines-body", "view-engines"), "engines-body")
-        self.assertTrue(inside(self.page, "config-groups", "config-dialog"), "config-groups")
-        self.assertTrue(inside(self.page, "config-save", "config-dialog"), "config-save")
-        for needle in ("function loadModelsView(", "function loadEngines(", "function openConfig(",
-                       "function renderConfig(", "api/models/config", "api/engines"):
+        for name in ("fs-dialog", "fs-title", "fs-cwd", "fs-pathbar", "fs-list", "fs-name", "fs-select"):
+            self.assertIn(name, self.page.by_id)
+        self.assertNotIn("config-dialog", self.page.by_id)                    # the old dialog is gone
+        self.assertIn("st-dialog", self.page.by_id["fs-dialog"][1])           # a real dialog, not a popover
+        self.assertTrue(inside(self.page, "models-cards", "view-models"), "models-cards")
+        self.assertTrue(inside(self.page, "engines-cards", "view-engines"), "engines-cards")
+        for name in ("cfg-rail", "cfg-sections", "cfg-side"):
+            self.assertTrue(inside(self.page, name, "view-config"), name)
+        self.assertTrue(inside(self.page, "fs-list", "fs-dialog"), "fs-list")
+        for needle in ("function loadModelsView(", "function loadEngines(", "async function openConfigPage(",
+                       "function openBrowser(", "st-slider", "api/models/config", "api/engines", "api/fs/list"):
             self.assertIn(needle, self.js, needle)
 
     def test_the_model_picker_is_in_the_composer(self):
@@ -347,7 +351,7 @@ class Contract(unittest.TestCase):
         for name in ("cc-card", "cc-slots-text", "cc-mem-text", "cc-facts", "cc-note"):
             self.assertIn(name, self.page.by_id)
             self.assertIn(f'"{name}"', self.js)
-        for name in ("config-dialog", "config-groups", "config-save", "config-msg"):
+        for name in ("view-config", "cfg-sections", "cfg-side", "fs-dialog"):
             self.assertIn(f'id="{name}"', self.html)
 
     def test_nothing_is_loaded_from_another_machine(self):

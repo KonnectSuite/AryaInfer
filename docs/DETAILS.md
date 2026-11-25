@@ -867,6 +867,13 @@ print(r.choices[0].message.content)
   `high`) in `strata-<model>.json`, outside `"args"` (#1641): the engine has no such option, and `--reasoning-effort` in
   `"args"` is moved to this key with a note at startup. The web app's shared Chat settings ("Use for other apps too") and a
   request's own level win over it.
+- **What a thinking level actually changes.** A level does exactly three things, and nothing else: `none` turns thinking
+  off; each level puts its own instruction sentence into the prompt (the sentences the model was trained with — the
+  graded levels are told to think briefly, `high` and `xhigh` to think longer; `xhigh` uses the same sentence as `high`
+  plus a bigger ceiling); and, when the config has `reasoning_budget_by_effort`, the level picks the thinking cap.
+  Sampling is never touched by a level: temperature, top_p, top_k and the rest stay exactly as the model config and the
+  request set them. The web app's Settings page (a model's card → Settings → Thinking) shows every level with its
+  sentence and its cap, so what a level does is visible instead of implied.
 - **Keep Windows awake while it works (opt-in, #1727).** `"prevent_sleep": true` in `strata-<model>.json` keeps the PC
   from going to sleep while at least one request is running or waiting (Windows' `SetThreadExecutionState` with
   `ES_SYSTEM_REQUIRED`; the screen may still turn off), and gives the normal sleep rules back when the server is idle

@@ -157,6 +157,30 @@ EFFORT_TEXT = {"low": "Reasoning effort is set to low. Keep your thinking brief 
                "xhigh": "Reasoning effort is set to xhigh. Please think carefully through the task, validate key "
                         "assumptions, consider plausible alternatives, and prioritize correctness, consistency, and "
                         "clarity in the final answer."}
+# high says what the template says for it: the xhigh sentence (chat_template.jinja maps high to xhigh).  Keeping the
+# entry here makes every path that reads EFFORT_TEXT total over the levels, so none can fall back to medium's text.
+EFFORT_TEXT["high"] = EFFORT_TEXT["xhigh"]
+
+
+def effort_info(cfg: dict) -> list[dict]:
+    """What each thinking level actually changes, for the Settings page's Thinking card: the instruction sentence the
+    prompt carries and the thinking ceiling in tokens (None: uncapped).  A level changes only these two things (and
+    "none" turns thinking off); it never touches sampling."""
+    by = cfg.get("reasoning_budget_by_effort")
+    by = by if isinstance(by, dict) else {}
+    fallback = cfg.get("reasoning_budget_tokens")
+    out = []
+    for level in ("none", "low", "medium", "high", "xhigh"):
+        if level == "none":
+            out.append({"level": level, "instruction": "Thinking off: the model answers directly.", "budget": None})
+            continue
+        budget = by.get(level)
+        if budget is None and level == "xhigh":
+            budget = by.get("high")                      # the same xhigh-falls-back-to-high rule reasoning_budget() uses
+        if budget is None:
+            budget = fallback
+        out.append({"level": level, "instruction": EFFORT_TEXT.get(level, EFFORT_TEXT["medium"]), "budget": budget})
+    return out
 VISION_START = "<|vision_start|>"
 # The tokens that open a chat turn in each call format's template.  The last one in a prompt begins the reply's
 # turn: strata-poly keeps a checkpoint there (turn_at), which the chat's next request goes on from.  The second one
@@ -6436,7 +6460,12 @@ def make_handler(svc: Service):
                     self._models_config_get()
             elif path == "/api/engines":
                 if self._authorized():
-                    self._json(200, engines.as_view(), headers={"Cache-Control": "no-store"})
+                    view = engines.as_view()
+                    view["used_by"] = self._engines_used_by()
+                    self._json(200, view, headers={"Cache-Control": "no-store"})
+            elif path == "/api/fs/list":
+                if self._authorized():
+                    self._fs_list()
             else:
                 self._json(404, {"error": {"message": "not found"}})
 
@@ -6858,7 +6887,7 @@ def make_handler(svc: Service):
             except (OSError, ValueError) as e:
                 self._json(500, {"error": {"type": "server_error", "message": f"the run config cannot be read: {e}"}})
                 return
-            self._json(200, {**configschema.view(cfg, path), "raw": raw})
+            self._json(200, {**configschema.view(cfg, path), "raw": raw, "efforts": effort_info(cfg)})
 
         def _models_config_post(self):
             """POST /api/models/config?model=<name> {"set": {key: value-or-null}}: change a model's run config.
@@ -6887,7 +6916,8 @@ def make_handler(svc: Service):
             if changed:
                 print(f"[strata] the model config changed {', '.join(changed)} in {Path(path).name} "
                       f"(the earlier file: {bak.name}); used from the next start of, or switch to, the model", flush=True)
-            self._json(200, {**configschema.view(new, path), "raw": json.dumps(new, indent=2), "changed": changed})
+            self._json(200, {**configschema.view(new, path), "raw": json.dumps(new, indent=2),
+                             "efforts": effort_info(new), "changed": changed})
 
         def _engines_repair(self):
             """POST /api/engines/repair: run setup.py --repair-engines in the background (downloads/installs the
@@ -6915,6 +6945,90 @@ def make_handler(svc: Service):
                 return
             print("[strata] engine repair started (setup.py --repair-engines)", flush=True)
             self._json(202, {"status": "started", "note": "the engines are downloading and installing in the background"})
+
+        def _engines_used_by(self) -> dict:
+            """{engine key: [model id, ...]}: which installed models each engine runs.  A model belongs to an engine
+            when its run config's exe is that engine's installed binary, or (a legacy layout like
+            C:\\AI\\Strata-data\\engines\\strata-0.1.67\\) when the exe's file name is that engine's binary."""
+            used = {}
+            view = engines.as_view()
+            for e in view["engines"]:
+                used[e["key"]] = []
+            for m in svc.models():
+                cfg_path = m.get("config")
+                if not cfg_path:
+                    continue
+                try:
+                    cfg = json.loads(Path(cfg_path).read_text(encoding="utf-8-sig"))
+                except (OSError, ValueError):
+                    continue
+                if not isinstance(cfg, dict):
+                    continue
+                exe = str(cfg.get("exe") or "")
+                if not exe:
+                    continue
+                p = Path(exe)
+                if not p.is_absolute():
+                    p = Path(cfg.get("cwd") or ROOT) / exe
+                try:
+                    parent = p.resolve().parent
+                except OSError:
+                    parent = p.parent
+                for e in view["engines"]:
+                    if parent == (ROOT / e["dir"]).resolve() or p.name == e["binary"]:
+                        used[e["key"]].append(m.get("id") or m.get("config"))
+                        break
+            return used
+
+        def _fs_list(self):
+            """GET /api/fs/list?path=&want=file|dir&ext=.gguf,.json: one directory listing for the Settings page's
+            file browser.  Read-only and behind the same key as every other GET; an empty path lists the drives
+            (Windows) or /.  Hidden entries are skipped, directories come first, and the list is capped."""
+            q = parse_qs(urlsplit(self.path).query)
+            raw = (q.get("path") or [""])[0]
+            want = (q.get("want") or [""])[0]
+            exts = {x.strip().lower() for x in (q.get("ext") or [""])[0].split(",") if x.strip()}
+            if raw == "":
+                roots = []
+                if os.name == "nt":
+                    import string
+                    for letter in string.ascii_uppercase:
+                        drive = f"{letter}:\\"
+                        if Path(drive).exists():
+                            roots.append({"name": f"{letter}:", "dir": True, "path": drive})
+                else:
+                    roots.append({"name": "/", "dir": True, "path": "/"})
+                self._json(200, {"path": "", "parent": None, "entries": roots},
+                           headers={"Cache-Control": "no-store"})
+                return
+            base = Path(raw)
+            if not base.is_absolute():
+                self._json(400, {"error": {"message": "path must be absolute"}})
+                return
+            try:
+                base = base.resolve()
+                if not base.is_dir():
+                    raise NotADirectoryError(str(base))
+                children = list(base.iterdir())
+            except OSError as e:
+                self._json(400, {"error": {"message": f"that path cannot be listed: {e}"}})
+                return
+            entries = []
+            for p in children:
+                if p.name.startswith("."):
+                    continue
+                try:
+                    is_dir = p.is_dir()
+                except OSError:
+                    continue
+                if not is_dir:
+                    if want == "dir" or (exts and p.suffix.lower() not in exts):
+                        continue
+                entries.append({"name": p.name, "dir": is_dir, "path": str(p)})
+            entries.sort(key=lambda e: (not e["dir"], e["name"].lower()))
+            self._json(200, {"path": str(base),
+                             "parent": str(base.parent) if base.parent != base else None,
+                             "entries": entries[:500]}, headers={"Cache-Control": "no-store"})
 
 
         def _mcp_post(self):

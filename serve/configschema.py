@@ -119,6 +119,31 @@ NUMERIC = {
     "int>0": (True, 0, None, True),
 }
 
+# kind -> [min, max, step] the front-end renders as a slider (the bounds the kind already enforces)
+KIND_RANGE = {
+    "0<x<=1": [0, 1, 0.01],
+    "0<=x<=1": [0, 1, 0.01],
+    "1..64": [1, 64, 1],
+}
+
+# key -> [min, max, step] for the settings a useful slider can cover; a value outside the slider still
+# saves through the paired number box (check() keeps the kind's own bounds - the range is only sugar).
+RANGES: dict[str, list] = {
+    "sampling.temperature": [0, 2, 0.05],
+    "sampling.presence_penalty": [0, 2, 0.05],
+    "sampling.frequency_penalty": [0, 2, 0.05],
+    "sampling.repetition_penalty": [0.5, 2, 0.01],
+    "reasoning_budget_tokens": [0, 65536, 256],
+    "reasoning_budget_by_effort": [0, 65536, 256],   # the per-level caps share this scale
+    "repeat_stop_tokens": [0, 256, 8],
+    "idle_unload_s": [0, 3600, 60],
+    "engine_silence_s": [0, 1800, 30],
+    "min_free_vram_mib": [0, 24576, 256],
+    "before_load_timeout_s": [0, 600, 10],
+    "vision.max_tokens": [0, 16384, 256],
+    "vision.min_tokens": [0, 4096, 64],
+}
+
 KEYS: dict[str, dict] = {}
 for _g, _label, _keys in GROUPS:
     for _key, _kind, _help, _choices, _advanced in _keys:
@@ -162,6 +187,40 @@ ENGINE_FLAGS: dict[str, tuple] = {
     "--expert-cache": ("text", "Expert cache mode (auto or a size)"),
     "--batch": ("int", "Batch slots (parallel requests)"),
     "--layer-split": ("text", "Layer split across GPUs (auto or a layer list)"),
+}
+
+# The flag subgroups the Settings page renders the "args" flags in (order matters; a flag in no group
+# lands in the trailing "Other flags" group).
+FLAG_GROUPS: list[tuple[str, str, list[str]]] = [
+    ("context", "Context & memory",
+     ["--max-context", "--kv", "--kv-dtype", "--vram-reserve-mib", "--host-kv-mib"]),
+    ("drafting", "Drafting",
+     ["--spec", "--mtp", "--draft", "--draft-model", "--draft-tokens", "--spec-min-p",
+      "--lm-head-draft", "--report-drafts"]),
+    ("experts", "Experts & cache",
+     ["--pack", "--native", "--ple-gguf", "--expert-profile", "--expert-cache", "--vram-elastic",
+      "--adapt-every", "--adapt-swaps", "--adapt-decay", "--pool-workers", "--pcie-frac"]),
+    ("prefill", "Prefill & batching",
+     ["--prefill", "--prefill-chunk", "--batch", "--max-concurrency"]),
+    ("misc", "Graphs & misc",
+     ["--vision", "--no-cuda-graph", "--no-graphs", "--split-skip-if-fits", "--layer-split"]),
+]
+
+# flag -> [min, max, step] for the flags a slider covers (values outside still save via the number box).
+FLAG_RANGES: dict[str, list] = {
+    "--max-context": [1024, 262144, 1024],
+    "--vram-reserve-mib": [0, 8192, 256],
+    "--host-kv-mib": [0, 131072, 4096],
+    "--prefill-chunk": [64, 8192, 64],
+    "--draft-tokens": [0, 8, 1],
+    "--batch": [1, 64, 1],
+    "--max-concurrency": [1, 32, 1],
+    "--spec-min-p": [0, 1, 0.01],
+    "--pcie-frac": [0, 1, 0.01],
+    "--adapt-every": [1, 64, 1],
+    "--adapt-swaps": [1, 256, 4],
+    "--adapt-decay": [0, 1, 0.05],
+    "--pool-workers": [0, 32, 1],
 }
 
 
@@ -419,16 +478,30 @@ def view(cfg: dict, path: str | Path) -> dict:
             item = {"key": key, "value": value, "kind": kind, "help": help_, "advanced": advanced}
             if choices:
                 item["choices"] = choices
+            rng = RANGES.get(key) or KIND_RANGE.get(kind)
+            if rng:
+                item["range"] = rng
             if kind == "args":
                 flags = []
                 for flag in known_flags:
                     fkind, fhelp = ENGINE_FLAGS[flag]
                     present = _bool_flag(cfg, flag) if fkind == "bool" else _flag_get(args, flag) is not None
                     fval = _bool_flag(cfg, flag) if fkind == "bool" else _flag_get(args, flag)
-                    flags.append({"flag": flag, "kind": fkind[0] if isinstance(fkind, tuple) else fkind,
-                                  "help": fhelp, "present": bool(present), "value": fval,
-                                  **({"choices": fkind[1]} if isinstance(fkind, tuple) else {})})
+                    entry = {"flag": flag, "kind": fkind[0] if isinstance(fkind, tuple) else fkind,
+                             "help": fhelp, "present": bool(present), "value": fval,
+                             **({"choices": fkind[1]} if isinstance(fkind, tuple) else {})}
+                    if flag in FLAG_RANGES:
+                        entry["range"] = FLAG_RANGES[flag]
+                    flags.append(entry)
+                by_flag = {f["flag"]: f for f in flags}
+                fgroups = [{"key": gk, "label": glabel, "flags": [by_flag[f] for f in gflags if f in by_flag]}
+                           for gk, glabel, gflags in FLAG_GROUPS]
+                grouped = {f for _, _, gflags in FLAG_GROUPS for f in gflags}
+                rest = [f for f in flags if f["flag"] not in grouped]
+                if rest:
+                    fgroups.append({"key": "other", "label": "Other flags", "flags": rest})
                 item["flags"] = flags
+                item["flag_groups"] = fgroups
                 item["other"] = other
             items.append(item)
         groups.append({"key": g, "label": label, "keys": items})

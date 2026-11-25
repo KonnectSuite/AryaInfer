@@ -15,6 +15,7 @@ import tempfile
 import threading
 import unittest
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,7 +24,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from serve import configschema, engines  # noqa: E402
 from serve.frontend import ChatTemplate  # noqa: E402
-from serve.server import ByteTokenizer, MockEngine, Service, serve  # noqa: E402
+from serve.server import EFFORT_TEXT, ByteTokenizer, MockEngine, Service, effort_info, serve  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -78,6 +79,25 @@ class ConfigSchema(unittest.TestCase):
         for f in flags.values():
             self.assertTrue(f.get("kind") and f.get("help"), f["flag"])
 
+    def test_view_carries_slider_ranges_and_flag_groups(self):
+        v = configschema.view(self.cfg, "strata-mini.json")
+        # a slider wherever the schema knows bounds; the editor draws range+number for these
+        self.assertEqual(key_entry(v, "sampling.temperature")["range"], [0, 2, 0.05])
+        self.assertEqual(key_entry(v, "sampling.top_k")["range"], [1, 64, 1])
+        self.assertEqual(key_entry(v, "reasoning_budget_by_effort")["range"], [0, 65536, 256])
+        self.assertEqual(key_entry(v, "idle_unload_s")["range"], [0, 3600, 60])
+        args = key_entry(v, "args")
+        flags = {f["flag"]: f for f in args["flags"]}
+        self.assertEqual(flags["--max-context"]["range"], [1024, 262144, 1024])
+        self.assertEqual(flags["--draft-tokens"]["range"], [0, 8, 1])
+        groups = {g["key"]: [f["flag"] for f in g["flags"]] for g in args["flag_groups"]}
+        self.assertIn("--max-context", groups["context"])
+        self.assertIn("--spec", groups["drafting"])
+        self.assertIn("--pack", groups["experts"])
+        self.assertIn("--prefill", groups["prefill"])
+        self.assertIn("--vision", groups["misc"])
+        self.assertTrue(all(flags_g for flags_g in groups.values()))   # no empty group is sent
+
     def test_apply_checks_every_value_before_writing_any(self):
         with self.assertRaises(ValueError):           # one bad value leaves the config untouched
             configschema.apply(self.cfg, {"sampling.temperature": 0.7, "sampling.top_p": 9})
@@ -114,6 +134,37 @@ class ConfigSchema(unittest.TestCase):
             self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["sampling"]["temperature"], 0.3)
             bak = path.with_name(path.name + ".bak")
             self.assertEqual(json.loads(bak.read_text(encoding="utf-8"))["sampling"]["temperature"], 0.7)
+
+
+class EffortSemantics(unittest.TestCase):
+    """What a thinking level actually changes: the instruction sentence and the cap - and nothing else."""
+
+    def test_every_level_has_a_sentence_and_a_cap(self):
+        rows = effort_info(SAMPLE)
+        self.assertEqual([r["level"] for r in rows], ["none", "low", "medium", "high", "xhigh"])
+        by = {r["level"]: r for r in rows}
+        self.assertIsNone(by["none"]["budget"])        # none turns thinking off: no sentence, no cap
+        self.assertEqual(by["low"]["budget"], 4800)    # from reasoning_budget_by_effort
+        self.assertEqual(by["medium"]["budget"], 9600)
+        self.assertEqual(by["high"]["budget"], 4800)   # no high entry: falls back to reasoning_budget_tokens
+        self.assertEqual(by["xhigh"]["budget"], 4800)  # no xhigh entry: falls back like reasoning_budget() does
+        for lv in ("low", "medium", "high", "xhigh"):
+            self.assertTrue(by[lv]["instruction"], lv)
+        self.assertEqual(EFFORT_TEXT["high"], by["high"]["instruction"])
+        self.assertEqual(by["high"]["instruction"], by["xhigh"]["instruction"])   # the template maps high to xhigh
+
+    def test_xhigh_falls_back_to_the_high_cap(self):
+        cfg = {**SAMPLE, "reasoning_budget_by_effort": {"high": 7777}}
+        by = {r["level"]: r for r in effort_info(cfg)}
+        self.assertEqual(by["xhigh"]["budget"], 7777)  # the same rule reasoning_budget() uses at request time
+        self.assertEqual(by["low"]["budget"], 4800)    # a level without an entry uses reasoning_budget_tokens
+        self.assertEqual(by["medium"]["budget"], 4800)
+
+    def test_a_level_carries_no_sampling(self):
+        # the knob is honest: a level reports an instruction and a budget, never a sampling change
+        for r in effort_info(SAMPLE):
+            self.assertEqual(sorted(r), ["budget", "instruction", "level"])
+        self.assertEqual(set(EFFORT_TEXT), {"low", "medium", "high", "xhigh"})
 
 
 class EngineInventory(unittest.TestCase):
@@ -160,6 +211,11 @@ class Endpoints(unittest.TestCase):
         root = Path(cls.dir.name)
         cls.config = root / "strata-mini.json"
         cls.config.write_text(json.dumps(SAMPLE), encoding="utf-8")
+        # fixtures for the file-browser tests: one folder, two files, one hidden entry
+        (root / "zsub").mkdir()
+        (root / "a.gguf").write_bytes(b"")
+        (root / "b.txt").write_bytes(b"")
+        (root / ".hidden").write_bytes(b"")
         cls.svc = Service(MockEngine(ByteTokenizer(), "ok", max_context=4096),
                           ByteTokenizer(), ChatTemplate(ROOT / "serve/chat_template.jinja"))
         cls.svc.models_root = root
@@ -189,6 +245,57 @@ class Endpoints(unittest.TestCase):
         self.assertEqual(body["release"], "engines-2026.11")
         self.assertEqual(len(body["engines"]), 5)
         self.assertTrue(all("status" in e for e in body["engines"]))
+        # which run configs use which engine: the sample config names strata-poly.exe
+        self.assertIn("used_by", body)
+        self.assertIn("mini", body["used_by"].get("poly", []))
+
+    def test_the_config_view_reports_the_effort_levels(self):
+        code, body = self.call("/api/models/config?model=mini")
+        self.assertEqual(code, 200)
+        self.assertEqual([r["level"] for r in body["efforts"]],
+                         ["none", "low", "medium", "high", "xhigh"])
+        self.assertTrue(all("instruction" in r and "budget" in r for r in body["efforts"]))
+
+    def test_fs_lists_a_directory_dirs_first(self):
+        d = Path(self.dir.name)
+        q = urllib.parse.quote(str(d))
+        code, body = self.call(f"/api/fs/list?path={q}")
+        self.assertEqual(code, 200)
+        names = [e["name"] for e in body["entries"]]
+        self.assertIn("zsub", names)
+        self.assertIn("a.gguf", names)
+        self.assertIn("b.txt", names)
+        self.assertNotIn(".hidden", names)                    # hidden entries stay out of the browser
+        self.assertLess(names.index("zsub"), names.index("a.gguf"))   # directories first
+        self.assertLess(names.index("a.gguf"), names.index("b.txt"))  # then alphabetical
+        self.assertEqual(body["path"], str(d.resolve()))
+        self.assertEqual(body["parent"], str(d.resolve().parent))
+
+    def test_fs_filters_by_kind_and_extension(self):
+        d = Path(self.dir.name)
+        q = urllib.parse.quote(str(d))
+        code, body = self.call(f"/api/fs/list?path={q}&want=dir")
+        self.assertEqual(code, 200)
+        self.assertTrue(all(e["dir"] for e in body["entries"]))
+        code, body = self.call(f"/api/fs/list?path={q}&ext=.gguf")
+        names = [e["name"] for e in body["entries"]]
+        self.assertIn("a.gguf", names)
+        self.assertNotIn("b.txt", names)
+        self.assertIn("zsub", names)                          # folders stay, so the browser can walk on
+
+    def test_fs_refuses_a_relative_path_or_a_file(self):
+        code, body = self.call("/api/fs/list?path=relative/thing")
+        self.assertEqual(code, 400)
+        self.assertIn("absolute", body["error"]["message"])
+        code, _ = self.call(f"/api/fs/list?path={urllib.parse.quote(str(self.config))}")
+        self.assertEqual(code, 400)                           # a file is not a listing
+
+    def test_fs_without_a_path_lists_the_roots(self):
+        code, body = self.call("/api/fs/list")
+        self.assertEqual(code, 200)
+        self.assertIsNone(body["parent"])
+        self.assertTrue(body["entries"])
+        self.assertTrue(all(e["dir"] for e in body["entries"]))
 
     def test_a_models_config_is_read_grouped(self):
         code, body = self.call("/api/models/config?model=mini")
