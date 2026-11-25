@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Package the fork's Windows x64 CUDA 13 `aryainfer` engine for `engines.json`.
 
-The upstream Strata and PolyStrata engines are published by their own projects.  AryaInfer's
-`aryainfer` target is this fork's build of the pinned PolyStrata sources, so its binary has no
+The upstream engines are published by their own projects.  AryaInfer's `aryainfer` target is
+this fork's build of the pinned upstream poly sources, so its binary has no
 upstream release to point at.  This script takes the portable build in `build-arya/`, adds the
 cuBLAS DLLs the executable loads, writes the BUILD.json that setup and the server read, and makes
 the zip pinned by the `arya` entry in `engines.json`.
@@ -162,7 +162,7 @@ def publish(archive: Path, release: str) -> None:
             [gh, "release", "create", release,
              "--title", f"AryaInfer engines {release}",
              "--notes", "AryaInfer `aryainfer` engine (portable Windows x64, CUDA 13). "
-                        "The upstream Strata and PolyStrata engines are published by their own projects."],
+                        "The upstream engines are published by their own projects."],
             cwd=ROOT, check=True,
         )
     subprocess.run([gh, "release", "upload", release, str(archive), "--clobber"], cwd=ROOT, check=True)

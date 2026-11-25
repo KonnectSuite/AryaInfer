@@ -6781,13 +6781,14 @@ def get_poly_prebuilt(gpu) -> bool:
     eng = ROOT / ENGINE_POLY_DIR
     stamp = eng / "BUILD.json"
     meta = json.loads(stamp.read_text()) if stamp.exists() else {}
-    # PolyStrata is upstream-managed: engines.json pins the current release, and its BUILD.json carries a
-    # release hash rather than this checkout's source hash.  Install it before the source-hash lookup below.
+    # The poly engine is upstream-managed: engines.json pins the current release, and its BUILD.json
+    # carries a release hash rather than this checkout's source hash.  Install it before the source-hash
+    # lookup below.
     if manifest_engine("poly") and WIN and POLY_PREBUILT_URL and not os.environ.get("STRATA_POLY_PREBUILT_URL"):
         try:
             got = install_manifest_engine("poly", gpu, toolkit=13)
         except Exception as e:
-            warn(f"could not install the pinned PolyStrata engine ({e})")
+            warn(f"could not install the pinned strata-poly engine ({e})")
             got = None
         if got is not None:
             return True
