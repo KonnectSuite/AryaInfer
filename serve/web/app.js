@@ -2029,9 +2029,11 @@ function engineCard() {
   const advanced = new Set(["env", "lib_dirs", "cwd"]);           // those live in the Advanced collapse
   const rest = (g.keys || []).filter((k) => !advanced.has(k.key) && k.key !== "exe" && k.key !== "args");
   const args = byKey.args;
-  const groups = args ? (args.flag_groups || []).map((fg) =>
+  const fgroups = args && args.flag_groups && args.flag_groups.length ? args.flag_groups
+    : (args && args.flags ? [{key: "flags", label: "Engine flags", flags: args.flags}] : []);   // older server: no groups, render flat
+  const groups = fgroups.map((fg) =>
     `<div class="flag-group"><div class="flag-group__title">${esc(fg.label)}</div>` +
-    (fg.flags || []).map((f) => flagFieldHtml(f, args.key)).join("") + `</div>`).join("") : "";
+    (fg.flags || []).map((f) => flagFieldHtml(f, args.key)).join("") + `</div>`).join("");
   return `<section class="cfg-card" id="cfg-engine">
     <h3 class="set-card__title">${icon("cpu", "st-icon st-icon--sm")} ${esc(g.label)}</h3>
     ${byKey.exe ? exeFieldHtml(byKey.exe) : ""}
@@ -2230,6 +2232,7 @@ function collectSet() {
     }
     if (k.kind === "args") {
       for (const f of k.flags || []) {
+        if (!$(cfgFlagId(k.key, f.flag))) continue;               // not rendered (old server): never a change
         const v = readFlag(f, k.key);
         if (JSON.stringify(v) !== JSON.stringify(normFlag(f, f.value))) set[`arg:${f.flag}`] = v;   // an off switch is the same as no flag
       }
