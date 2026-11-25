@@ -929,6 +929,24 @@ PRESETS: dict[str, list[dict]] = {
     ],
 }
 
+# The sampling chips.  A chip sets the whole sampler, not only the temperature, so it lives here with the
+# rest of the catalog rather than as a list of numbers in the page: the values must pass the same kind and
+# range checks a hand edit does (top_k is 1..64, so "wide" is 64 and not more).
+SAMPLING_PRESETS: list[dict] = [
+    {"key": "precise", "name": "Precise",
+     "note": "Narrow: the top few tokens, little room for a surprise.",
+     "values": {"sampling.temperature": "0.3", "sampling.top_p": "0.9", "sampling.top_k": "20",
+                "sampling.min_p": "0.05", "sampling.repetition_penalty": "1.05"}},
+    {"key": "balanced", "name": "Balanced",
+     "note": "The default mix: mostly the likely token, some room to vary.",
+     "values": {"sampling.temperature": "0.7", "sampling.top_p": "0.95", "sampling.top_k": "40",
+                "sampling.min_p": "0.02", "sampling.repetition_penalty": "1.02"}},
+    {"key": "creative", "name": "Creative",
+     "note": "Wide: a long tail stays possible, so wording varies more.",
+     "values": {"sampling.temperature": "1.0", "sampling.top_p": "0.98", "sampling.top_k": "64",
+                "sampling.min_p": "0", "sampling.repetition_penalty": "1.0"}},
+]
+
 # Keys whose value when unset is known and worth showing beside the box.  None (or an absent entry)
 # means "the engine or the model card decides", which the page prints as that.
 KEY_DEFAULTS: dict[str, object] = {
@@ -1482,4 +1500,7 @@ def view(cfg: dict, path: str | Path) -> dict:
                        "unknown_env": sorted(set(env) - set(ENGINE_ENV)),
                        "unknown_env_values": {n: str(env[n]) for n in sorted(set(env) - set(ENGINE_ENV))},
                        "presets": PRESETS.get(family, [])},
+            # The sampler chips are the same for every engine, so they sit beside the groups rather than
+            # inside the engine block.
+            "sampling_presets": SAMPLING_PRESETS,
             "note": "Saved to the run config; used from the next start of, or switch to, the model."}

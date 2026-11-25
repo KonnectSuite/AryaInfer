@@ -109,7 +109,10 @@ value** means the variable is not set.
 - `FLAG_CHOICES`, `FLAG_META`, `FLAG_RANGES` — dropdown sets, labels, units,
   defaults, risk and ranges;
 - `ENGINE_ENV` — the variables without a flag;
-- `PRESETS` — the measured starting points, with the record they came from.
+- `PRESETS` — the measured starting points, with the record they came from;
+- `SAMPLING_PRESETS` — the three sampler chips. A chip's values are checked by
+  the same kind and range rules a hand edit gets, so a chip cannot set
+  `sampling.top_k 80` against a 1-64 field.
 
 A flag that a family does not take is not removed from the payload: it moves to
 the collapsed *Not listed by this engine* group, and comes back to its normal

@@ -1857,19 +1857,13 @@ const cfgId = (key) => `cfgk-${String(key).replace(/[^a-zA-Z0-9]/g, "-")}`;
 const cfgFlagId = (key, flag) => `${cfgId(key)}-f-${String(flag).replace(/[^a-zA-Z0-9]/g, "-")}`;
 const NUMERIC_KIND = /^(int>=0|num>=0|0<x<=1|0<=x<=1|1\.\.64|num>0|int>0|int|num)$/;
 const INT_KIND = /^(int>=0|int>0|int)$/;
-const SAMPLING_PRESETS = [
-  // a preset that only moved the temperature left every other sampler at whatever the file said, which is
-  // why "Precise" and "Creative" produced the same kind of text.  Each one now sets the whole sampler.
-  {name: "Precise", note: "Narrow: the top few tokens, little room for a surprise.",
-   values: {"sampling.temperature": 0.3, "sampling.top_p": 0.9, "sampling.top_k": 20,
-            "sampling.min_p": 0.05, "sampling.repetition_penalty": 1.05}},
-  {name: "Balanced", note: "The default mix: mostly the likely token, some room to vary.",
-   values: {"sampling.temperature": 0.7, "sampling.top_p": 0.95, "sampling.top_k": 40,
-            "sampling.min_p": 0.02, "sampling.repetition_penalty": 1.02}},
-  {name: "Creative", note: "Wide: a long tail stays possible, so wording varies more.",
-   values: {"sampling.temperature": 1.0, "sampling.top_p": 0.98, "sampling.top_k": 80,
-            "sampling.min_p": 0.0, "sampling.repetition_penalty": 1.0}},
-];
+// The sampling chips come from the catalog (serve/configschema.py SAMPLING_PRESETS), not from here: their
+// values have to pass the same kind and range checks a hand edit does, and that can only be checked in one
+// place.  A preset that only moved the temperature left every other sampler where the file had it, which is
+// why "Precise" and "Creative" used to produce the same kind of text.
+function samplingPresets() {
+  return (cfgView && cfgView.sampling_presets) || [];
+}
 const PATH_BROWSE = {                                    // string keys that get a Browse… button
   "vision.exe": {want: "file", ext: ".exe"},
   "vision.mmproj": {want: "file", ext: ".gguf"},
@@ -2258,6 +2252,15 @@ function cfgSetValue(field, value) {
               field.querySelector("input.st-input");
   if (!box) return false;
   box.value = String(value);
+  // A slider row is two controls over one value: move the handle and its readout too, or the row shows a
+  // number the handle disagrees with (a chip once left the handle parked at 64 while the box read 80).
+  const range = field.querySelector('input[type="range"]');
+  if (range && !Number.isNaN(Number(value))) {
+    const n = Number(value);
+    range.value = String(Math.min(Number(range.max), Math.max(Number(range.min), n)));
+    const out = field.querySelector("output");
+    if (out) out.textContent = String(value);
+  }
   box.dispatchEvent(new Event("input", {bubbles: true}));
   box.dispatchEvent(new Event("change", {bubbles: true}));
   return true;
@@ -2285,14 +2288,16 @@ function cfgApplyPreset(i) {
 function samplingCard() {
   const g = (cfgView.groups || []).find((x) => x.key === "sampling");
   if (!g) return "";
+  const ps = samplingPresets();
+  if (!ps.length) return "";
   const cur = {};
   for (const k of g.keys || []) {
-    if (k.key in (SAMPLING_PRESETS[0].values)) cur[k.key] = k.value == null ? null : Number(k.value);
+    if (k.key in (ps[0].values || {})) cur[k.key] = k.value == null ? null : Number(k.value);
   }
-  const matches = (p) => Object.keys(p.values).every((k) => cur[k] == null ? false : Math.abs(cur[k] - p.values[k]) < 1e-9);
-  const chips = SAMPLING_PRESETS.map((p, i) =>
-    `<button type="button" class="chip" data-sampling-preset="${i}" title="${esc(p.note)}" ` +
-    `aria-pressed="${matches(p)}">${esc(p.name)} ${p.values["sampling.temperature"]}</button>`).join("");
+  const matches = (p) => Object.keys(p.values || {}).every((k) => cur[k] == null ? false : Math.abs(cur[k] - Number(p.values[k])) < 1e-9);
+  const chips = ps.map((p, i) =>
+    `<button type="button" class="chip" data-sampling-preset="${i}" title="${esc(p.note || "")}" ` +
+    `aria-pressed="${matches(p)}">${esc(p.name)} ${esc(String(Number(p.values["sampling.temperature"])))}</button>`).join("");
   return `<section class="cfg-card" id="cfg-sampling">
     ${cfgCardTitle("cfg-sampling", "gauge", g.label)}
     <p class="cfg-note">Defaults for every request; the chat drawer and API calls override them per request.
@@ -2303,10 +2308,10 @@ function samplingCard() {
   </section>`;
 }
 function cfgApplySampling(i) {
-  const p = SAMPLING_PRESETS[i];
+  const p = samplingPresets()[i];
   if (!p) return;
   let n = 0;
-  for (const [key, value] of Object.entries(p.values)) {
+  for (const [key, value] of Object.entries(p.values || {})) {
     const field = document.querySelector(`#cfg-sections .cfg-field[data-key="${CSS.escape(key)}"]`);
     if (field && cfgSetValue(field, String(value))) n += 1;
   }

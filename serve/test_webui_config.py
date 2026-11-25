@@ -266,6 +266,31 @@ class EngineCatalog(unittest.TestCase):
         self.assertEqual(flags["--kv"]["default"], "fp16")
         self.assertIsNone(flags["--pack"]["default"])                            # the engine decides
 
+    def test_a_sampling_chip_sets_every_sampler_and_stays_in_range(self):
+        """A chip is a whole sampler, and each value must pass the check a hand edit does.
+
+        The chips used to write only the temperature; then one carried top_k 80 against a 1..64 field, so
+        clicking it left the page showing "The largest value here is 64" with Save disabled.  Both faults
+        are cheap to catch here.
+        """
+        self.assertGreaterEqual(len(configschema.SAMPLING_PRESETS), 3)
+        for p in configschema.SAMPLING_PRESETS:
+            with self.subTest(preset=p["key"]):
+                self.assertTrue(p["name"])
+                self.assertTrue(p["note"])
+                self.assertEqual(set(p["values"]), {
+                    "sampling.temperature", "sampling.top_p", "sampling.top_k",
+                    "sampling.min_p", "sampling.repetition_penalty"})
+                for key, value in p["values"].items():
+                    self.assertIn(key, configschema.KEYS)
+                    stored = configschema.check(key, value, {})     # ValueError would fail the test
+                    self.assertIsNotNone(stored)
+
+    def test_sampling_chips_reach_the_page(self):
+        view = configschema.view(self.cfg(), "a.json")
+        self.assertEqual(len(view["sampling_presets"]), len(configschema.SAMPLING_PRESETS))
+        self.assertEqual(view["sampling_presets"][0]["values"]["sampling.top_k"], "20")
+
 
 class EffortSemantics(unittest.TestCase):
     """What a thinking level actually changes: the instruction sentence and the cap - and nothing else."""
