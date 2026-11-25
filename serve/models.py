@@ -30,6 +30,8 @@ BACKENDS = {
     "lfm2moe": "lfm2moe",
     "flint": "flint",
     "kolibri1": "kolibri1",
+    "qwen4exp": "qwen4exp",        # Qwen3.8-Flash-Next MoE: the Coder, Gyro and Unsloth UD-* files
+    "inkling2_loop": "inkling2",   # Inkling-2-Mini: its own engine binary (strata-inkling), same line protocol
 }
 # a routed expert's tensors: they stay in the file and are held in VRAM as far as it has room
 EXPERT = re.compile(r"\.ffn_(gate|up|down|gate_up)_exps\.weight$")
@@ -85,11 +87,17 @@ def _params(label) -> tuple[str | None, str | None]:
 
 def _quant(name: str, types: dict) -> str | None:
     """The quantization a file's name states (UD-Q3_K_M, 3.0bit, ...), or else its most common tensor type."""
-    m = re.search(r"((?:UD-)?I?Q\d[A-Z0-9_]*|\d(?:\.\d)?bit[\w-]*|APEX[\w-]*|BF16|F16)", name, re.I)
+    m = re.search(r"((?:UD-)?(?:TQ[KTP]?\d|I?Q\d)[A-Z0-9_]*|\d(?:\.\d)?bit[\w-]*|APEX[\w-]*|BF16|F16)", name, re.I)
     if m:
         return m.group(1)
     quantized = [t for t in types if t not in ("F32", "F16", "BF16")]
     return quantized[0] if quantized else None
+
+
+def _backend(arch) -> str:
+    """The canonical engine backend for a config's "arch" (its GGUF architecture, else its own family name)."""
+    name = str(arch or "qwen4exp")
+    return BACKENDS.get(name, name)
 
 
 def _aliases(value) -> list[str]:
@@ -127,7 +135,7 @@ def describe(config: Path) -> dict | None:
         return None
     args = [str(a) for a in cfg["args"]]
     cwd = Path(cfg.get("cwd") or ROOT)
-    model = _arg(args, "--model")
+    model = _arg(args, "--model") or _arg(args, "--native") or _arg(args, "--pack")
     path = (cwd / model) if model and not Path(model).is_absolute() else Path(model) if model else None
     exe = Path(cfg["exe"]) if Path(cfg["exe"]).is_absolute() else cwd / cfg["exe"]
     ctx = _arg(args, "--max-context") or _arg(args, "--ctx")
@@ -135,7 +143,7 @@ def describe(config: Path) -> dict | None:
     e = {
         "id": str(cfg.get("model_name") or Path(config).stem.replace("strata-", "", 1)),
         "config": str(config),
-        "display_name": None, "backend": "qwen4exp", "path": str(path) if path else None,
+        "display_name": None, "backend": _backend(cfg.get("arch")), "path": str(path) if path else None,
         "quantization": None, "params_total": None, "params_active": None,
         "context": int(ctx) if ctx and str(ctx).isdigit() else None,
         "efforts": _effort_levels(tok),
@@ -175,6 +183,12 @@ def describe(config: Path) -> dict | None:
                                     "all": round((g["dense_bytes"] + g["expert_bytes"]) / 1e9 + 1.0, 1)}
                 if not g["runnable"]:
                     e["status"], e["problem"] = "unavailable", f"no engine here runs a '{g['backend']}' model"
+    elif path is not None:
+        # a pack directory or a .strata file: the engine's own artifact, so the config's "arch" says its family
+        if not path.exists():
+            e["status"], e["problem"] = "unavailable", f"the model file is missing ({path})"
+        elif e["backend"] not in BACKENDS.values():
+            e["status"], e["problem"] = "unavailable", f"no engine here runs a '{e['backend']}' model"
     # the name setup gave it, else the file's own (a file's can be a converter's leftover), else the id
     e["display_name"] = cfg.get("display_name") or e["display_name"] or e["id"]
     return e

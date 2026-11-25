@@ -6645,7 +6645,10 @@ def update_poly_engine(cfg: dict, yes=False, cfg_path: Path | None = None) -> No
     """Before a model of strata-poly starts: the engine setup installed is replaced when its source changed (a `git
     pull`) or the card is another generation, a ready-made one by the release's for the new source, one compiled here
     by a compile.  A ready-made one stays while no release has the new source: a compile would first install the
-    build tools.  A failure must not stop the start: the installed one runs.  An install from before the engine was
+    build tools.  An engine built here from upstream PolyStrata's own tree (BUILD.json "source": "upstream", naming
+    the tag and commit; docs/HOST-RTX-PRO-2000-LAPTOP.md) is kept as it is: this checkout has no source for it, so
+    it neither recompiles it nor replaces it with a ready-made one of the fork's source.
+    A failure must not stop the start: the installed one runs.  An install from before the engine was
     renamed has the old engine in its config: the engine is compiled under its new name and, with cfg_path, the
     config is moved to it."""
     eng = Path(cfg["exe"]).parent
@@ -6677,6 +6680,18 @@ def update_poly_engine(cfg: dict, yes=False, cfg_path: Path | None = None) -> No
         vision = ("gpu" if meta.get("vision") == "gpu" or vis.get("gpu") else "cpu") if isinstance(vis, dict) else "none"
         changed = renamed
         fits = set(gpu["archs"]) <= {int(x) for x in meta.get("archs", [])}
+        if meta.get("source") == "upstream" and (eng / POLY_EXE).exists():
+            # a build of upstream PolyStrata's own tree, recorded with the tag and commit it came from: neither this
+            # checkout's source nor a release asset of the fork is that engine, so both would replace it
+            if not fits:
+                warn(f"engine-poly was built for {', '.join(f'sm_{x}' for x in meta.get('archs', []))} only and "
+                     "this card is another generation: the installed engine starts, a faster one would need a "
+                     "release built from the same upstream source")
+            if renamed:
+                cfg["exe"] = str(eng / POLY_EXE)
+                if cfg_path is not None:
+                    cfg_path.write_text(json.dumps(cfg, indent=1), encoding="utf-8")
+            return
         if not (meta.get("src") == source_hash(ENGINE_SOURCES) and (eng / POLY_EXE).exists() and fits
                 and (vision == "none" or meta.get("vision_src") == source_hash(VISION_SOURCES))):
             # one compiled here (--build, a CPU without AVX2) stays so

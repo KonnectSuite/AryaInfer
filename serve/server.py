@@ -159,7 +159,8 @@ VISION_START = "<|vision_start|>"
 # ends the first turn: the system prompt with the tools, which "warm_start" keeps.
 TURN_OPENERS = {"function": ("<|im_start|>",), "gemma": ("<|turn>",),
                 "glm": ("<|system|>", "<|developer|>", "<|user|>", "<|assistant|>", "<|observation|>"),
-                "dsml": ("<｜User｜>", "<｜Assistant｜>"), "lfm2": ("<|im_start|>",)}
+                "dsml": ("<｜User｜>", "<｜Assistant｜>"), "lfm2": ("<|im_start|>",),
+                "inkling": ("<|message_user|>", "<|message_system|>", "<|message_model|>", "<|message_tool|>")}
 WARM_MIN_TOKENS = 2048           # a shorter prompt start is quick to read again: not kept
 # #606: a reply that repeats one token this many times in a row is ended there ("length"): a model in a loop, or a
 # broken state that answers one token forever (an issue saw 36,689 tokens of "!"). The config's "repeat_stop_tokens"
@@ -3355,7 +3356,8 @@ class Service:
         # how the model writes a tool call (serve/frontend.py's OutputParser)
         pre = getattr(tokenizer, "pre", "")
         self.call_format = "glm" if pre in ("glm4", "glm5", "flint") else "gemma" if pre == "gemma4" else \
-            "dsml" if pre in ("joyai-llm", "deepseek-v3") else "lfm2" if pre == "lfm2" else "function"
+            "dsml" if pre in ("joyai-llm", "deepseek-v3") else "lfm2" if pre == "lfm2" else \
+            "inkling" if pre == "inkling2" else "function"
         self.turn_ids = frozenset(t[0] for t in (tokenizer.encode(s, parse_special=True)
                                                  for s in TURN_OPENERS[self.call_format]) if len(t) == 1)
         self.engine.turn_ids = self.turn_ids            # the GEN line's turn_at (StrataEngine.turn_key)
@@ -3383,8 +3385,18 @@ class Service:
         # the template leaves that to the program
         # A template that writes the marker alone (MiniCPM-V 4.7's, like Gemma 4's) has no token before it to tell
         # an image's marker from the same text in a message: the first ones are the images (prepare()).
-        self.image_marks = ("<|image|>", None, ("<|image>", "<image|>")) if self.call_format == "gemma" else \
-            (IMAGE_PAD, VISION_START if VISION_START in getattr(self.template, "source", VISION_START) else None, None)
+        # A template that names its own marker instead of <|image_pad|> (Inkling 2 writes <|content_image|> then
+        # <|unused_200054|>): the marker is the token it writes after <|content_image|>, one id in that tokenizer.
+        source = getattr(self.template, "source", "")
+        if self.call_format == "gemma":
+            self.image_marks = ("<|image|>", None, ("<|image>", "<image|>"))
+        else:
+            mark = IMAGE_PAD
+            if IMAGE_PAD not in source:
+                found = re.search(r"<\|content_image\|>(<\|[^|]+\|>)", source)
+                if found:
+                    mark = found.group(1)
+            self.image_marks = (mark, VISION_START if VISION_START in source else None, None)
         # #567: a prompt re-encodes only what follows the last special token it shares with a recent prompt (the
         # same ids as a full encode: tools/strata_tokenizer.py PromptEncoder).  Tokenizers without resume points
         # encode in full.
@@ -4848,6 +4860,63 @@ class Service:
         thinking_n = 0                                  # tokens written while thinking (Responses' reasoning_tokens)
         stop_list = stop_strings(sampling)
         stops = StopMatcher(stop_list) if stop_list else None
+        # Inkling 2 writes its template's markers as text: <|content_thinking|> opens the reasoning, <|content_text|>
+        # the answer and <|end_message|> ends the message.  Split the stream at them and drop the markers.
+        inkling = self.call_format == "inkling"
+        ink_mark = re.compile(r"<\|[a-z0-9_]+\|>") if inkling else None
+        ink = {"answered": False, "done": False, "tail": ""}
+        WRAP = "time to give my answer."
+
+        def inkling_events(evs):
+            out = []
+            for ev in evs:
+                if ink["done"] or ev.kind not in ("content", "reasoning") or not ev.text:
+                    out.append(ev)
+                    continue
+                text = ev.text
+                if not ink["answered"] and ink_mark.search(text) is None:
+                    # The thinking budget's wrap-up ends the thinking without a <|content_text|> marker when the
+                    # model answers inside it: what follows the sentence is the answer (measured on Inkling 2).
+                    # The sentence can arrive in pieces, so a suffix that could still become it is held back.
+                    combined = ink["tail"] + text
+                    at = combined.find(WRAP)
+                    if at >= 0:
+                        before = combined[:at]
+                        if before:
+                            out.append(Event("reasoning", before))
+                        rest = combined[at + len(WRAP):].lstrip("\n")
+                        ink["answered"], ink["tail"] = True, ""
+                        if rest:
+                            out.append(Event("content", rest))
+                        continue
+                    hold = next((k for k in range(min(len(WRAP) - 1, len(combined)), 0, -1)
+                                 if WRAP.startswith(combined[-k:])), 0)
+                    if len(combined) > hold:
+                        out.append(Event("reasoning", combined[:len(combined) - hold]))
+                    ink["tail"] = combined[len(combined) - hold:] if hold else ""
+                    continue
+                if ink["tail"]:
+                    out.append(Event("reasoning", ink["tail"]))
+                    ink["tail"] = ""
+                pos = 0
+                for m in ink_mark.finditer(text):
+                    piece = text[pos:m.start()]
+                    if piece:
+                        out.append(Event("content" if ink["answered"] else "reasoning", piece))
+                    name = m.group(0)
+                    if name == "<|content_thinking|>":
+                        ink["answered"] = False
+                    elif name == "<|content_text|>":
+                        ink["answered"] = True
+                    elif name == "<|end_message|>" and ink["answered"]:
+                        ink["done"] = True
+                        break
+                    pos = m.end()
+                if not ink["done"]:
+                    piece = text[pos:]
+                    if piece:
+                        out.append(Event("content" if ink["answered"] else "reasoning", piece))
+            return out
 
         def cut(evs):
             """The events with the answer's text cut at a stop string (OpenAI stop, Anthropic stop_sequences)."""
@@ -5010,6 +5079,8 @@ class Service:
                                 piece = detok.push(t)
                                 tail = (tail + piece)[-2:]
                                 evs = cut(parser.feed(piece))
+                                if inkling:
+                                    evs = inkling_events(evs)
                                 self._note(n, evs, st, rate)
                                 last_print = self._progress(last_print, st=st)
                                 for ev in evs:
@@ -5023,6 +5094,9 @@ class Service:
                                 elif time.perf_counter() - last_out >= KEEPALIVE_S:
                                     last_out = time.perf_counter()
                                     yield "ping", None
+                                if ink["done"]:
+                                    finish = "stop"         # the answer's <|end_message|>: the message is complete
+                                    break
                                 if stops is not None and stops.hit is not None:
                                     finish = "stop"         # gen.close() below STOPs the engine, as for a stop token
                                     break

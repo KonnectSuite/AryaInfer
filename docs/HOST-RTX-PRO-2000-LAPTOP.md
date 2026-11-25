@@ -4,9 +4,16 @@
 > pack, the MTP runtime, the vision encoder and `strata-coder-iq1_m.json` were
 > deleted (63.08 GB freed), because at 8 GB of VRAM it ran at 5-33 tok/s with a
 > 3-4 minute first token at 100K context. This page stays as the measured record of
-> what it did on this hardware. `strata-qwen36-200k.json` and
+> what it did on this hardware. It was installed again on 2026-11-24 at IQ1_M and
+> now measures 22.4 tok/s; see "Models installed 2026-11-24". `qwen36-UD-Q4_K_M`
+> recorded 73.7 tok/s on 2026-11-13; the same config re-measured on 2026-11-24 gave
+> 20.0 tok/s over 96 new tokens (expert cache 45.4% hit), which is the number to
+> compare a Q4 MoE against on this 8 GB card. `strata-qwen36-200k.json` and
 > `models\qwen36-UD-Q4_K_M\` are what remain: 21.1 GB, and 73.7 tok/s measured on
-> the same day through the same server.
+> the same day through the same server. The poly engine was rebuilt from the
+> 2026-11-24 upstream release (`v0.2.20-poly.4-hotfix`, which runs Inkling 2) and
+> `strata.exe` from the newer Strata snapshot on 2026-11-24; see "The 2026-11-20
+> engine update" and "The 2026-11-24 Strata update" below.
 
 The numbers in the rest of `docs/` come from the machine in `docs/ARYAINFER.md`
 (i9-14900KF, 16 GB RTX 4070 Ti SUPER). This page is the other host: a 16-core
@@ -27,36 +34,302 @@ this machine appear here.
 
 | Engine | Version | Built from | Size |
 |---|---|---|---|
-| `engine\strata.exe` | 0.1.59.1 | upstream [Niko1221/Strata](https://github.com/Niko1221/Strata) tag `v0.2.13.1`, commit `628f74955` | 115,088,384 B |
-| `engine-poly\strata-poly.exe` | 0.1.45 | upstream [simplexai-labs/PolyStrata](https://github.com/simplexai-labs/PolyStrata) `main`, commit `67dde645d` (the 149 commits after `v0.1.45-poly.9`) | 84,346,368 B |
+| `engine\strata.exe` | 0.1.66 | upstream [Niko1221/Strata](https://github.com/Niko1221/Strata) main snapshot downloaded 2026-11-23 (app 0.2.20; the zip has no git metadata) | 64,620,032 B |
+| `engine-poly\strata-poly.exe` | 0.2.20 | upstream [simplexai-labs/PolyStrata](https://github.com/simplexai-labs/PolyStrata) tag `v0.2.20-poly.4-hotfix`, commit `36e654b1b` | 54,883,840 B |
 
-Both were compiled here on 2026-11-13 with CUDA 13.5 for `sm_120` only:
-`build-upstream-strata.cmd` (171 of 171 units) and `build-upstream-polystrata.cmd`
-(130 of 130), from the worktrees `strata-upstream\` and `polystrata-upstream\`.
-The previous binaries, the fork's own 0.1.45 builds, are kept in
-`engine-backup-0.1.45\` and `engine-backup-0.1.45\poly\`; copying those four files
-back restores them.
+`strata.exe` was compiled here on 2026-11-24 with CUDA 13.5 for `sm_120` only:
+`build-strata-0.1.66\build.cmd` (144 of 144 units). The poly engine was rebuilt
+the same way on 2026-11-24: `polystrata-upstream\build-poly.4.cmd` (120 of 120
+units, `polystrata-upstream\build-poly.4`), from the poly worktree. The binaries
+they replaced (0.1.63 and the 0.1.45 poly build) are in `engine-backup-0.1.63\`
+and `engine-backup-poly.4\`; copying those files back restores them. The older
+fork 0.1.45 and 0.1.59.1 builds are still in `engine-backup-0.1.45\` and
+`engine-backup-0.1.59.1\`.
 
 The PolyStrata line is where upstream keeps its version number: the newest tag is
-`v0.1.45-poly.9`, `main` is 149 commits past it and still says 0.1.45, so the
-binary here is newer than the newest release while reporting the same version.
-The 149 commits are mostly the Metal backend and benchmarks; on Windows CUDA what
-it changes is small.
+`v0.2.20-poly.4-hotfix` (2026-11-23), which is `main` at commit `36e654b1b`, and
+the engine itself still says 0.1.66. It moved the tree into `engine/` and vendored
+ggml, and it added Inkling 2 to `strata-poly` (`src/poly/inkling2.cpp`), so poly
+now runs `inkling2_loop` models; the Qwen3.8 `qwen4exp` family is still not in
+`src/poly`.
 
-Neither engine was merged into this fork's source. Strata 0.1.59 restructured the
-tree (`cmake/backends/*`, a vendored `third_party/strata-ggml`) over 3,881 commits
-against 684 local ones, and a merge would have cost more than building the release
-in its own worktree and installing the binary. The fork's own source, including
-its `kQ4_0` KV and the AQ3 path, is untouched.
+Neither engine was merged into this fork's source. Strata restructured the tree
+again in 0.2.16 (the engine moved into `engine/`, so the build is
+`cmake -S engine`) over thousands of commits against the fork's few hundred, and a
+merge would have cost more than building the release in its own worktree. 0.2.16
+also dropped the llama.cpp MMQ prompt kernels: every CUDA build now compiles
+Strata's own, so 0.1.66 has no `strata_kq.dll` and the one 0.1.59.1 needed was
+removed from `engine\` (the backup keeps it). The fork's own source, including its
+`kQ4_0` KV and the AQ3 path, is untouched.
 
-`engine\BUILD.json` and `engine-poly\BUILD.json` say `"source": "upstream"` with
-the commit they were built from. `setup.py` treats any engine whose `source` is
-not `local` as one it does not have to compile, so the normal `START-HERE.bat`
-path starts these binaries; `setup.py --build` still compiles the fork's source
-over them, and after that the release line and this page disagree again.
+`engine\BUILD.json` and `engine-poly\BUILD.json` say `"source": "upstream"`: the
+poly one names the tag and commit it was built from, the Strata one the snapshot
+downloaded on 2026-11-23 (app 0.2.20, engine 0.1.66), because a downloaded zip
+carries no git metadata. For `engine\`, `setup.py` sees a version
+at or above its minimum and leaves the binary alone. For `engine-poly\` that was
+not enough: its BUILD.json has no `src` hash of this checkout's source, so
+`update_poly_engine` would have recompiled the fork's `src/poly` over the engine
+on the first `START-HERE.bat`. Since 2026-11-20 that function keeps an engine
+whose `source` is `upstream` (warning only when the card is another architecture
+generation), and `tools/test_poly_prebuilt.py` covers it. `setup.py --build` still
+compiles the fork's source over either, and after that the release line and this
+page disagree again.
 
 Nothing here repacks a model: the 0.1.45 packs under
-`PolyStrata-data\packs\` load unchanged in 0.1.59.1.
+`PolyStrata-data\packs\` are still what these engines read, and the 0.1.66 build
+this page records changed no pack format.
+
+## The 2026-11-20 engine update
+
+What was measured, with the shipped `strata-qwen36-200k.json`, one server on port
+8080 at 23:38 on 2026-11-20: the poly engine was ready in 15.2 s, put 1,788 of
+10,496 routed experts in 3.2 GiB of VRAM, and decoded 77.8 tok/s on an 83-token
+prompt and 95.9 tok/s on a 394-token prompt (64 new tokens each). An image request
+through `engine-poly\strata-vision.exe` answered "Red" for a red 96x96 PNG in
+0.52 s, 32 prompt tokens, so the image path works on this engine and this encoder.
+
+A rested-card comparison, each arm started after 120 s idle and alternating the two
+binaries: the new engine gave 78.5 and 74.5 tok/s on the short case and 88.4 and
+95.2 on the mid case; the 11-13 engine gave 80.8 and 78.5, and 97.8 and 86.5. The
+spread within one binary is as large as the gap between them, so this host measures
+no decode difference between the two builds, which is what those 44 commits
+predict. The new engine did keep more experts in VRAM: 1,788 (3.2 GiB) against
+1,684 (3.0 GiB).
+
+`strata.exe` 0.1.63 was not run: there is no Strata-native pack on this machine
+since the Coder was removed, and `strata.exe --version` printing `strata 0.1.63`
+is all that was measured. The release notes' new defaults (route tail skip off, a
+16-token short read, `ADAPT_FETCH=2`, the 12.0 decode switches) are therefore
+unmeasured here.
+
+## The 2026-11-24 Strata update
+
+`engine\strata.exe` went from 0.1.63 to 0.1.66, built here from the Strata main
+snapshot downloaded on 2026-11-23 (`Strata-main.zip`, app version 0.2.20, engine
+`CMakeLists.txt` version 0.1.66). No fetch was made: the zip is the newest Strata
+source on this machine, and it carries no git metadata, so `engine\BUILD.json`
+records the snapshot instead of a tag and commit. The build is
+`build-strata-0.1.66\build.cmd` — the same CUDA 13.5, `sm_120`, Release, tests-off
+recipe as 0.1.63 — and it compiled 144 of 144 units into `strata_core` and
+`strata_kernels` where 0.1.63 compiled 132. The binary is
+64,620,032 B against 66,830,848 B before, and `strata.exe --version` prints
+`strata 0.1.66`. As with 0.1.63, decode, its prompt kernels and its image path are
+unmeasured on this machine: there is still no Strata-native pack here, so the
+version line is the whole of what was checked. The engine that was replaced is in
+`engine-backup-0.1.63\`.
+
+The poly engine moved too: `update` fetched simplexai-labs/PolyStrata (the tags
+`v0.2.19-poly.1` through `v0.2.20-poly.4-hotfix`) and the newest, `main` at
+commit `36e654b1b`, was built here on 2026-11-24 with
+`polystrata-upstream\build-poly.4.cmd` (120 of 120 units). That release moved the
+tree into `engine/`, vendored ggml and added Inkling 2 to `strata-poly`. The
+engine it replaced (0.1.45, tag `v0.1.45-poly.10`) is in `engine-backup-poly.4\`.
+
+## Models installed 2026-11-20
+
+Four more families were installed for `engine-poly\strata-poly.exe`, every one at
+the trained context of 262,144 tokens, each with its own config and start script in
+the checkout root. They were installed through a wrapper that keeps the upstream
+poly engine: `setup.py`'s install steps would otherwise have downloaded the fork's
+ready-made engine and compiled this checkout's `src/poly` over it.
+
+| Config | Model file | Size | Smoke test |
+|---|---|---|---|
+| `strata-ornith-apex-i-quality.json` | Ornith-1.5-35B-A3B-APEX-MTP-I-Quality | 23.72 GB | loaded 13.6 s, 2,103 of 10,496 experts in 4.1 GiB, answered "OK" |
+| `strata-qwen36-ornith-1.5-35b-a3b-apex-mtp-i-balanced.json` | Ornith-1.5-35B-A3B-APEX-MTP-I-Balanced | 26.17 GB | loaded 12.2 s, 1,913 experts, answered "OK" |
+| `strata-qwen36-nail-qwen3.6-35b-a3b-ud-q4_k_xl.json` | Nail-Qwen3.6-35B-A3B-UD-Q4_K_XL | 22.36 GB | loaded 9.8 s, 2,092 of 10,240 experts in 3.7 GiB, answered "OK" |
+| `strata-minicpmv-q4_k_m.json` | MiniCPM-V-4.7-35B-A3B-Q4_K_M | 21.2 GB | loaded 10.6 s, 2,512 of 10,240 experts in 4.5 GiB, answered "OK" |
+
+This is a smoke test, not a benchmark: one chat completion each ("Reply with
+exactly: OK", temperature 0), on its own port, with the 8 GB card at 6,880 MiB used.
+No speed number here is worth comparing, and none was compared.
+
+Three things a first conversation on these models shows. Nail's chat template adds
+a system preamble of about 180 tokens, so the one-line prompt was 197 prompt
+tokens and the model thinks before it answers: "OK" took 153 new tokens. MiniCPM-V
+answers short replies inside the reasoning channel — the engine's server reports
+`content: null` and puts "OK" or "4" in `reasoning_content` — which is the model's
+template, not a load failure. Both Ornith sizes and MiniCPM-V start the image
+encoder named in their config (`strata-vision: model files loaded in 1.7–3.2 s`).
+
+All four configs now carry `--kv q8_0`, the setting that makes a 262,144-token
+context affordable on an 8 GB card: at load Ornith quality's expert cache went from
+2,103 to 2,238 of 10,496 experts (4.1 GiB, the engine's own line) and Nail's stayed
+at 2,093 of 10,240 (3.7 GiB), while the attention caches cost about half the VRAM
+they would in fp16. Two changes that a 16 GB template carries were not applied:
+`--vram-reserve-mib 512` with `--prompt-batch 2048` took Nail's cache down to 1,790
+experts (3.2 GiB), 305 fewer, so the default batch and reserve stay. Threads stay at
+10, where the earlier tuning here left them. No speed is claimed for these settings
+here: the power-mode section below measures what one of them writes, and the same
+config measures 16 tok/s in one Windows power mode and 52–57 in another.
+
+Both Ornith sizes are here because the request said quality or balanced or both.
+Quality came through the setup family, which pins the MTP file; Balanced and Nail
+have no such family entry, so they were downloaded and installed with
+`--custom-gguf`, and that resolution matched them to the `qwen36` family. The
+Balanced config therefore carries `--tail-skip 6` from that family; nothing has
+measured whether Ornith wants it.
+
+## Models installed 2026-11-24
+
+Three families were added on 2026-11-24, from Hugging Face: the ISTA-DASLab Coder
+at IQ1_M and Agention's Gyro-S on `strata-0.1.63.exe`, and Inkling-2-Mini on the
+rebuilt poly engine (the slower `strata-inkling` route was removed the same day).
+
+| Model | Engine | Files | Pack | Loaded | Measured |
+|---|---|---|---:|---|---|
+| Coder IQ1_M (`qwen3.8-flash-next-coder-iq1_m`) | `strata-0.1.63.exe` | 29,608,446,496 + 28,800,138,432 + 907,543,008 B | 1.48 GB | 23.42 GiB of experts at 5.70 GiB/s, 172,032 context, KV k8v4 | 22.4 tok/s end to end at 131K; 9.8 tok/s at 262K fp16 KV; at 172,032 with k8v4 a 200-token reply takes 1.6 s |
+| Gyro-S (`qwen3.8-flash-next-gyro-s`) | `strata-0.1.63.exe` | 58,487,015,808 + 904,004,128 B | 1.54 GB | 24.02 GiB of experts, 2,068 in 2.02 GiB of VRAM, 172,032 context, KV k8v4 | 26.3 tok/s at 262K in the app (62.7% expert cache hit); at 172,032 with k8v4 a three-word reply takes 4.7 s |
+| Inkling 2 Mini IQ1_S (poly) (`inkling-2-mini-poly`) | `strata-poly.exe` | 7,764,293,056 + 639,348,160 B | none (GGUF in place) | 2,225 of 3,072 routed experts in 4.4 GiB of VRAM, 172,032 context, KV q8_0, vision on | 54.7 tok/s decode in the app at 262K with a warm cache (97.8% hit); 14.75 tok/s steady from cold; vision read `HELLO 42` |
+| Inkling 2 Mini Q4_K_XL (poly) (`inkling-2-mini-poly-q4`) | `strata-poly.exe` | 17,629,760,736 B | none (GGUF in place) | 851 of 3,072 routed experts in 4.1 GiB of VRAM, 172,032 context, KV q8_0, vision on | 22.5 tok/s decode direct over 64 tokens (71.9% from VRAM), 20.0 in the app over 160 tokens |
+
+Two things had to change after the first measurements, both because the pack
+streams experts over PCIe on an 8 GB card. Engine 0.1.66 runs the CPU side of that
+stream about 1.6-1.7x slower than 0.1.63 on this machine: the same Coder arguments
+measured 6.96 against 12.28 tok/s at 65K context, and 11.95 against 20.04 at 8K;
+Gyro-S measured 7.81 against 13.91 at 4K. Its 0.1.66 configs now run
+`engine\strata-0.1.63.exe` (a copy of the previous build), which still reads the
+v5 Hadamard pack and needs no Q8 workaround. Second, at 131K context the draft
+layer does not fit in VRAM, so the engine silently drops it and every speculative
+round is wasted work — the log says `runs without the draft layer` and its own
+speculation line reads `drafts accepted 0 of 93`. `STRATA_MTP_KEEP=1` (in each
+config's `env`) keeps the draft at the cost of a smaller expert cache; measured on
+0.1.63 it moved the Coder from 12.13 to 16.55 tok/s at 131K and Gyro-S to 15.00.
+The app then measured 22.4 and 23.6 tok/s, because a chat answer amortizes the
+prefill and the card was cool at the start.
+
+The Coder's config is the one `setup.py --family coder` writes, now at 262,144
+tokens (the context the host's models use) with `--kv q4_0`, `--spec 4` and the
+MTP draft in `PolyStrata-data\mtp\rt`; the IQ1_M pack held 256 of its 512 experts,
+as the Coder family intends. The long context is what costs speed there: at 131K
+it measured 22.4 tok/s in the app, at 262K it measured 9.8, because the KV cache
+leaves only 343 experts in VRAM (0.66 GiB) and the rest stream over PCIe.
+Gyro-S keeps `--spec 4` and the default `data\expert-profile.bin`, because no Gyro
+profile exists upstream; at 262K it measured 26.3 tok/s. Inkling's config is `strata-inkling2-mini-poly.json`; its tokenizer was
+exported from the GGUF with `tools\strata_tokenizer.py`, because the `.strata` pack
+carries only the chat template.
+
+The 262,144-token context left the card too tight for Gyro-S: its log reported
+`111 MiB of the card's memory are free` and Windows then pages GPU memory to system
+RAM, so a long question stalled and the stuck request held the model's turn — the
+next switch answered `409 busy` until it finished. Its `--vram-reserve-mib` is now
+1216 (785 MiB free, 21-26 tok/s). The Coder cannot take the same reserve: at 262K,
+1216 MiB leaves `0 slots` for the expert cache and the model does not start, so it
+keeps 300 and loads 343 experts. All four configs also cap thinking with
+`reasoning_effort: low` and `reasoning_budget_by_effort` (256 / 512 / 1024
+tokens), lowered after the app's own `High` request spent 8,192 thinking tokens
+(5-7 minutes at 20-25 tok/s) before any answer appeared; a request with a very
+small `max_tokens` can still spend every token thinking, which the app sees as
+empty content with `finish_reason: length`.
+
+Inkling 2 on the poly engine answered with the model's own template markers
+(`<|message_model|><|content_thinking|>...<|end_message|><|content_text|>...`) inside
+the reply text, because nothing in `serve/` knew them. `serve/server.py` now reads
+the tokenizer's `inkling2` pre as `call_format == "inkling"`, adds its turn openers,
+and `inkling_events()` splits the stream at `<|content_thinking|>` and
+`<|content_text|>`, drops the markers and ends the message at `<|end_message|>`.
+Measured after the change: `What is 12 times 12?` → `content: "144"` with the
+thinking in `reasoning_content`, and a streamed `Name the capital of France` →
+`Paris` over 21 SSE chunks. At the 1024-token budget the model sometimes writes
+its answer inside the thinking, after `I have thought about this long enough;
+time to give my answer.`, with no `<|content_text|>` marker; `inkling_events()`
+therefore holds back a suffix that could still become that sentence and treats
+what follows it as the answer, so `Say hi in three words.` on `High` returned
+`content: "Hi there friend"` on IQ1_S (9.3 s) and Q4_K_XL (1.9 s).
+
+The four configs were then moved to 172,032 tokens (168K) with a smaller KV format,
+because the 262K settings spent too much VRAM on the cache: Gyro and the Coder use
+`--kv k8v4` (INT8 keys, rotated Q4_0 values, 816 B/cell against int8's 1,056), and the
+poly Inkling configs keep `--kv q8_0`, the smallest KV format `strata-poly` offers
+(fp16, q8_0, q4_0). Measured after the change on this host: Gyro-S a three-word reply
+in 4.7 s at 172,032, the Coder a one-line Python answer in 1.6 s, Inkling IQ1_S
+`12 times 12` -> `144` in 2.8 s, Inkling Q4_K_XL `Hello there friend` in 3.0 s. The
+engine logs no low-VRAM warning at the new settings.
+
+One tool had to be extended: Gyro's experts are stored in a Hadamard-rotated basis
+(`prism.hadamard.*` in the GGUF metadata). A pack built without the rotation table
+loads and answers, but the answer is plausible garbage — 120 repetitions of one
+token. `tools/iq_pack.py` now writes `hadamard.txt` and marks `native_experts.txt`
+v5 for such files, a port of the Strata 0.2.20 packer; the table it wrote is
+byte-identical to that packer's (sha256 `0AC6508D…`), and the engine then logs
+`APR pack: Hadamard-folded experts (block 128)` and answers correctly.
+
+PolyStrata 0.2.20 (`v0.2.20-poly.4-hotfix`) runs Inkling 2: the rebuilt
+`strata-poly.exe` loads the IQ1_S GGUF and measured 58.7 tok/s decode in the app at
+32K (92.7% expert cache hit), 54.7 tok/s at 262K once the cache warms. The Qwen3.8
+`qwen4exp` family (Coder, Gyro-S) is still refused with `is a 'qwen4exp' model,
+which this engine does not run`, because `src/poly` in this release has no
+`qwen4exp` loader.
+Inkling's config is `strata-inkling2-mini-poly.json`; the `strata-inkling.exe`
+route (native SQ-10 pack, 13.7 tok/s) and its 11.1 GB of `.strata` files were
+removed on 2026-11-24, because poly runs the same model about four times faster.
+
+Quant choice is an expert-tier question on this card, not a model-size one: at
+Q4_K_XL (16.4 GB) only 851 of Inkling's 3,072 routed experts fit in 4.1 GiB of
+VRAM and it decodes at 22.5 tok/s direct (20.0 in the app); at IQ1_S (7.2 GB)
+2,225 fit and it decodes at 54.6 direct (58.7 in the app). The "60+ tok/s" rows
+elsewhere in `docs/` were measured on the 16 GB desktop host. For comparison, the
+Q4 35B MoEs on this laptop measured 20.0 tok/s (`qwen3.6-35b-a3b-ud-q4_k_m`,
+expert cache 45.4% hit), 17 tok/s (Nail Q4_K_XL) and 7.8 tok/s (Ornith APEX)
+through the same server on 2026-11-24, so Inkling at Q4 is not slower than they are.
+
+Both Inkling configs now run 262,144 tokens with `--kv q8_0` and vision on, the
+same context the rest of this host uses. Poly's Inkling has no KV offload, so the
+context costs expert-tier VRAM and decode: 32K measured 54.6 tok/s, 262K measured
+14.75 tok/s steady from cold, and a chat at 262K with the cache warm measured
+54.7 tok/s (97.8% hit). Vision runs through `engine\strata-vision-inkling2v.exe`,
+built from PolyStrata's `terminal\tools\vision` because that projector is the
+`inkling2v` one. Sending the first image needed a server change: Inkling's template
+writes `<|content_image|><|unused_200054|>`, not `<|image_pad|>`, so
+`serve/server.py` now reads the marker after `<|content_image|>` when the usual
+literal is absent; the 448×320 test image (`HELLO 42`) came back as `42`.
+
+The Coder and Gyro-S vision blocks use `engine\strata-vision-0.1.66.exe`, built
+from the Strata 0.1.66 snapshot's `terminal\tools\vision`; the older
+`engine\strata-vision.exe` (the `qwen4exp` build that shipped with poly 0.1.45)
+could not open Gyro's TQ1_0 file (`ERR cannot open the text model`), the 0.1.66
+build reads it. Both models were raised to 262,144 tokens as well: the Coder
+measured 22.4 tok/s at 131K and 9.8 at 262K, Gyro-S 26.3 at 262K; both read the
+`HELLO 42` image correctly (the Coder answered `42` in `content`).
+
+## Why it looked slow: the Windows power mode
+
+Serving the Ornith quality config in Windows' Balanced power mode measured a 16.0
+tok/s write (64 new tokens) and 120.8 tok/s read (480 prompt tokens) with the card
+at 85–89 °C, clocks averaging 180–364 MHz and 16.1 W: the 60 W power limit (default
+60, maximum 75) was not being used, because the GPU stayed under its 87 °C target by
+clocking down. Setting Windows' "Best performance" mode, which drives Lenovo
+Intelligent Cooling on this machine, with
+
+    powercfg /overlaysetactive ded574b5-45a0-4f42-8737-46345c09c238
+
+dropped the idle temperature from 83 to 78 °C in 90 seconds. The same arm then wrote
+90.2 tok/s and read 295.3 tok/s at 2,150 MHz average and 29 W.
+
+Sustained is lower, because the card heats to 85–88 °C: four back-to-back writes of
+128 tokens on one server measured 52.4, 56.7, 51.8 and 54.5 tok/s at 1,477–2,400 MHz
+and 36–51 W, and a repeat of the same four gave 53.7, 56.8, 50.6 and 52.2. The 8 GB
+laptop row in [BACKENDS.md](BACKENDS.md) — an RTX 4070 Laptop at 32,768 tokens of
+context — writes Ornith quality at 48–50 tok/s, so this host sustains at that level
+and starts above it while the card is still cool.
+
+Six flag arms under the new mode, 128 written tokens each, cooled to 70 °C or for up
+to five minutes between arms (`speed_tune.py`, rows in
+`model-installs-2026-11-20\speed.jsonl`): base 90.2 tok/s, `--tail-skip 6` 133.3
+(read fell to 255.0), `--threads 6` 82.7, `--threads 14` 87.7, `--prompt-batch 512`
+104.6, base again 53.6. The two arms that started at 86 °C are the slow ones, and the
+rest sit inside that temperature spread, so no flag was adopted beyond the `--kv
+q8_0` already applied. `--tail-skip 6` buys about 40% more write speed at a read-speed
+cost; it is the setting upstream Strata turned off by default for quality in 0.1.63,
+and nothing here measures what it costs Ornith's answers.
+
+The overlay is an AC-power setting: on battery Windows falls back to what the mode
+carries. Read it back with
+
+    (Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes').ActiveOverlayAcPowerScheme
+
+and set "Better performance" instead with the id
+`3af9b8d9-7c97-431d-ad78-34a8bfea439f`.
 
 ## What the Coder does on this machine
 
@@ -112,7 +385,9 @@ grows is work over the context itself, on a card this small.
 
 Each of these was run on this machine, on the Coder, and lost. The engine column is
 the one the row was measured on: the two builds account for VRAM differently, so a
-row from 0.1.45 does not automatically carry over to 0.1.59.1.
+row from 0.1.45 does not automatically carry over to 0.1.59.1. Nothing in this
+table was re-run on 0.1.63 or 0.1.66: with no Strata-native pack left on the
+machine, both were built and version-checked but not served.
 
 | Change | Engine | Result |
 |---|---|---|
@@ -145,9 +420,10 @@ not change decode rate.
 
 ## What was not measured here
 
-- The image path on 0.1.59.1: `strata-vision.exe` in `engine\` is still the fork's
-  0.1.45 build (upstream builds it separately from `tools/vision`, against a
-  llama.cpp checkout), and no image request was sent after the engine swap.
+- The Strata-native engine beyond `--version`: with the Coder removed there is no
+  Strata-native pack on this machine, so 0.1.63's and 0.1.66's decode, their own
+  prompt kernels and their image path are unmeasured here. The image path itself was
+  measured on the poly engine on 2026-11-20 and works.
 - `strata-poly` on any other family. It was verified on the one GGUF that is on
   this machine: Qwen3.6-35B-A3B-UD-Q4_K_M loaded in 10.7 s, put 2,064 of 10,496
   routed experts in 3.7 GiB of VRAM, and generated 64 tokens at 23.35 tok/s with
@@ -159,4 +435,7 @@ The harness used for the tables above is `tune_ab2.py` next to this checkout's
 parent folder (`C:\Users\kphung\AryaCode\KonnectSuite\tune_ab2.py`): one server per
 arm, a warm-up, prefill and two decodes per context size, `nvidia-smi` sampled
 four times a second, and the engine's own cache-hit and VRAM lines parsed out of
-its log. Its rows are in `tune_ab2.jsonl`.
+its log. Its rows are in `tune_ab2.jsonl`. The 2026-11-20 engine comparison used
+`ab_poly_2026_11_20.py` in the same folder (modes `serve`, `ab` and `cool`, the
+last one resting the card 120 s before each arm); its rows and logs are in
+`poly-update-2026-11-20\`.

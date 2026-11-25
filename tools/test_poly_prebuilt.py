@@ -108,6 +108,38 @@ class PolyPrebuilt(unittest.TestCase):
         build.assert_not_called()
         self.assertEqual((self.eng / setup.POLY_EXE).read_text(), "ready-made")
 
+    def test_an_update_keeps_an_engine_built_from_upstream(self):
+        """A host build of upstream PolyStrata's own tree is neither recompiled here nor replaced by a release."""
+        release(self.rel)
+        self.eng.mkdir()
+        (self.eng / setup.POLY_EXE).write_text("upstream build")
+        stamp = {"source": "upstream", "version": "0.1.45", "archs": [120], "vision": "cpu",
+                 "upstream": {"repo": "https://github.com/simplexai-labs/PolyStrata.git",
+                              "tag": "v0.1.45-poly.10", "commit": "3e1642161"}}
+        (self.eng / "BUILD.json").write_text(json.dumps(stamp))
+        build, ready_made = mock.Mock(), mock.Mock()
+        with mock.patch.object(setup, "gpu_info", lambda i=None: {"arch": 120, "driver": "581.57"}), \
+                mock.patch.object(setup, "build_engine_poly", build), \
+                mock.patch.object(setup, "get_poly_prebuilt", ready_made):
+            setup.update_poly_engine({"exe": str(self.eng / setup.POLY_EXE), "args": []})
+        build.assert_not_called()
+        ready_made.assert_not_called()
+        self.assertEqual((self.eng / setup.POLY_EXE).read_text(), "upstream build")
+        self.assertEqual(json.loads((self.eng / "BUILD.json").read_text()), stamp)
+
+    def test_an_upstream_engine_is_kept_on_another_card_with_a_warning(self):
+        self.eng.mkdir()
+        (self.eng / setup.POLY_EXE).write_text("upstream build")
+        (self.eng / "BUILD.json").write_text(json.dumps({"source": "upstream", "archs": [120]}))
+        build, warning = mock.Mock(), mock.Mock()
+        with mock.patch.object(setup, "gpu_info", lambda i=None: GPU), \
+                mock.patch.object(setup, "build_engine_poly", build), \
+                mock.patch.object(setup, "warn", warning):
+            setup.update_poly_engine({"exe": str(self.eng / setup.POLY_EXE), "args": []})
+        build.assert_not_called()
+        self.assertTrue(warning.called)
+        self.assertEqual((self.eng / setup.POLY_EXE).read_text(), "upstream build")
+
     def test_a_ready_made_engine_with_an_older_encoder_is_replaced(self):
         release(self.rel)
         self.eng.mkdir()

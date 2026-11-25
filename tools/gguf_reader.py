@@ -25,6 +25,9 @@ GGML_TYPES: dict[int, str] = {
     28: "F64", 29: "IQ1_M", 30: "BF16", 31: "Q4_0_4_4", 32: "Q4_0_4_8", 33: "Q4_0_8_8",
     34: "TQ1_0", 35: "TQ2_0", 36: "IQ4_NL_4_4", 37: "IQ4_NL_4_8", 38: "IQ4_NL_8_8",
     39: "MXFP4", 40: "NVFP4", 41: "Q4_0_8_8", 42: "Q2_0",
+    # Agention's trellis (APR) expert formats, as their llama.cpp fork numbers them: 128 weights a block,
+    # {fp16 d; qs}.  The engine's GGUF reader (include/strata/artifact/gguf_reader.hpp) takes the same ids.
+    144: "TQ2_T", 145: "TQK6", 146: "TQK7", 147: "TQP5", 148: "TQP6", 149: "TQP7",
 }
 
 # GGUF metadata value type ids
@@ -45,6 +48,11 @@ BLOCK_GEOMETRY: dict[str, tuple[int, int]] = {
     "IQ2_XXS": (256, 66), "IQ2_XS": (256, 74), "IQ3_XXS": (256, 98), "IQ1_S": (256, 50),
     "IQ4_NL": (32, 18), "IQ3_S": (256, 110), "IQ2_S": (256, 82), "IQ4_XS": (256, 136),
     "IQ1_M": (256, 56), "Q2_0": (64, 18), "MXFP4": (32, 17), "NVFP4": (64, 36),
+    "TQ1_0": (256, 54), "TQ2_0": (256, 66),
+    # trellis (APR) blocks: 128 values, {fp16 d; qs} - block_tq2_t / tqk6 / tqk7 / tqp5-7 in
+    # engine/third_party/ggml/ggml-common-tq.h.
+    "TQ2_T": (128, 34), "TQK6": (128, 26), "TQK7": (128, 30),
+    "TQP5": (128, 42), "TQP6": (128, 50), "TQP7": (128, 58),
 }
 
 
