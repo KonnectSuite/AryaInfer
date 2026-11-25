@@ -504,6 +504,59 @@ Defender exclusions for `AryaInfer\`, `PolyStrata-data\`, `strata.exe` and
 `strata-vision.exe` were added while measuring. They cut model load time; they do
 not change decode rate.
 
+## Inkling 2 Mini on the native engine, with the SQ-10 pack
+
+The native `strata-inkling.exe` built here for sm_120 ran three Inkling files
+this machine had, all Unsloth GGUFs, and each one reported `drafter=none`: the
+DSpark drafter is a separate file for the GGUF path, and the picture reader was a
+second engine process. The `.strata` pack from
+`strata-engine/Inkling-2-Mini-Strata` carries both inside it, so it was fetched
+with the sizes and SHA-256 digests from the upstream release grid
+(`tools/release_grid/models.lock.json`) and put beside the GGUFs:
+`Inkling-2-Mini-SQ-10.strata` 10,471,526,400 B `ac4d452a…5934`,
+`Inkling-2-Mini-Vision.strata` 636,526,592 B `6589eff4…c677`. SQ-10, not SQ-15:
+SQ-15 is 14.35 GB and SQ-20 is 19.35 GB, and this card has 8,151 MiB.
+
+`--info` on the pack: `format=strata build=SQ-10 layers=24 visits=48 hidden=2304
+vocab=200058 experts=128 eos=200006 drafter=dspark images=1 image_pad=200054
+parallel=64`. What that changes on this card, measured 2026-11-25 with
+`--vram-experts-gb 5.5 --kv k8v4`:
+
+| run | prefill | decode |
+| --- | --- | --- |
+| 2,048-token prompt, 64 generated, `--draft off` | 980.8 tok/s (2.09 s) | 29.1 tok/s |
+| 2,048-token prompt, 64 generated, `--draft auto` | 1030.8 tok/s (1.99 s) | 20.3 tok/s |
+| 8,192-token prompt, 128 generated, `--draft off` | 922.1 tok/s (8.88 s) | 28.5 tok/s |
+| 8,192-token prompt, 128 generated, `--draft auto` | 907.5 tok/s (9.03 s) | 36.3 tok/s |
+| 32,768-token prompt, 128 generated, `--draft off` | 736.8 tok/s (44.47 s) | 19.2 tok/s |
+| 32,768-token prompt, 128 generated, `--draft auto` | 737.3 tok/s (44.44 s) | 13.8 tok/s |
+| 2,048-token prompt, 64 generated, `--parallel 4 --draft auto` | 967.2 tok/s (8.47 s) | 54.9 tok/s aggregate, 13.7 per slot |
+
+Drafting pays here only in the middle: it wins at 8,192 (+7.8 tok/s) and loses at
+2,048 (−8.8) and at 32,768 (−5.4), which is the length this app actually sends.
+The run config therefore ships `--draft off`. The pack also loads far faster than
+the GGUF did: trunk 1.87 GB in 0.44 s and 1,169 experts on the card with 1,903 in
+an 8.60 GB pinned host arena in 3.63 s, against 476 card experts and 2,596 host
+experts taking 36–45 s for the IQ1_S GGUF — the GGUF path widens its experts to
+canonical SF4 on the way in. A model switch through `POST /api/models/load` now
+takes 9–10 s each way; the same switch on the IQ1_S GGUF at 262,144 context took
+53 s warm and 155 s cold, which is why it looked like nothing happened.
+
+K/V is not the problem people expect: at `--max-context 262144` with
+`--kv k8v4` the engine keeps 12,288 tokens on the card and maps 249,856 host
+tokens into 3,050 MiB of RAM, about 12 KB per token, not the ~110 KB a fp16 K/V
+would cost.
+
+Through the server (`strata-inkling-2-mini-sq-10.json`, images on, 262,144
+context): a 25-token prompt answered in 2.66 s; a 448×320 PNG with "HELLO 42" was
+read correctly in 10.07 s by the pack's own encoder (no second vision process);
+a `tool_choice: required` call returned `finish_reason=tool_calls` with
+`{"a":2,"b":2}`. `GET /api/models` answers in 1.4 s with all ten models
+available, and the harness reports the lane as `engineVersion=strata-inkling-0.1.67`.
+The older run config that pointed `strata-inkling` at the IQ1_S GGUF is retired to
+`configs-unused\`: the pack replaces it, and two Inkling native entries in one
+picker is not a choice, it is a coin toss.
+
 ## What was not measured here
 
 - The Strata-native engine beyond `--version`: with the Coder removed there is no
