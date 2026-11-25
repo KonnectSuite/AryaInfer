@@ -58,6 +58,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import tarfile
 import tempfile
 import textwrap
 import time
@@ -973,6 +974,13 @@ POLY_CONV_CACHE_MIB = 8192       # the most the engine's "auto" conversation cac
 # MODEL-UPDATE Phase 1: the K-quant prompt kernels (Unsloth's UD-Q4/Q5/Q6_K_XL experts) are a library next to the CUDA
 # engine, opened only for those models; an engine without it runs them on the FP16 prompt path
 KQ_LIB = "strata_kq.dll" if WIN else "libstrata_kq.so"
+# The engines.json manifest pins the ready-made engines a clone installs.  It is the one place that says
+# which upstream releases and which fork build belong to this checkout, so setup never has to guess from
+# the source version.  The upstream binaries stay theirs (Strata, Inkling, AryaInfer); only AryaInfer and
+# AryaNInfer are this fork's.
+MANIFEST_PATH = ROOT / "engines.json"
+ENGINE_ARYA_DIR = "engine-arya"
+ENGINE_INKLING_DIR = "engine-inkling"
 
 
 # ------------------------------------------------------------------------------------------------ output
@@ -4272,6 +4280,184 @@ def verify_engine_archive(z: Path, asset: str, base: str) -> None:
     ok(f"{z.name}: SHA-256 checksum verified against GitHub's ({sha[:12]}...)")
 
 
+def version_tuple(value) -> tuple:
+    """A BUILD.json / engines.json version as comparable integers; empty when it is not numeric."""
+    return tuple(int(x) for x in re.findall(r"\d+", str(value or ""))[:4])
+
+
+def load_engines_manifest() -> dict:
+    """engines.json, the pinned engine set of this checkout.  An empty set (with a warning) when the file is
+    missing or malformed: setup then falls back to the old, source-tag based path instead of failing to run."""
+    try:
+        data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        warn(f"engines.json is missing or not valid JSON ({e}): using the older engine lookup")
+        return {}
+    if data.get("schema") != 1 or not isinstance(data.get("engines"), dict):
+        warn("engines.json has an unsupported schema: using the older engine lookup")
+        return {}
+    return data
+
+
+def manifest_engine(name: str) -> dict | None:
+    return load_engines_manifest().get("engines", {}).get(name)
+
+
+def manifest_version(name: str) -> tuple:
+    rec = manifest_engine(name)
+    return version_tuple(rec.get("min_version") or rec.get("version")) if rec else ()
+
+
+def manifest_asset(name: str, toolkit=13) -> dict | None:
+    """The asset for this OS and toolkit.  Windows has cuda13 / cuda12 entries; other systems have an
+    explicit linux-* / macos-* key when a release publishes one, otherwise there is nothing to download."""
+    rec = manifest_engine(name)
+    if not rec:
+        return None
+    if rec.get("pending") or rec.get("manual"):
+        return None
+    assets = rec.get("assets") or {}
+    system = "windows" if WIN else "linux" if sys.platform.startswith("linux") else "macos"
+    key = f"{system}-cuda{int(toolkit)}"
+    asset = assets.get(key)
+    return asset if asset and asset.get("url") and asset.get("size") and asset.get("sha256") else None
+
+
+def manifest_install_dir(name: str, toolkit=13) -> Path:
+    rec = manifest_engine(name) or {}
+    if name == "strata" and int(toolkit) == 12:
+        return ROOT / ENGINE12_DIR
+    return ROOT / (rec.get("dir") or {"strata": "engine", "poly": ENGINE_POLY_DIR, "arya": ENGINE_ARYA_DIR,
+                                      "inkling": ENGINE_INKLING_DIR}.get(name, f"engine-{name}"))
+
+
+def manifest_installed(name: str, gpu=None, toolkit=13) -> tuple:
+    """(folder, version, ok, why): whether the manifest engine is installed and at least its minimum version.
+    It also checks the cards when gpu is given, as the download path does."""
+    rec = manifest_engine(name)
+    eng = manifest_install_dir(name, toolkit)
+    exe = eng / str((rec or {}).get("binary") or EXE)
+    info = eng / "BUILD.json"
+    if not rec or not exe.exists() or not info.exists():
+        return eng, "?", False, "not installed"
+    try:
+        meta = json.loads(info.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return eng, "?", False, "BUILD.json is not readable"
+    ver = version_tuple(meta.get("version"))
+    need = manifest_version(name)
+    if need and ver < need:
+        return eng, str(meta.get("version") or "?"), False, f"older than {'.'.join(map(str, need))}"
+    if gpu is not None:
+        have = {int(x) for x in meta.get("archs", [])}
+        cards = {int(x) for x in gpu.get("archs", [gpu.get("arch")]) if x is not None}
+        if have and not cards <= have and not (meta.get("ptx") and cards and max(cards) > max(have)):
+            return eng, str(meta.get("version") or "?"), False, "no code for this GPU"
+    return eng, str(meta.get("version") or "?"), True, "installed"
+
+
+def _safe_extract(archive: Path, dest: Path) -> None:
+    """Extract a zip or tar.gz without allowing an entry to escape `dest` (absolute paths, .., symlinks)."""
+    dest.mkdir(parents=True, exist_ok=True)
+    if zipfile.is_zipfile(archive):
+        with zipfile.ZipFile(archive) as z:
+            for info in z.infolist():
+                name = info.filename.replace("\\", "/")
+                parts = [p for p in name.split("/") if p not in ("", ".")]
+                if name.startswith("/") or ".." in parts:
+                    raise UnverifiedEngine(f"{archive.name} contains an unsafe path: {info.filename}")
+                z.extract(info, dest)
+        return
+    if tarfile.is_tarfile(archive):
+        with tarfile.open(archive, "r:*") as t:
+            for m in t.getmembers():
+                name = m.name.replace("\\", "/")
+                parts = [p for p in name.split("/") if p not in ("", ".")]
+                if name.startswith("/") or ".." in parts or m.issym() or m.islnk() or m.isdev():
+                    raise UnverifiedEngine(f"{archive.name} contains an unsafe entry: {m.name}")
+                t.extract(m, dest, set_attrs=False)
+        return
+    raise UnverifiedEngine(f"{archive.name} is not a zip or tar.gz archive")
+
+
+def _find_engine_root(tmp: Path) -> Path:
+    """The folder that holds BUILD.json inside an unpacked release (the archives put it at the root or one
+    folder down, and that has changed between releases)."""
+    found = sorted(tmp.rglob("BUILD.json"))
+    if len(found) != 1:
+        raise UnverifiedEngine(f"the engine archive has {len(found)} BUILD.json files, expected one")
+    return found[0].parent
+
+
+def install_manifest_engine(name: str, gpu, toolkit=13, updating=False, check_only=False) -> Path | None:
+    """Install one engines.json engine into its folder.  The pinned size and SHA-256 are checked before the
+    archive is opened; the BUILD.json's version and GPU architectures are checked before anything is replaced.
+    check_only never downloads: it returns the folder only when the installed engine already matches."""
+    rec = manifest_engine(name)
+    if not rec:
+        return None
+    eng = manifest_install_dir(name, toolkit)
+    have, ver, ok_now, why = manifest_installed(name, gpu, toolkit)
+    if ok_now:
+        if not check_only:
+            ok(f"{rec.get('title', name)} {ver} already installed")
+        return eng
+    if check_only:
+        return None
+    asset = manifest_asset(name, toolkit)
+    if asset is None:
+        if not rec.get("pending") and not rec.get("manual"):
+            warn(f"no {rec.get('title', name)} build in engines.json for this PC and toolkit")
+        return None
+    eng.mkdir(parents=True, exist_ok=True)
+    z = eng / str(asset.get("asset") or Path(asset["url"]).name)
+    say(f"  Downloading {rec.get('title', name)} {asset.get('asset') or ''} ...")
+    download(asset["url"], z, f"{rec.get('title', name)} engine")
+    try:
+        if not sha256_matches(z, int(asset["size"]), str(asset["sha256"])):
+            drop_archive(z)
+            raise UnverifiedEngine(f"{z.name} does not match the pinned size/SHA-256 in engines.json")
+        tmp = eng / "_unpack"
+        shutil.rmtree(tmp, ignore_errors=True)
+        _safe_extract(z, tmp)
+        root = _find_engine_root(tmp)
+        meta = json.loads((root / "BUILD.json").read_text(encoding="utf-8"))
+        need = manifest_version(name)
+        if need and version_tuple(meta.get("version")) < need:
+            raise UnverifiedEngine(f"{z.name} is version {meta.get('version')}, engines.json needs "
+                                   f"{'.'.join(map(str, need))}")
+        exe = root / str(rec.get("binary") or EXE)
+        if not exe.exists():
+            raise UnverifiedEngine(f"{z.name} has no {rec.get('binary') or EXE}")
+        cards = {int(x) for x in gpu.get("archs", [gpu.get("arch")]) if x is not None} if gpu else set()
+        have_archs = {int(x) for x in meta.get("archs", [])}
+        if cards and have_archs and not cards <= have_archs and not (
+                meta.get("ptx") and max(cards) > max(have_archs)):
+            raise UnverifiedEngine(f"{z.name} is built for {', '.join(map(str, sorted(have_archs)))}, "
+                                   f"this PC has {', '.join(map(str, sorted(cards)))}")
+        if not WIN:
+            exe.chmod(0o755)
+        install_unpacked(root, eng)
+        if name == "poly":
+            pip_cuda_libs(13)       # the release zip has the engine only; cuBLAS comes from the wheels
+        # A manifest install is a release build even when its BUILD.json says "release"; setup and the
+        # poly installer use that to keep it instead of compiling the older source pin.
+        info = eng / "BUILD.json"
+        try:
+            installed = json.loads(info.read_text(encoding="utf-8"))
+            installed["source"] = "manifest" if name == "poly" else installed.get("source", "release")
+            installed["toolkit"] = int(toolkit)
+            installed.setdefault("cuda", "13.0" if int(toolkit) == 13 else "12.9")
+            info.write_text(json.dumps(installed, indent=1), encoding="utf-8")
+        except (OSError, ValueError):
+            pass
+        ok(f"{rec.get('title', name)} {meta.get('version', '')} installed in {eng}")
+        return eng
+    finally:
+        shutil.rmtree(eng / "_unpack", ignore_errors=True)
+        drop_archive(z)
+
+
 def engine_refused(asset: str, e: Exception, updating: bool) -> None:
     """Report a refusal and either stop setup or keep the engine that is installed.
 
@@ -4381,6 +4567,17 @@ def get_prebuilt(url_base, gpu, vision, updating=False, toolkit=13) -> Path | No
     toolkit 12: the experimental CUDA 12 engine (CUDA12_ASSET) in engine-cuda12/."""
     eng = engine_dir(toolkit)
     asset = CUDA12_ASSET if int(toolkit) == 12 else PREBUILT_ASSET
+    # The pinned manifest is the default path.  Its release assets are .tar.gz with names newer than
+    # PREBUILT_ASSET, so the old tag-first lookup would otherwise install this checkout's 0.1.45 forever.
+    if WIN and url_base and str(url_base).rstrip("/") == PREBUILT_URL.rstrip("/") and manifest_engine("strata"):
+        try:
+            got = install_manifest_engine("strata", gpu, toolkit=toolkit, updating=updating)
+        except Exception as e:
+            warn(f"could not install the pinned Strata engine ({e})")
+            got = None
+        if got is not None:
+            return got
+        return None
     info = eng / "BUILD.json"
     if info.exists() and (eng / EXE).exists() and json.loads(info.read_text(encoding="utf-8")).get("backend") != "hip":
         meta = json.loads(info.read_text(encoding="utf-8"))
@@ -4545,7 +4742,7 @@ def update_installed_engine(url_base, toolkit=None) -> None:
         if meta.get("src") == source_hash(ENGINE_SOURCES) and not stale_binary(eng / EXE) and \
                 (vision == "none" or meta.get("vision_src") == source_hash(VISION_SOURCES)):
             return
-    elif ver >= MIN_ENGINE:
+    elif ver >= (manifest_version("strata") or MIN_ENGINE):
         return
     try:                                               # a running engine cannot be replaced (Windows keeps it locked)
         for x in (EXE, VEXE):
@@ -6584,6 +6781,17 @@ def get_poly_prebuilt(gpu) -> bool:
     eng = ROOT / ENGINE_POLY_DIR
     stamp = eng / "BUILD.json"
     meta = json.loads(stamp.read_text()) if stamp.exists() else {}
+    # PolyStrata is upstream-managed: engines.json pins the current release, and its BUILD.json carries a
+    # release hash rather than this checkout's source hash.  Install it before the source-hash lookup below.
+    if manifest_engine("poly") and WIN and POLY_PREBUILT_URL and not os.environ.get("STRATA_POLY_PREBUILT_URL"):
+        try:
+            got = install_manifest_engine("poly", gpu, toolkit=13)
+        except Exception as e:
+            warn(f"could not install the pinned PolyStrata engine ({e})")
+            got = None
+        if got is not None:
+            return True
+        return False
     src, vsrc = source_hash(ENGINE_SOURCES), source_hash(VISION_SOURCES)
     cards = {int(x) for x in gpu.get("archs", [gpu["arch"]])}
     # a ready-made one came with its encoder, which is out of date when tools/vision changed
@@ -6650,10 +6858,13 @@ def build_engine_poly(gpu, yes, llama, vision="none", toolkit=13) -> Path:
     built = {int(x) for x in meta.get("archs", [])}
     same = int(meta.get("toolkit", 13)) == toolkit
     # one compiled here keeps the cards it was built for; one in place of a ready-made engine is for these cards
-    release = meta.get("source") == "release"
+    release = meta.get("source") in ("release", "manifest")
     archs = sorted(cards if release or not same else built | cards)
     have = (eng / POLY_EXE).exists()
-    engine_ok = have and same and meta.get("src") == src and (cards <= built if release else set(archs) == built)
+    if meta.get("source") == "manifest":
+        engine_ok = have and same and cards <= built
+    else:
+        engine_ok = have and same and meta.get("src") == src and (cards <= built if release else set(archs) == built)
     # an encoder built with CUDA also runs on the CPU, so the one there is kept unless the GPU is asked of a CPU one
     was = meta.get("vision") or "none"
     vision_ok = vision == "none" or ((eng / VEXE).exists() and meta.get("vision_src") == vsrc and
@@ -7520,7 +7731,68 @@ def engine_step(a, gpu, hip, amd, cuda_tk, vision):
         lib_dirs = [str(d) for d in hip_lib_dirs(eng)]
     else:
         lib_dirs = meta.get("lib_dirs") or meta.get("cuda_dirs") or cuda_lib_dirs(cuda_tk)
+    if not hip and manifest_engine("arya"):
+        # This fork's engine, built from the same src/poly tree as strata-poly.  It is needed by the AQ3
+        # config; a failure here must not stop the Qwen or AryaInfer model the user actually chose.
+        try:
+            install_manifest_engine("arya", gpu, toolkit=cuda_tk)
+        except Exception as e:
+            warn(f"could not install the pinned AryaInfer engine ({e})")
     return llama, eng, meta, lib_dirs, gpu, vision
+
+
+def engine_manifest_cli(a, gpu, hip, cuda_tk) -> int:
+    """--check-engines / --repair-engines: the pinned set, without model questions or model downloads."""
+    check = bool(a.check_engines)
+    say()
+    say("  The pinned engines (engines.json):")
+    names = ["strata", "poly", "arya"]
+    if a.with_inkling:
+        names.insert(1, "inkling")
+    bad = 0
+    for name in names:
+        rec = manifest_engine(name) or {}
+        title = rec.get("title", name)
+        if not rec:
+            warn(f"{title}: no entry in engines.json")
+            bad += 1
+            continue
+        if rec.get("pending"):
+            say(f"  {title:12s} {rec.get('version') or ''}: not published yet (engines.json says pending)")
+            continue
+        if rec.get("manual"):
+            say(f"  {title:12s} {rec.get('version') or ''}: manual build (docs/NINFER.md)")
+            continue
+        eng, ver, ok_now, why = manifest_installed(name, gpu, cuda_tk)
+        if ok_now:
+            ok(f"{title:12s} {ver}: {eng}")
+            continue
+        if check:
+            bad += 1
+            warn(f"{title:12s} {ver}: {why} - run START-HERE.bat --repair-engines")
+        elif hip:
+            say(f"  {title:12s} {ver}: AMD engines are compiled here; run START-HERE.bat --build")
+        else:
+            got = None
+            try:
+                if name == "strata":
+                    got = get_prebuilt(a.prebuilt, gpu, "gpu", updating=True, toolkit=cuda_tk)
+                elif name == "poly":
+                    got = manifest_install_dir("poly", cuda_tk) if get_poly_prebuilt(gpu) else None
+                else:
+                    got = install_manifest_engine(name, gpu, toolkit=cuda_tk, updating=True)
+            except Exception as e:
+                warn(f"{title}: {e}")
+            if got is not None:
+                ok(f"{title:12s} installed in {got}")
+            else:
+                bad += 1
+                warn(f"{title:12s} was not installed; see the message above")
+    if a.with_ninfer:
+        say("  AryaNInfer: manual build, engine-ninfer/build.ps1 (docs/NINFER.md); not downloaded")
+    if check and not bad:
+        say("\nAll required pinned engines are installed.")
+    return 1 if bad else 0
 
 
 def engine_families(eng: Path) -> set:
@@ -8082,6 +8354,14 @@ def main() -> int:
     ap.add_argument("--prebuilt", default=os.environ.get("STRATA_PREBUILT_URL", PREBUILT_URL),
                     help="where the ready-made engine is (a URL folder or a local folder)")
     ap.add_argument("--check", action="store_true", help="only check this PC and exit")
+    ap.add_argument("--check-engines", action="store_true",
+                    help="check the pinned engines in engines.json against what is installed and exit")
+    ap.add_argument("--repair-engines", action="store_true",
+                    help="install or update the engines pinned in engines.json and exit")
+    ap.add_argument("--with-inkling", action="store_true",
+                    help="with --repair-engines: also install the pinned Strata Inkling engine")
+    ap.add_argument("--with-ninfer", action="store_true",
+                    help="with --repair-engines: report the manual AryaNInfer build (it is not downloaded)")
     ap.add_argument("--calibrate", action="store_true",
                     help="tune the engine's settings for this PC (about 15-30 minutes, longer on a slow card), then start the model")
     ap.add_argument("--draft-vocab", choices=list(DRAFT_VOCABS),
@@ -8175,7 +8455,7 @@ def main() -> int:
     have = installed_configs()
     if a.update:                                       # #475: UPDATE.bat / update.sh - never starts the model
         return update_install(have, a)
-    explicit = a.setup or a.model or a.family or a.check or a.no_start
+    explicit = a.setup or a.model or a.family or a.check or a.no_start or a.check_engines or a.repair_engines
     adopted = None                                     # #629: the earlier install this copy is set up like
     if not have and not explicit:                      # a new copy of AryaStrata (an update unzipped elsewhere): set it
         prev = previous_config(elsewhere, load_settings())   # up like the last one, from the files already here
@@ -8236,7 +8516,7 @@ def main() -> int:
         return 0 if a.no_start else start(pick_cfg, a.port, run_gpu, yes=a.yes, layer_split=a.layer_split,
                      keep={"host": a.host, "api_key": a.api_key, "draft_vocab": a.draft_vocab,
                            "vram_reserve_mib": a.vram_reserve_mib, "open_browser": a.browser})
-    if have and not (a.setup or a.model or a.family or a.check or a.no_start):
+    if have and not (a.setup or a.model or a.family or a.check or a.no_start or a.check_engines or a.repair_engines):
         if not a.build:
             update_installed_engine(a.prebuilt)
         if len(have) == 1:
@@ -8359,6 +8639,8 @@ def main() -> int:
                  "update it with the NVIDIA App or from https://www.nvidia.com/drivers, restart, and run this again" +
                  ("" if cuda_tk == 12 else f" (or --cuda 12: the experimental CUDA 12 engine runs with driver "
                                            f"{CUDA12_MIN_DRIVER} or newer, docs/OLDER_GPUS.md)"))
+    if a.check_engines or a.repair_engines:
+        return engine_manifest_cli(a, gpu, hip, cuda_tk)
     if gpu["vram_gb"] < 11:
         warn("less than 12 GB of " + ("GPU memory (this APU's carve-out + shared memory)" if gpu.get("uma") else "VRAM")
              + ": AryaStrata will run, but most experts stay on the CPU and it will be slow")

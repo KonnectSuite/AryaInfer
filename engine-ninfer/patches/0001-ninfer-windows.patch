@@ -7,12 +7,12 @@
 +# AryaInfer's engine shim (patch): built only when its source is supplied, so a stock checkout
 +# still builds exactly what it built before.
 +if(NINFER_ARYAINFER_SHIM)
-+  add_executable(ninfer-engine "${NINFER_ARYAINFER_SHIM}")
-+  target_include_directories(ninfer-engine PRIVATE
++  add_executable(arya-ninfer "${NINFER_ARYAINFER_SHIM}")
++  target_include_directories(arya-ninfer PRIVATE
 +    ${PROJECT_SOURCE_DIR}/include
 +    ${PROJECT_SOURCE_DIR}/src
 +    ${PROJECT_SOURCE_DIR}/third_party)
-+  target_link_libraries(ninfer-engine PRIVATE ninfer_engine ninfer_product_logging)
++  target_link_libraries(arya-ninfer PRIVATE ninfer_engine ninfer_product_logging)
 +endif()
 +
  add_executable(ninfer-perplexity

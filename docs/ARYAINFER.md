@@ -10,18 +10,19 @@ The run config this host uses for each installed model - context, KV format, dra
 budget, with the machine's paths replaced by two placeholders - is kept in [host tuning](host-tuning/README.md), so the
 settings survive a fresh clone onto another folder.
 
-## Four engines, one server
+## Five engines, one server
 
-AryaInfer serves four engine backends from `serve/server.py`; the run config
+AryaInfer serves five engine backends from `serve/server.py`; the run config
 names the executable and the arguments, and everything else (template, thinking
 budget, tools, images, API, web app) is shared:
 
 | Backend | Binary here | Runs | Context |
 | --- | --- | --- | ---: |
-| Strata (native Qwen engine, upstream 0.1.59) | `C:\AI\Strata-data\engines\strata-0.1.59\strata.exe` | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5, Swift abliterated | 262,144 |
-| PolyStrata (`strata-poly`) | `engine-poly\strata-poly.exe` (0.1.45, src `7bc1d82f`) | Qwen3.6-35B-A3B UD-Q4, abliterated, Ornith 1.5, and the GGUF families | 262,144 |
-| AryaInfer build (`aryainfer`) | `build-poly\aryainfer.exe` (2026-11-03) | Qwen3.8-27B AQ3, 27B Turbo IQ3_XXS, Qwen3.5-4B | 131,072 / 65,536 |
-| NInfer (ported) | `engine-ninfer\ninfer-engine.exe` (pinned `2469b57` + shim) | Qwen3.8-27B GSQ3 `.ninfer` | 131,072; the entry ships 114,688 to fit a 16 GiB card |
+| Strata (native Qwen engine, upstream 0.1.67) | `engine\strata.exe` | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5, Swift abliterated | 262,144 |
+| Strata Inkling (upstream 0.1.67) | `engine-inkling\strata-inkling.exe` | Inkling 2 Mini | 131,072 |
+| PolyStrata (`strata-poly`, upstream 0.1.66) | `engine-poly\strata-poly.exe` | Qwen3.6-35B-A3B UD-Q4, abliterated, Ornith 1.5, and the GGUF families | 262,144 |
+| AryaInfer build (`aryainfer`, 0.1.45) | `engine-arya\aryainfer.exe` | Qwen3.8-27B AQ3, 27B Turbo IQ3_XXS, Qwen3.5-4B | 131,072 / 65,536 |
+| AryaNInfer (ported core 0.1.0) | `engine-ninfer\arya-ninfer.exe` (pinned `2469b57` + shim) | Qwen3.8-27B GSQ3 `.ninfer` | 131,072; the entry ships 114,688 to fit a 16 GiB card |
 
 The split, the protocol each one speaks and the measured tables are in
 [ENGINES.md](ENGINES.md). The short version: the server tokenizes, applies the

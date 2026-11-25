@@ -1,4 +1,4 @@
-# Builds the pinned NInfer engine plus AryaInfer's line-protocol shim.
+# Builds AryaNInfer: the pinned NInfer engine plus AryaInfer's line-protocol shim.
 #
 # Inputs: the pinned roofkid/ninfer-4080 source, the AryaInfer patch, NVIDIA NVTX
 # v3.1.0 headers (CUDA 13 no longer ships them), vcpkg packages (ffmpeg, curl),
@@ -21,6 +21,7 @@ $Work = [IO.Path]::GetFullPath($Work)
 $Src = Join-Path $Work 'src'
 $Build = Join-Path $Work 'build'
 $Commit = '2469b5752672ad597055af61fe28e8e7ced20056'
+$Version = '0.1.0'
 $TarSha = '4DBDC09000E0358DF70A4DBDD824EDC1CB853FA48634A4877554D7F1841379BA'
 $Tar = Join-Path $Work 'ninfer-src.tar.gz'
 $Patch = Join-Path $PSScriptRoot 'patches\0001-ninfer-windows.patch'
@@ -86,12 +87,23 @@ $lines = @(
     "set `"PATH=$Cuda\bin;%PATH%`"",
     $cmake,
     'if errorlevel 1 exit /b 1',
-    "cmake --build `"$Build`" --target ninfer-engine --parallel 20"
+    "cmake --build `"$Build`" --target arya-ninfer --parallel 20"
 )
 Set-Content -Path $bat -Value $lines -Encoding ascii
 $log = Join-Path $Work 'build.log'
 cmd.exe /c "`"$bat`" > `"$log`" 2>&1"
 if ($LASTEXITCODE -ne 0) { throw "build failed; see $log" }
 
-Copy-Item (Join-Path $Build 'apps\ninfer-engine.exe') (Join-Path $PSScriptRoot 'ninfer-engine.exe') -Force
-Step "done: $(Join-Path $PSScriptRoot 'ninfer-engine.exe')"
+$Exe = Join-Path $PSScriptRoot 'arya-ninfer.exe'
+Copy-Item (Join-Path $Build 'apps\arya-ninfer.exe') $Exe -Force
+$BuildInfo = [ordered]@{
+    version    = $Version
+    source     = 'fork-release'
+    core       = 'roofkid/ninfer-4080'
+    core_commit = $Commit
+    archs      = @(89)
+    cuda       = '13.1'
+    cuda_toolkit = '13.1.2'
+}
+$BuildInfo | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path $PSScriptRoot 'BUILD.json') -Encoding ascii
+Step "done: $Exe"

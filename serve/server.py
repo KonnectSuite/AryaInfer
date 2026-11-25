@@ -62,10 +62,11 @@ from urllib.parse import parse_qs, urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT))   # run as a script (run-<model>.bat) as well as a module
-from serve.frontend import (THINK_END, EFFORT, ChatTemplate, Event, OutputParser, anthropic_to_messages,  # noqa: E402
-                            budget_effort, effort_levels, forced_call, gemma_model_turn, images_of, literal_tags,
-                            mark_think_literals, openai_to_messages, tool_choice_of, unmark_think_literals,
-                            with_effort_instruction)
+from serve.frontend import (THINK_END, EFFORT, ChatTemplate, Event, InklingOutputParser, InklingTemplate,  # noqa: E402
+                            OutputParser, anthropic_to_messages, budget_effort, effort_levels, forced_call,
+                            gemma_model_turn, images_of, literal_tags, mark_think_literals, openai_to_messages,
+                            tool_choice_of, unmark_think_literals, with_effort_instruction)
+from serve import inkling_dialect, inkling_kind  # noqa: E402
 from serve.mcp import McpCancelled, check_name, check_server, hub_for, merge_config  # noqa: E402
 from serve.toolhub import ToolHub  # noqa: E402
 from serve import websearch  # noqa: E402
@@ -766,6 +767,11 @@ def poly_engine(cfg: dict) -> bool:
     return Path(str(cfg.get("exe") or "")).stem.lower() in ("strata-poly", "strata-glm", "aryainfer")
 
 
+def ninfer_engine(cfg: dict) -> bool:
+    """AryaNInfer (or a legacy ninfer-engine.exe): the same line protocol, but no SAVE/RESTORE."""
+    return Path(str(cfg.get("exe") or "")).stem.lower() in ("arya-ninfer", "ninfer-engine")
+
+
 def conversation_slots(engine) -> int | None:
     """How many conversations the engine's cache holds: its --conversation-cache-slots argument, which is known
     before the engine has started (a lazy start has reported no INFO line yet), else the INFO line it reported."""
@@ -848,8 +854,9 @@ class StrataEngine:
 
     @property
     def disk_sessions(self) -> bool:
-        """SAVE / RESTORE: the Strata project's engine has them, strata-poly does not (issue 114)."""
-        return Path(str(self.spawn[0])).stem.lower() not in ("strata-poly", "strata-glm")
+        """SAVE / RESTORE: the Strata project's engine has them, strata-poly and AryaNInfer do not (issue 114)."""
+        return Path(str(self.spawn[0])).stem.lower() not in ("strata-poly", "strata-glm", "arya-ninfer",
+                                                             "ninfer-engine")
 
     def __init__(self, exe: str, args: list[str], cwd: str | None = None, log: str | None = None,
                  env: dict | None = None, lazy: bool = False, cpus: list[int] | None = None, _attempt: int = 0):
@@ -976,7 +983,11 @@ class StrataEngine:
         # (from PR #41, midhatn) a locally built engine can sit next to another release's BUILD.json: engines that
         # report their own version (INFO engine=, 0.1.8+) win, the manifest stays the fallback for older ones
         if self.info.get("engine"):
-            self.info["version"] = str(self.info["engine"])
+            shown = str(self.info["engine"])
+            if Path(str(self.spawn[0])).stem.lower() in ("arya-ninfer", "ninfer-engine") and \
+                    not re.fullmatch(r"\d+(?:\.\d+)*", shown):
+                shown = "0.1.0"          # legacy binaries said "ninfer-4080" here; that is the core, not the version
+            self.info["version"] = shown
         self.ended = False                              # READY: alive from here (restart() set it True, #344)
         # the engine's stdout on a thread, so a request can wait with a timeout (heartbeats, cancel checks)
         self.lines: queue.Queue = queue.Queue()
@@ -1266,6 +1277,11 @@ class StrataEngine:
         seed = sampling.get("seed")
         if isinstance(seed, int) and seed > 0:
             keys += f" seed={seed}"
+        ik = sampling.get("strata_inkling_images")      # Inkling reads its pictures itself: one image= key each
+        if isinstance(ik, list) and ik:
+            for p in ik:
+                keys += " image=" + inkling_kind.encode_path(p)
+            return keys
         pad = sampling.get("image_pad")                 # an image request's (Service.run()); strata skips the key
         if isinstance(pad, int) and not isinstance(pad, bool):
             keys += f" image_pad={pad}"
@@ -3274,6 +3290,9 @@ class Service:
         self.codex_thread_titles = False              # #923 (opt-in): answer Codex's thread-title turns without the engine
         self.sampling_defaults = dict(sampling_defaults or {})   # the run config's `sampling` block
         self.model_arch = None                        # the config's family ("qwen4exp", "qwen35moe"): None = no model-card defaults
+        self.inkling = False                          # the config's arch or exe is Inkling-2-Mini (serve/inkling_kind.py)
+        self.inkling_native = False                   # the native strata-inkling.exe: it reads image= files itself
+        self.inkling_vision = False                   # this config has the Inkling image shard (not the native text-only file)
         self.shared = {}                              # the web app's Chat settings for every client (POST /settings)
         self.shared_path = None                       # where they are kept between starts (next to the config)
         self.config_effort = None                     # #1641: the config's "reasoning_effort": the level for requests with none
@@ -3376,7 +3395,10 @@ class Service:
     def _read_tokenizer(self, tokenizer) -> None:
         """What the model's tokenizer says of the model: the texts that stay text inside a message, the tokens that
         end a reply, and how it writes a tool call."""
-        self.literals = literal_tags(getattr(tokenizer, "control_tokens", ()))
+        controls = list(getattr(tokenizer, "control_tokens", ()) or ())
+        if getattr(self, "inkling", False):
+            controls += inkling_kind.literal_tags(tokenizer)
+        self.literals = literal_tags(controls)
         im_end = tokenizer.encode(IM_END, parse_special=True)
         if len(im_end) == 1:
             self.stop_ids = set(im_end + tokenizer.encode("<|endoftext|>", parse_special=True))
@@ -3384,6 +3406,10 @@ class Service:
             special = getattr(tokenizer, "special_ids", None) or {}
             self.stop_ids = {special[k] for k in ("tokenizer.ggml.eos_token_id", "tokenizer.ggml.eot_token_id",
                                                   "tokenizer.ggml.eom_token_id") if k in special}
+        if getattr(self, "inkling", False):
+            # The parser needs to see <|end_message|> to leave the thinking channel; only the final
+            # sampling token and end-of-text end the engine's generation.
+            self.stop_ids |= inkling_kind.end_ids(tokenizer)
         # these are exactly the engine's default --eos-ids (a ChatML model's <|im_end|> and <|endoftext|>, else the
         # GGUF's eos, eot and eom): what it ends a slot's reply on.  The model-specific stops added below are not.
         if self.stop_ids:
@@ -3426,6 +3452,10 @@ class Service:
         # an image's marker from the same text in a message: the first ones are the images (prepare()).
         self.image_marks = ("<|image|>", None, ("<|image>", "<image|>")) if self.call_format == "gemma" else \
             (IMAGE_PAD, VISION_START if VISION_START in getattr(self.template, "source", VISION_START) else None, None)
+        if self.inkling:
+            # Inkling's template writes <|content_image|><|unused_200054|> for a picture; that pad is what
+            # strata-poly's image_pad replaces with the encoder's rows.
+            self.image_marks = ("<|unused_200054|>", "<|content_image|>", None)
         # #567: a prompt re-encodes only what follows the last special token it shares with a recent prompt (the
         # same ids as a full encode: tools/strata_tokenizer.py PromptEncoder).  Tokenizers without resume points
         # encode in full.
@@ -3552,7 +3582,10 @@ class Service:
         if tok is None:
             raise ValueError(f"{target['id']} cannot be loaded: its tokenizer is missing ({tpath})")
         tpl = tpath / "chat_template.jinja"
-        return cfg, settings, tok, ChatTemplate(tpl if tpl.exists() else ROOT / "serve/chat_template.jinja")
+        template = ChatTemplate(tpl if tpl.exists() else ROOT / "serve/chat_template.jinja")
+        if settings.get("inkling"):
+            template = InklingTemplate(template)
+        return cfg, settings, tok, template
 
     def _switch_to(self, target: dict) -> None:
         """The switch, run by the gate (serve/model_gate.py) while no request runs.  One model is in memory at a time:
@@ -3799,6 +3832,10 @@ class Service:
                 self.set_aliases(value)
             else:
                 setattr(self, key, value)
+        # The first _read_tokenizer() ran before this config's arch was known.  Re-read after
+        # every settings change: an Inkling model adds its stop ids and control-token literals,
+        # and a switch away from Inkling must restore the ordinary image marks as well.
+        self._read_tokenizer(self.tok)
 
     def read_shared(self, config_path) -> None:
         """The Chat settings shared with other apps (POST /settings), kept next to the model's run config as
@@ -4361,7 +4398,8 @@ class Service:
                 live["state"] = "generating"
         if hasattr(self.engine, "replica_view"):        # opt-in replicas: each one's state and requests routed to it
             live["replicas"] = self.engine.replica_view()
-        engine = {"model": self.model, "max_context": self.reported_ctx(), "images": self.vision is not None,
+        engine = {"model": self.model, "max_context": self.reported_ctx(),
+                  "images": self.vision is not None or (self.inkling_native and self.inkling_vision),
                   **dict(getattr(self.engine, "info", {}) or {})}
         tel = self.telemetry.snapshot() if getattr(self, "telemetry", None) else {"now": {}, "history": {}, "static": {}}
         parked = self.conv_log.poll(getattr(self.engine, "log_path", None), getattr(self.engine, "log_start", None))
@@ -4421,7 +4459,7 @@ class Service:
             return round(v / unit, digits) if isinstance(v, (int, float)) else None
 
         busy, ctx = bool(s.get("busy")), self.reported_ctx()
-        images = self.vision is not None
+        images = self.vision is not None or (self.inkling_native and self.inkling_vision)
         return {
             "service": "strata", "model": self.model,
             "loaded": self.loaded(), "auto_load": hasattr(self.engine, "restart"),
@@ -4617,6 +4655,17 @@ class Service:
             ids = self.truncate_prompt_middle(ids, max_new)
         self.embeddings.path = None
         self.embeddings.keys = None
+        self.embeddings.inkling = None
+        if images and self.inkling_native:
+            if (getattr(self.engine, "info", {}) or {}).get("images") != 1:
+                raise ValueError("Inkling-2-Mini: this engine does not read images yet, so it starts without the "
+                                 "image reader")
+            def load(src):
+                if cancel is not None and cancel.is_set():
+                    raise ClientGone()
+                return fetched[src] if src in fetched else Vision.load(src)
+            self.embeddings.inkling = inkling_kind.write_images(images, load, Vision.normalize, cancel)
+            images = []
         if images:
             if self.vision is None:
                 raise ValueError("this server was started without the vision encoder (run setup again and choose "
@@ -4795,6 +4844,9 @@ class Service:
         path, self.embeddings.path = getattr(self.embeddings, "path", None), None
         if path is not None:
             Path(path).unlink(missing_ok=True)
+        inkling, self.embeddings.inkling = getattr(self.embeddings, "inkling", None), None
+        for p in inkling or []:
+            Path(p).unlink(missing_ok=True)
 
     def _note(self, n, evs, st=None, rate=None):
         with self.status_lock:
@@ -4837,6 +4889,8 @@ class Service:
 
     def run(self, ids, thinking, tools, max_new, sampling, cancel, force=None) -> Iterator[tuple[str, object]]:
         """The request's events (see _run); with "prevent_sleep" in the config, the PC stays awake while it runs or waits."""
+        if getattr(self, "inkling", False):
+            thinking = False
         ka = self.keep_awake
         if ka is not None:
             ka.acquire()
@@ -4913,8 +4967,9 @@ class Service:
                       f"the answer (budget {budget})", flush=True)
                 budget = max(1, max_new - reserve)
         opened = bool(self.think_open_ids) and ids[-len(self.think_open_ids):] == self.think_open_ids
-        parser = OutputParser(thinking=thinking, tools=tools, stream_tools=True, recover=self.tool_call_recovery,
-                              call_format=self.call_format, opened=opened)
+        parser_cls = InklingOutputParser if getattr(self, "inkling", False) else OutputParser
+        parser = parser_cls(thinking=thinking, tools=tools, stream_tools=True, recover=self.tool_call_recovery,
+                            call_format=self.call_format, opened=opened)
         detok, n, finish = Detokenizer(self.tok), 0, "length"
         run_tok, run_len, repeated = None, 0, False     # #606: the current run of one repeated token
         thinking_n = 0                                  # tokens written while thinking (Responses' reasoning_tokens)
@@ -4941,7 +4996,12 @@ class Service:
             return out
         opening = []                                    # without thinking the prompt ends with the forced opening:
         if force and not thinking:                      # the parser reads it as if the model had written it
-            opening, force = parser.feed(force), None
+            if getattr(self, "inkling", False):
+                native = inkling_dialect.force_text(force)
+                ids = list(ids) + self.tok.encode(native, parse_special=True)
+                opening, force = parser.feed(native), None
+            else:
+                opening, force = parser.feed(force), None
         tail = ""                                       # the last characters written (the newlines before a call)
         answered, close_retried = False, False          # #1053: content or a call came out; the thinking was closed
         nf_retried = False                              # #879: the request was sent again after non-finite logits
@@ -4952,8 +5012,11 @@ class Service:
         emb, self.embeddings.path = getattr(self.embeddings, "path", None), None   # this run's to delete now
         if emb:                                         # strata-poly finds the images' rows by their token
             sampling = {**(sampling or {}), "image_pad": self.embeddings.pad}
+        inkling_images, self.embeddings.inkling = getattr(self.embeddings, "inkling", None), None
+        if inkling_images and self.inkling_native:       # native Inkling reads the files itself: image= keys
+            sampling = {**(sampling or {}), "strata_inkling_images": inkling_images}
         self.warm_stop.set()                            # a warm read (start_warm()) gives way
-        if self.warm_start and tools and not emb:
+        if self.warm_start and tools and not emb and not inkling_images:
             self.keep_start(ids)
         img_keys, self.embeddings.keys = getattr(self.embeddings, "keys", None), None
         if emb and img_keys:
@@ -5343,6 +5406,8 @@ class Service:
         finally:
             if emb:
                 Path(emb).unlink(missing_ok=True)
+            for p in inkling_images or []:
+                Path(p).unlink(missing_ok=True)
         for ev in cut(parser.finish(finish)):
             yield "event", ev
         if parser.rescued or parser.refused:
@@ -6294,7 +6359,7 @@ def make_handler(svc: Service):
             elif path in ("/health", "/api/health"):
                 reachable = svc.comfy.reach() if svc.comfy is not None else {"up": False, "version": None}
                 self._json(200, {"status": "ok", "max_context": svc.reported_ctx(), "model": svc.model,
-                                 "images": svc.vision is not None, "api_key": bool(svc.api_key),
+                                 "images": svc.vision is not None or (svc.inkling and svc.inkling_vision), "api_key": bool(svc.api_key),
                                  "image_generation": svc.images is not None, "api_monitor": svc.api_monitor,
                                  "comfyui": {"configured": bool(svc.comfy is not None and svc.comfy.configured()),
                                              "reachable": bool(reachable.get("up")),
@@ -8077,6 +8142,9 @@ def model_settings(cfg: dict, overrides: dict | None = None) -> dict:
         # 0.1.45: the model card's sampling (MODEL_CARD_SAMPLING) for the Strata project's families; the models on
         # strata-poly have no "arch" and keep their own defaults
         "model_arch": None if poly_engine(cfg) else cfg.get("arch") or "qwen4exp",
+        "inkling": inkling_kind.is_inkling(cfg),                           # Inkling-2-Mini's channel dialect
+        "inkling_native": bool(cfg.get("inkling_native")) or inkling_kind.is_inkling_exe(cfg.get("exe")),      # strata-inkling.exe reads image= files itself
+        "inkling_vision": bool(cfg.get("vision")),                          # its image shard, when the config has one
         "answer_room": cfg.get("answer_room") is not False,                 # 0.1.45: see ANSWER_ROOM_MIN_CAP
     }
 
@@ -8107,7 +8175,7 @@ def start_model(cfg: dict, tok, lazy: bool = False):
     if sampling_defaults:
         pretty = ", ".join(f"{k}={v}" for k, v in sampling_defaults.items())
         print(f"[strata] sampling defaults from the config: {pretty}", flush=True)
-    if cfg.get("vision"):
+    if isinstance(cfg.get("vision"), dict):
         # relative paths are the config's cwd's, as for the engine below
         vcfg = {k: (os.path.abspath(os.path.join(cfg.get("cwd") or ".", v))
                     if k in ("exe", "mmproj", "model") and isinstance(v, str) and not os.path.isabs(v) else v)
@@ -8390,7 +8458,10 @@ def main() -> int:
             "Thinking about it.</think>\n\nHello from the mock engine."]), None, {}
     # the model's own chat template (exported with its tokenizer), else the original model's
     tpl = tpath / "chat_template.jinja"
-    svc = Service(engine, tok, ChatTemplate(tpl if tpl.exists() else ROOT / "serve/chat_template.jinja"),
+    template = ChatTemplate(tpl if tpl.exists() else ROOT / "serve/chat_template.jinja")
+    if settings.get("inkling"):
+        template = InklingTemplate(template)
+    svc = Service(engine, tok, template,
                   model_name=default_model_name(cfg), vision=vision,
                   sampling_defaults=sampling_defaults)
     svc.overrides, svc.cfg_overrides = overrides, cfg_overrides

@@ -1872,3 +1872,86 @@ class OutputParser:
         self._reset_scan()
         self.state, self.lead = "content", True
         return [Event("tool_call", call=call)]
+
+
+class InklingTemplate:
+    """Inkling-2-Mini's chat template, honouring its graded reasoning effort.
+
+    The template ends before the assistant header.  A thinking turn lets the model write
+    `<|message_model|><|content_thinking|>` itself; a non-thinking turn gets the explicit
+    `<|message_model|><|content_text|>` opener (see serve/inkling_dialect.py)."""
+
+    def __init__(self, inner: ChatTemplate):
+        self.inner = inner
+        self.source = inner.source
+        self.caps = inner.caps
+        self.supports_reasoning_effort = inner.supports_reasoning_effort
+        self.supports_enable_thinking = inner.supports_enable_thinking
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    def render(self, messages, tools=None, add_generation_prompt=True, **kwargs):
+        from serve import inkling_dialect
+        kwargs = inkling_dialect.template_kwargs(kwargs)
+        text = self.inner.render(inkling_dialect.prepare_messages(messages), tools=tools,
+                                 add_generation_prompt=add_generation_prompt, **kwargs)
+        # Only a non-thinking turn needs the explicit text opener.  With thinking on, the
+        # template intentionally ends before the assistant header so the model writes
+        # <|message_model|><|content_thinking|> itself.
+        if add_generation_prompt and kwargs.get("enable_thinking") is False:
+            text = inkling_dialect.finish_prompt(text, has_tools=bool(tools))
+        return text
+
+
+def _inkling_json_call(text: str) -> str:
+    """The dialect's JSON `<tool_call>` frame -> the XML form this fork's OutputParser reads."""
+    m = re.fullmatch(r"<tool_call>\s*(\{.*\})\s*</tool_call>", text, re.S)
+    if not m:
+        return text
+    try:
+        obj = json.loads(m.group(1))
+    except ValueError:
+        return text
+    if not isinstance(obj, dict):
+        return text
+    name = str(obj.get("name") or "").strip()
+    args = obj.get("arguments", obj.get("args", {}))
+    if not name or not isinstance(args, dict):
+        return text
+    params = "".join(f"<parameter={k}>{v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)}</parameter>"
+                     for k, v in args.items())
+    return f"<tool_call>\n<function={name}>\n{params}\n</function>\n</tool_call>"
+
+
+class InklingOutputParser(OutputParser):
+    """OutputParser for Inkling-2-Mini: translates its channel tokens before parsing.
+
+    The thinking channel is streamed as reasoning_content so a long reasoning pass keeps
+    the client stream alive; text/tool channels are parsed into the form below."""
+
+    def __init__(self, thinking: bool = True, tools: list[dict] | None = None, stream_tools: bool = False,
+                 recover: bool = False, call_format: str = "function", opened: bool = False):
+        super().__init__(thinking=False, tools=tools, stream_tools=stream_tools, recover=True,
+                         call_format=call_format, opened=opened)
+        from serve import inkling_dialect
+        self._dialect = inkling_dialect.InklingDialect()
+
+    def _events(self, chunks) -> list[Event]:
+        out: list[Event] = []
+        for kind, chunk in chunks:
+            if not chunk:
+                continue
+            if kind == "reasoning":
+                out.append(Event("reasoning", chunk))
+                continue
+            text = _inkling_json_call(chunk) if chunk.startswith("<tool_call>") else chunk
+            out += super().feed(text)
+        return out
+
+    def feed(self, delta: str) -> list[Event]:
+        return self._events(self._dialect.feed_channels(delta))
+
+    def finish(self, reason: str | None = None) -> list[Event]:
+        out = self._events(self._dialect.feed_channels("", final=True))
+        return out + super().finish(reason)

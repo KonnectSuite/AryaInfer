@@ -33,6 +33,13 @@
 
 namespace {
 
+// AryaInfer's own identity.  The core below the shim is the pinned roofkid/ninfer-4080 engine; keep that
+// provenance in its own INFO keys so --version, BUILD.json and the server all agree on one number.
+constexpr const char* kProduct    = "AryaNInfer";
+constexpr const char* kVersion    = "0.1.0";
+constexpr const char* kCore       = "ninfer-4080";
+constexpr const char* kCoreCommit = "2469b5752672ad597055af61fe28e8e7ced20056";
+
 using ninfer::Engine;
 using ninfer::EngineOptions;
 using ninfer::ExternalVisionItem;
@@ -58,6 +65,7 @@ struct Options {
     ProposalHead head            = ProposalHead::Optimized;
     bool use_graphs              = true;
     bool vision                  = false;
+    bool show_version            = false;
 };
 
 struct Request {
@@ -82,7 +90,7 @@ void say(const char* fmt, ...) {
     std::fflush(stdout);
 }
 
-void note(const std::string& text) { std::fprintf(stderr, "[ninfer-engine] %s\n", text.c_str()); }
+void note(const std::string& text) { std::fprintf(stderr, "[arya-ninfer] %s\n", text.c_str()); }
 
 std::optional<KvCacheStorage> parse_kv(std::string_view name) {
     if (name == "bf16") { return KvCacheStorage::BFloat16; }
@@ -114,6 +122,7 @@ Options parse_args(int argc, char** argv) {
     Options out;
     for (std::size_t i = 0; i < args.size(); ++i) {
         const std::string& arg = args[i];
+        if (arg == "--version") { out.show_version = true; continue; }
         if (arg == "--serve") { continue; }
         if (arg == "--artifact" || arg == "--model" || arg == "--weights") {
             out.artifact = take_value(args, i);
@@ -160,6 +169,7 @@ Options parse_args(int argc, char** argv) {
             note("ignoring unknown option " + arg);
         }
     }
+    if (out.show_version) { return out; }             // --version needs no model file
     if (out.artifact.empty()) { throw std::invalid_argument("--artifact is required"); }
     return out;
 }
@@ -382,8 +392,12 @@ int main(int argc, char** argv) {
     try {
         options = parse_args(argc, argv);
     } catch (const std::exception& error) {
-        std::fprintf(stderr, "[ninfer-engine] %s\n", error.what());
+        std::fprintf(stderr, "[arya-ninfer] %s\n", error.what());
         return 2;
+    }
+    if (options.show_version) {
+        std::printf("%s %s\ncore=%s\ncore_commit=%s\n", kProduct, kVersion, kCore, kCoreCommit);
+        return 0;
     }
 
     EngineOptions engine_options;
@@ -415,13 +429,16 @@ int main(int argc, char** argv) {
     try {
         engine = std::make_unique<Engine>(engine_options);
     } catch (const std::exception& error) {
-        std::fprintf(stderr, "[ninfer-engine] engine did not start: %s\n", error.what());
+        std::fprintf(stderr, "[arya-ninfer] engine did not start: %s\n", error.what());
         return 1;
     }
 
     say("INFO model=qwen3.8-27b\n");
     say("INFO weights=gsq3\n");
-    say("INFO engine=ninfer-4080\n");
+    say("INFO product=%s\n", kProduct);
+    say("INFO engine=%s\n", kVersion);
+    say("INFO core=%s\n", kCore);
+    say("INFO core_commit=%s\n", kCoreCommit);
     say("READY %u stop\n", options.max_context);
     std::fflush(stdout);
 

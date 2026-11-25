@@ -57,24 +57,28 @@ layout; we say so plainly. Full numbers, artifacts and caveats:
 ## The interface
 
 The same server that ran that benchmark is the app: a chat page, a live
-resource monitor, a model roster spanning all four engines, and an about page
+resource monitor, a model roster spanning all five engines, and an about page
 that states the exact engine, context and cache a model is using.
 
 <table align="center"><tr>
 <td align="center"><img src="docs/media/ui/arya-infer-chat.jpg" width="390" alt="AryaInfer chat page with swift-1.5-iq3_xxs selected"><br><sub>Chat: <i>runs on this PC. Nothing leaves it.</i></sub></td>
 <td align="center"><img src="docs/media/ui/arya-infer-monitor.jpg" width="390" alt="AryaInfer monitor: decode speed, GPU load, VRAM, temperature, PCIe, power"><br><sub>Monitor: live decode, VRAM, experts cached, power, PCIe</sub></td>
 </tr><tr>
-<td align="center"><img src="docs/media/ui/arya-infer-models.jpg" width="390" alt="AryaInfer model roster dropdown across four engines"><br><sub>Roster: the model picker spans all four engines</sub></td>
+<td align="center"><img src="docs/media/ui/arya-infer-models.jpg" width="390" alt="AryaInfer model roster dropdown across five engines"><br><sub>Roster: the model picker spans all five engines</sub></td>
 <td align="center"><img src="docs/media/ui/arya-infer-about.jpg" width="390" alt="AryaInfer about page: model, engine, context, KV cache, host specs"><br><sub>About: exact engine, context and cache per model</sub></td>
 </tr></table>
 
 ## Supported models
 
-It installs ten profiles here, served by four engine backends in one program:
-the upstream Strata engine, PolyStrata's `strata-poly`, our `aryainfer` build of
-the same tree with the AQ3 kernels, and a ported NInfer core. The server, API,
-chat page, tools and settings are the same whichever one a model uses. See
-[Engines](docs/ENGINES.md) for the split and the measured numbers.
+It installs ten profiles here, served by five engine backends in one program:
+the upstream [Strata](https://github.com/Niko1221/Strata) engine, its
+`strata-inkling` sibling, [PolyStrata](https://github.com/simplexai-labs/PolyStrata)'s
+`strata-poly`, our `aryainfer` build of the same tree with the AQ3 kernels, and
+AryaNInfer, a ported NInfer core with our shim. The server, API, chat page, tools
+and settings are the same whichever one a model uses. See
+[Engines](docs/ENGINES.md) for the split, the versions and the measured numbers.
+The upstream engines and their releases are managed by their own projects; see
+[Credits](CREDITS.md).
 
 The inherited installer covers twelve model families across the original Strata
 engine and PolyStrata's additional `strata-poly` engine. Support in the codebase
@@ -102,7 +106,19 @@ and [the roster report](docs/MODEL_ROSTER_HOST_RESULTS.md).
 
 Qwen3.8 variants include **Coder, Swift 1.5, and Unsloth quantizations**. These are
 inherited options; our results apply to the exact IQ3_XXS files in the benchmark
-record. Linux AMD beta paths, Apple Silicon, Intel Arc and multi-GPU work have
+record.
+
+The weights keep their own homes: the Qwen3.8 base models are the
+[Qwen team's](https://huggingface.co/Qwen/Qwen3.8-27B), the Flash-Next quants are
+[ISTA-DASLab's GSQ-RCO](https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF),
+and the 27B IQ2_S/IQ3_XXS files plus the mmproj are
+[ISTA-DASLab's 27B GSQ-RCO](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-GSQ-RCO-GGUF).
+The 27B AQ3 file is converted from
+[ISTA-DASLab's 3-bit GSQ](https://huggingface.co/ISTA-DASLab/Qwen3.8-27B-3Bit-GSQ)
+by `tools/aryainfer_gsq3_convert.py`; AryaNInfer's `.ninfer` is
+[roofkid's GSQ3 repack](https://huggingface.co/roofkid/Qwen3.8-27B-GSQ3-NInfer)
+of that 3-bit checkpoint. The [27B guide](docs/QWEN38-27B.md) has the exact files
+and checksums. Linux AMD beta paths, Apple Silicon, Intel Arc and multi-GPU work have
 separate scope: [AMD](docs/AMD_HIP.md), [Mac](docs/MAC.md),
 [Intel](docs/INTEL.md), [multiple GPUs](docs/MULTI_GPU.md). None is qualified by
 our single-NVIDIA Windows results. Image support means understanding image input;
@@ -182,7 +198,7 @@ and [MiniCPM-V 4.7 Q4 with vision](docs/MINICPMV_HOST_RESULTS.md). The MiniCPM
 report uses corrected coding-validator results and retains the original records
 for audit; its speed, image and recall results are separate measurements.
 The [complete host model report](docs/MODEL_ROSTER_HOST_RESULTS.md) includes the
-older eight-profile roster. The current roster has ten profiles across all four
+older eight-profile roster. The current roster has ten profiles across all five
 engines (Qwen3.8 Flash-Next, 27B AQ3, 27B NInfer, 27B Turbo, 35B UD-Q4 and
 abliterated, 35B Ornith, and Qwen3.5 4B): [Engines](docs/ENGINES.md#choosing-a-model-not-an-engine).
 It records exact model IDs, cold/cached agent timings, failures, resource

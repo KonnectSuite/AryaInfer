@@ -5,7 +5,7 @@
 AryaInfer runs more than one model family. This page says which, how the engine is put together so that it can,
 how a model is recognized, how to add one, and how to change the model that answers.
 
-The four engine backends behind the same server - Strata, `strata-poly`, our
+The five engine backends behind the same server - Strata, Strata Inkling, `strata-poly`, our
 `aryainfer` build and the ported NInfer core - are compared in
 [ENGINES.md](ENGINES.md), with what each one runs and its measured table. This
 page keeps the per-family recognition, quantization and setup detail.

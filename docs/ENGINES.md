@@ -1,6 +1,6 @@
 # Engines
 
-AryaInfer is one inference space with four engine backends behind it. You start
+AryaInfer is one inference space with five engine backends behind it. You start
 one server, open one web app, and use one OpenAI- or Anthropic-compatible API;
 the model you pick decides which backend runs. Switching models is a config
 change (`switch_on_request`), not a different program to learn.
@@ -12,19 +12,35 @@ ids into new token ids, over the same line protocol. That is why a GGUF MoE
 runner, the native Qwen engine, our AQ3 build and a ported NInfer core can sit
 in the same roster.
 
-## The four backends
+## The five backends
 
 | Backend | Binary | Source | Models on this host | Context | Vision |
 | --- | --- | --- | --- | ---: | --- |
-| **Strata** (native Qwen engine) | `strata.exe` 0.1.62 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5, Swift 1.5 abliterated | 262,144, int8 KV | `strata-vision.exe` + mmproj, GPU |
-| **PolyStrata** (`strata-poly`) | `engine-poly\strata-poly.exe` | `src/poly`, from [VecSzn/PolyStrata](https://github.com/simplexai-labs/PolyStrata) | Qwen3.6-35B-A3B UD-Q4_K_XL and abliterated, Ornith 1.5 APEX, and the GGUF families in [BACKENDS.md](BACKENDS.md) | 262,144, q8_0 KV | `strata-vision.exe` + mmproj, GPU |
-| **AryaInfer** (fork build) | `C:\AI\Strata-data\engines\arya-infer\aryainfer.exe` (repo build: `build-poly\aryainfer.exe`) | `src/poly` fork target, CUDA `sm_89`; AQ3 kernels in `src/poly/prefill_f16.cu` | Qwen3.8-27B AQ3 (GSQ 3-bit), Qwen3.8-27B Turbo IQ3_XXS, Qwen3.5-4B Q4_K_M | 131,072 (27B), 65,536 (4B), q4_0 KV | `strata-vision.exe` + mmproj, CPU |
-| **NInfer** (ported) | `engine-ninfer\ninfer-engine.exe` | [roofkid/ninfer-4080](https://github.com/roofkid/ninfer-4080) at `rtx4080-port` commit `2469b57`, plus `engine-ninfer/shim/main.cpp` | Qwen3.8-27B GSQ3 `.ninfer` | 131,072, rk4v4-e8 KV | external `.sve` embeddings from `strata-vision.exe`, CPU |
+| **Strata** (native Qwen engine) | `strata.exe` 0.1.67 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | Qwen3.8-Flash-Next IQ3_S, Gyro-M, Swift 1.5 abliterated | 262,144, int8 KV | `strata-vision.exe` + mmproj, GPU |
+| **Strata Inkling** | `strata-inkling.exe` 0.1.67 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | Inkling-2-Mini SQ-15 | 262,144, host KV offload | native vision encoder |
+| **PolyStrata** (`strata-poly`) | `engine-poly\strata-poly.exe` 0.1.66 | `src/poly`, from [VecSzn/PolyStrata](https://github.com/simplexai-labs/PolyStrata) | Qwen3.6-35B-A3B UD-Q4_K_XL and abliterated, Ornith 1.5 APEX, and the GGUF families in [BACKENDS.md](BACKENDS.md) | 262,144, q8_0 KV | `strata-vision.exe` + mmproj, GPU |
+| **AryaInfer** (fork build) | `engine-arya\aryainfer.exe` 0.1.45 | `src/poly` fork target, from [KonnectSuite/AryaInfer](https://github.com/KonnectSuite/AryaInfer); CUDA `sm_89`; AQ3 kernels in `src/poly/prefill_f16.cu` | Qwen3.8-27B AQ3 (GSQ 3-bit), Qwen3.8-27B Turbo IQ3_XXS, Qwen3.5-4B Q4_K_M | 131,072 (27B), 65,536 (4B), q4_0 KV | `strata-vision.exe` + mmproj, CPU |
+| **AryaNInfer** (ported core) | `engine-ninfer\arya-ninfer.exe` 0.1.0 | [roofkid/ninfer-4080](https://github.com/roofkid/ninfer-4080) at `rtx4080-port` commit `2469b57`, plus `engine-ninfer/shim/main.cpp` | Qwen3.8-27B GSQ3 `.ninfer` | 131,072, rk4v4-e8 KV | external `.sve` embeddings from `strata-vision.exe`, CPU |
 
-All four are configured per model in a `strata-*.json` run config: `exe`,
+All five are configured per model in a `strata-*.json` run config: `exe`,
 `args`, `tokenizer`, `sampling`, `reasoning_effort`, `reasoning_budget_by_effort`,
 `vision`, `switch_on_request`. Nothing about the API, the web app or the tools
 changes when the engine does.
+
+### Who owns which engine
+
+| Engine | Built and released by | AryaInfer's part |
+| --- | --- | --- |
+| Strata, Strata Inkling | [Niko1221/Strata](https://github.com/Niko1221/Strata) — [releases](https://github.com/Niko1221/Strata/releases) | installs the pinned binary from `engines.json`; no source changes |
+| PolyStrata (`strata-poly`) | [VecSzn/PolyStrata](https://github.com/simplexai-labs/PolyStrata) — [releases](https://github.com/simplexai-labs/PolyStrata/releases) | installs the pinned binary; `strata-poly` stays upstream-identical |
+| AryaInfer (`aryainfer`) | this fork — [AryaInfer releases](https://github.com/KonnectSuite/AryaInfer/releases) | our build of the pinned PolyStrata source, with the AQ3/q4_0 changes behind `ARYAINFER_ENGINE` |
+| AryaNInfer (`arya-ninfer`) | core by [roofkid](https://github.com/roofkid/ninfer-4080), shim/patches by this fork | manual build; the core stays pinned at `2469b57` |
+
+The source snapshot in this checkout is still Strata `v0.1.45` / PolyStrata
+`0.1.45-poly.9` (`upstream.json`). `--build` compiles that pin, so it produces
+0.1.45 engines; the default install takes the current upstream binaries pinned in
+`engines.json` (Strata 0.1.67, Inkling 0.1.67, PolyStrata 0.1.66). Updating the
+source pin is a separate merge, not something this installer pretends happened.
 
 ## One protocol
 
@@ -41,7 +57,7 @@ Thinking, sampling defaults, the template and tool parsing stay on the server.
 The engine ABI is described in `serve/server.py` (`StrataEngine`) and each
 backend implements it:
 
-- Strata and PolyStrata implement it natively (`--serve`);
+- Strata, Strata Inkling and PolyStrata implement it natively (`--serve`);
 - `aryainfer` is the same `src/poly` tree built with the AQ3/Turbo kernels;
 - `engine-ninfer` is a small C++ shim over NInfer's `Engine` API
   (`prepare_tokens` / `prepare_tokens_with_vision` + `submit`), with a vendored
@@ -54,15 +70,16 @@ The roster is the `strata-*.json` files next to the config you start with
 
 | Model | Engine | Context | Why it is here |
 | --- | --- | ---: | --- |
-| `qwen3.8-flash-next-iq3_xxs` | Strata 0.1.62 | 262,144 | Fastest long-context MoE path here; DFlash2 + MTP, `--draft-cap 8` |
+| `qwen3.8-flash-next-gyro-m` | Strata 0.1.67 | 262,144 | Gyro-M TQ2_0 (~92 GB); 61.6 tok/s decode, 270 tok/s prompt, 262K vision |
+| `inkling-2-mini-sq-15` | Strata Inkling 0.1.67 | 262,144 | Native Inkling 2 Mini SQ-15 (~14.3 GB); 88.8 tok/s text, 73.8 tok/s with vision; native encoder |
 | `qwen3.8-27b-aq3` | AryaInfer | 131,072 | Dense 27B quality at 3-bit codes, 1.2K tok/s prompt reads |
-| `qwen3.8-27b-ninfer` | NInfer | 114,688 | Highest measured prefill on this card (2,039 tok/s at 8K); 131,072 overruns a 16 GiB card with vision |
+| `qwen3.8-27b-ninfer` | AryaNInfer | 114,688 | Highest measured prefill on this card (2,039 tok/s at 8K); 131,072 overruns a 16 GiB card with vision |
 | `qwen3.6-35b-a3b-ud-q4_k_xl` | PolyStrata | 262,144 | Best validated 35B MoE for agent work |
 | `qwen3.6-35b-a3b-abliterated` | PolyStrata | 262,144 | Unrestricted 35B variant |
 | `ornith-1.5-35b-a3b-apex-i-quality` | PolyStrata | 262,144 | 18/18 bounded coding with low reasoning |
 | `qwen3.8-27b-turbo-iq3xxs` | AryaInfer | 131,072 | Daily-driver 27B with MTP |
-| `swift-1.5-iq3_xxs` | Strata 0.1.59 | 262,144 | Token-efficient Qwen3.8 variant, 262K vision |
-| `swift-1.5-abliterated-iq3_xxs` | Strata 0.1.59 | 262,144 | Unrestricted Swift 1.5 |
+| `inkling-2-mini-ud-q4_k_xl` | PolyStrata 0.1.66 | 262,144 | Unsloth UD-Q4_K_XL text fallback; 262K, vision via `mmproj-F16.gguf` |
+| `swift-1.5-abliterated-iq3_xxs` | Strata 0.1.67 | 262,144 | Unrestricted Swift 1.5 |
 | `qwen3.5-4b` | AryaInfer | 65,536 | Small, fast, vision-capable |
 
 ## Measured on this host
@@ -97,7 +114,7 @@ log and the Monitor showed 52.8 tok/s decode around 15K, so 0.1.58 is roughly
 notes credit the CPU/upload share following the measured CPU speed (ceiling
 0.95 instead of 0.60) and a larger automatic prompt chunk.
 
-### Strata 0.1.62 (November 19, 2026) - Qwen3.8-Flash-Next IQ3_XXS
+### Strata 0.1.62 baseline (November 19, 2026) - Qwen3.8-Flash-Next IQ3_XXS
 
 Engine 0.1.62 with `--draft-cap 8` (upstream release v0.2.16). Cold prompts,
 one different prompt per request, interleaved A/B, medians of five (two at
