@@ -19,6 +19,29 @@ tokens; details in [QWEN38-27B.md](QWEN38-27B.md). NInfer numbers are from roofk
 The target is about 85-90% of NInfer: fewer SMs and less bandwidth on this card. NInfer's headline 300-385 tok/s
 writing includes n-gram drafting on a repetitive test text; compare against its `--ngram off` column.
 
+## P0 result (2026-11-25): the 300+ is the chain, and the chain is already here
+
+Measured with IQ3_XXS, q4_0 KV, `--prompt-batch 512`, 256 generated tokens. No AQ3 GGUF is present on this host, so
+these numbers cannot exercise the AQ3 kernels; the AQ3 gate in P1/P2 still needs the converted artifact.
+
+| Prompt | `--lookup-chain` | 8K prefill | 8K decode | 32K prefill | 32K decode | accepted |
+|---|---:|---:|---:|---:|---:|---:|
+| tiled task | 0 | 1,179.8 | 66.1 | 1,115.5 | 65.6 | 169/211 |
+| tiled task | 7 | 1,266.7 | 70.0 | 1,116.2 | 64.5 | 172/211 |
+| coding | 0 | 1,254.4 | 63.5 | - | - | 140/172 |
+| coding | 7 | 1,274.1 | 62.3 | - | - | 145/191 |
+| exact repeat | 0 | 1,273.3 | 106.7 | - | - | 224/224 |
+| exact repeat | 7 | 1,272.2 | 105.9 | - | - | 224/224 |
+
+The exact-repeat row is the important one: every offered guess was accepted, so the answer ran at the window's
+ceiling, 8 tokens a pass. 106.7 tok/s is therefore 8 tokens every 75 ms. NInfer's 361.8 tok/s at 8K is the same
+7-8 tokens a pass at about 22 ms, so the difference is the **row cost**, not the drafter. The chain flag cannot add a
+ninth token: `DraftPolicy::kMaxT` is 8 and NInfer's MTP3 + n-gram chain also commits seven to eight.
+
+On non-repetitive text the chain does not pay (coding 63.5 -> 62.3, tiled 66.1 -> 70.0 at 8K and no gain at 32K).
+P1's gate (real coding >=150 with the chain) fails, so the chain stays off by default. P2 remains the unlock: get an
+extra row under 1 ms and the same 8 accepted tokens become 300+.
+
 ## 2. Why we are slow: what the measurements say
 
 1. **A one-token pass costs 22.7 ms** at 8K (IQ3_XXS mix): 427 GB/s, 64% of the card's bandwidth. A pass that reads
