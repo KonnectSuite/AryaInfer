@@ -86,13 +86,26 @@ class Contract(unittest.TestCase):
                      "settings-btn", "view-title"):
             self.assertIn(name, self.page.by_id)
 
-    def test_settings_holds_appearance_the_key_and_the_model_settings(self):
-        for name in ("settings-pop", "theme-seg", "api-key", "cfg-card", "cfg-form", "cfg-save", "cfg-msg",
-                     "about-link"):
+    def test_settings_holds_appearance_the_key_and_models_get_their_own_view(self):
+        for name in ("settings-pop", "theme-seg", "api-key", "about-link"):
             self.assertIn(name, self.page.by_id)
             self.assertTrue(inside(self.page, name, "settings-pop") or name == "settings-pop", name)
         self.assertFalse(inside(self.page, "api-key", "view-about"))
-        self.assertFalse(inside(self.page, "cfg-card", "view-about"))
+        # the model settings moved out of the popover into a Models view and a full Configure dialog
+        for name in ("nav-models", "nav-engines", "view-models", "models-body", "models-note",
+                     "view-engines", "engines-body", "engines-repair", "engines-note"):
+            self.assertIn(name, self.page.by_id)
+        for name in ("config-dialog", "config-title", "config-file", "config-groups", "config-raw",
+                     "config-msg", "config-cancel", "config-save"):
+            self.assertIn(name, self.page.by_id)
+        self.assertIn("st-dialog", self.page.by_id["config-dialog"][1])       # a real dialog, not a popover
+        self.assertTrue(inside(self.page, "models-body", "view-models"), "models-body")
+        self.assertTrue(inside(self.page, "engines-body", "view-engines"), "engines-body")
+        self.assertTrue(inside(self.page, "config-groups", "config-dialog"), "config-groups")
+        self.assertTrue(inside(self.page, "config-save", "config-dialog"), "config-save")
+        for needle in ("function loadModelsView(", "function loadEngines(", "function openConfig(",
+                       "function renderConfig(", "api/models/config", "api/engines"):
+            self.assertIn(needle, self.js, needle)
 
     def test_the_model_picker_is_in_the_composer(self):
         for name in ("model-select", "model-btn", "model-menu"):
@@ -334,7 +347,7 @@ class Contract(unittest.TestCase):
         for name in ("cc-card", "cc-slots-text", "cc-mem-text", "cc-facts", "cc-note"):
             self.assertIn(name, self.page.by_id)
             self.assertIn(f'"{name}"', self.js)
-        for name in ("cfg-card", "cfg-form", "cfg-save", "cfg-msg"):
+        for name in ("config-dialog", "config-groups", "config-save", "config-msg"):
             self.assertIn(f'id="{name}"', self.html)
 
     def test_nothing_is_loaded_from_another_machine(self):

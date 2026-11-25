@@ -109,8 +109,8 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
 });
 
 // ------------------------------------------------------------------ views, sidebar, overlays
-const VIEWS = ["chat", "images", "monitor", "about"];
-const VIEW_TITLES = {chat: "Chat", images: "Images", monitor: "Monitor", about: "About"};
+const VIEWS = ["chat", "images", "monitor", "models", "engines", "about"];
+const VIEW_TITLES = {chat: "Chat", images: "Images", monitor: "Monitor", models: "Models", engines: "Engines", about: "About"};
 let tab = "chat";
 function showTab(name) {
   tab = VIEWS.includes(name) ? name : "chat";
@@ -125,6 +125,8 @@ function showTab(name) {
   if (location.hash.slice(1) !== tab) history.replaceState(null, "", tab === "chat" ? location.pathname : `#${tab}`);
   if (tab === "chat") $("input").focus();
   if (tab === "monitor") loadMcp();
+  if (tab === "models") loadModelsView();
+  if (tab === "engines") loadEngines();
   if (lastMetrics) render(lastMetrics);
   closeSidebar();
   closeSettings();
@@ -195,7 +197,6 @@ function openSettings(open) {
   $("settings-btn").setAttribute("aria-expanded", String(open));
   if (!open) { closeOverlay("settings"); return; }
   closeModelMenu();
-  loadConfig();
   loadMcp();                                       // the Tools rows: how many servers, and their state
   loadSearch();
   openOverlay("settings");
@@ -1686,59 +1687,278 @@ $("image-url").oninput = () => {
     : "Start with http:// or https://, and leave out ?query and #hash.";
 };
 
-// ------------------------------------------------------------------ Model settings (GET / POST /config, #564)
-// A few documented keys of the run config (strata-<model>.json), for every client, from the next start on.  The
-// server lists them, checks every value and keeps every other key of the file as it is.
-let cfgKeys = [];
-async function loadConfig() {
-  let r;
-  try { r = await fetch("config", {headers: headers()}); } catch (e) { return; }
-  if (!r.ok) { $("cfg-card").hidden = true; return; }       // no run config, an older server, or no key yet
-  const c = await r.json();
-  cfgKeys = c.keys || [];
-  $("cfg-file").textContent = c.file || "";
-  $("cfg-form").innerHTML = cfgKeys.map((k, i) => {
-    const id = `cfg-${i}`, v = k.value;
-    let input;
-    if (k.kind === "bool" || k.kind === "enum") {
-      const opts = k.kind === "bool" ? [["true", "on"], ["false", "off"]] : k.choices.map((x) => [x, x]);
-      const cur = v == null ? "" : String(v);
-      input = `<select class="st-input" id="${id}"><option value=""${cur === "" ? " selected" : ""}>default</option>` +
-        opts.map(([val, text]) => `<option value="${esc(val)}"${cur === val ? " selected" : ""}>${esc(text)}</option>`).join("") + `</select>`;
-    } else {
-      const text = v == null ? "" : Array.isArray(v) ? v.join(", ") : String(v);
-      input = `<input class="st-input" id="${id}" ${k.kind === "number" ? 'type="number" step="any" min="0"' : 'type="text"'} ` +
-        `value="${esc(text)}" placeholder="default" autocomplete="off">`;
-    }
-    return `<label for="${id}" title="${esc(k.help)}">${esc(k.help)}<code>${esc(k.key)}</code></label>${input}`;
-  }).join("");
-  $("cfg-card").hidden = false;
+// ------------------------------------------------------------------ Models view (GET /api/models)
+// The sidebar Models row opens this view: every installed model in a table, with Load (switch to it) and Configure
+// (open its run config in the dialog below). The composer's chip and menu still switch quickly; this is the full list.
+function paramsText(n) {
+  if (n == null) return "";
+  return n >= 1e9 ? (n / 1e9).toFixed(1) + "B" : n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : String(n);
 }
-function configValue(k, el) {
-  const s = el.value.trim();
-  if (s === "") return null;
-  if (k.kind === "bool") return s === "true";
-  if (k.kind === "number") return Number(s);
-  return s;                                         // enum, or names (the server splits them at commas)
-}
-$("cfg-save").addEventListener("click", async () => {
-  const set = {};
-  cfgKeys.forEach((k, i) => {
-    const v = configValue(k, $(`cfg-${i}`));
-    const old = Array.isArray(k.value) ? k.value.join(", ") : k.value;
-    if (JSON.stringify(v) !== JSON.stringify(old ?? null)) set[k.key] = v;
-  });
-  if (!Object.keys(set).length) { $("cfg-msg").textContent = "Nothing changed."; return; }
+let modelList = [];
+async function loadModelsView() {
+  const body = $("models-body");
   try {
-    const r = await fetch("config", {method: "POST", headers: headers(true), body: JSON.stringify({set})});
+    const r = await fetch("api/models", {headers: headers()});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    modelList = (await r.json()).models || [];
+  } catch (e) {
+    $("models-note").textContent = "";
+    body.innerHTML = `<tr><td colspan="7" class="muted">Could not load models: ${esc(e.message || e)}</td></tr>`;
+    return;
+  }
+  $("models-note").textContent = `${modelList.length} model${modelList.length === 1 ? "" : "s"}`;
+  if (!modelList.length) { body.innerHTML = `<tr><td colspan="7" class="muted">No models found</td></tr>`; return; }
+  body.innerHTML = modelList.map((m) => {
+    const loaded = Boolean(m.current);
+    const bad = m.status === "unavailable";
+    const badge = loaded ? "st-badge st-badge--generating" : bad ? "st-badge st-badge--error" : "st-badge st-badge--reading";
+    const stat = loaded ? "loaded" : bad ? "unavailable" : "ready";
+    return `<tr>
+      <td><span class="model-name">${esc(m.display_name || m.id)}<code>${esc(m.id)}</code></span></td>
+      <td>${esc(m.backend || "")}</td>
+      <td class="num">${esc(m.quantization || "")}</td>
+      <td class="num">${paramsText(m.params_active)}</td>
+      <td class="num">${m.context ? ctxfmt(m.context) : ""}</td>
+      <td><span class="${badge}">${stat}</span></td>
+      <td class="num"><span class="row-actions">
+        <button class="st-btn st-btn--secondary" type="button" data-load="${esc(m.id)}"${loaded ? " disabled" : ""}>Load</button>
+        <button class="st-btn st-btn--secondary" type="button" data-configure="${esc(m.id)}">Configure</button>
+      </span></td>
+    </tr>`;
+  }).join("");
+}
+$("models-body").addEventListener("click", (e) => {
+  const load = e.target.closest("[data-load]");
+  if (load) { switchModel(load.dataset.load); return; }
+  const conf = e.target.closest("[data-configure]");
+  if (conf) openConfig(conf.dataset.configure);
+});
+
+// ------------------------------------------------------------------ Engines view (GET /api/engines)
+// Every engine of engines.json with its pinned version and installed state (read from its BUILD.json). Repair runs
+// setup.py --repair-engines in the background, only when the server was started with --allow-engine-repair.
+function engStatusLabel(s) { return {current: "current", outdated: "outdated", missing: "missing", manual: "manual", unknown: "unknown"}[s] || s; }
+async function loadEngines() {
+  const body = $("engines-body");
+  let data;
+  try {
+    const r = await fetch("api/engines", {headers: headers()});
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    data = await r.json();
+  } catch (e) {
+    $("engines-note").textContent = "";
+    body.innerHTML = `<tr><td colspan="5" class="muted">Could not load engines: ${esc(e.message || e)}</td></tr>`;
+    return;
+  }
+  const engs = data.engines || [];
+  $("engines-note").textContent = data.release ? `pinned release ${esc(data.release)}` : "";
+  if (!engs.length) { body.innerHTML = `<tr><td colspan="5" class="muted">No engines</td></tr>`; return; }
+  body.innerHTML = engs.map((e) => {
+    const ver = e.installed_version || "—";
+    const archs = Array.isArray(e.archs) ? e.archs.join(", ") : "";
+    const stat = engStatusLabel(e.status);
+    const badge = e.status === "current" ? "st-badge st-badge--generating" : e.status === "outdated" ? "st-badge st-badge--queued"
+      : e.status === "missing" ? "st-badge st-badge--error" : "st-badge";
+    return `<tr>
+      <td><span class="model-name">${esc(e.title || e.key)}${e.required ? " <em>(required)</em>" : ""}${e.manual ? " <em>(manual)</em>" : ""}<code>${esc(e.key)}</code></span></td>
+      <td><code>${esc(e.binary)}</code></td>
+      <td>${esc(ver)}</td>
+      <td class="num">${esc(archs)}</td>
+      <td><span class="${badge} eng-status">${stat}</span></td>
+    </tr>`;
+  }).join("");
+}
+$("engines-repair").addEventListener("click", async () => {
+  $("engines-msg").textContent = "";
+  try {
+    const r = await fetch("api/engines/repair", {method: "POST", headers: headers(true), body: "{}"});
     const b = await r.json();
     if (!r.ok) throw new Error((b.error || {}).message || `HTTP ${r.status}`);
-    $("cfg-msg").textContent = b.changed.length
-      ? `Saved (${b.changed.join(", ")}); the earlier file is ${b.file}.bak. Start the model again to use it.` : "Nothing changed.";
-    loadConfig();
+    $("engines-msg").textContent = b.note || "Repair started.";
+    toast("info", "Repair started", "The engines download and install in the background.", 8000);
   } catch (e) {
-    $("cfg-msg").textContent = "";
-    toast("error", "Not saved", String(e.message || e), 6000);
+    $("engines-msg").textContent = "";
+    toast("error", "Repair not started", String(e.message || e), 8000);
+  }
+});
+
+// ------------------------------------------------------------------ Model configuration dialog
+// One model's whole run config (GET /api/models/config?model=), grouped and editable, plus a raw JSON tab. Every value
+// is checked by the server before anything is written; an earlier file is kept as <name>.bak.
+let cfgModel = null;
+let cfgView = null;
+// stable element ids for a config key and for one of its args flags (ids cannot hold ":" or "--" cleanly)
+const cfgId = (key) => `cfgk-${String(key).replace(/[^a-zA-Z0-9]/g, "-")}`;
+const cfgFlagId = (key, flag) => `${cfgId(key)}-f-${String(flag).replace(/[^a-zA-Z0-9]/g, "-")}`;
+function cfgKindInput(k, id) {
+  const v = k.value;
+  const label = k.flag ? esc(k.flag) : "";
+  if (k.kind === "bool") {
+    return `<button class="st-toggle" type="button" role="switch" aria-checked="${v === true}" aria-label="${esc(k.key || k.flag || "")}" id="${id}"></button>`;
+  }
+  if (k.kind === "enum") {
+    const cur = v == null ? "" : String(v);
+    return `<select class="st-input" id="${id}"${label ? ` aria-label="${label}"` : ""}><option value=""${cur === "" ? " selected" : ""}>default</option>` +
+      (k.choices || []).map((x) => `<option value="${esc(x)}"${cur === x ? " selected" : ""}>${esc(x)}</option>`).join("") + `</select>`;
+  }
+  const text = v == null ? "" : Array.isArray(v) ? v.join(", ") : String(v);
+  const num = /^(int>=0|num>=0|0<x<=1|0<=x<=1|1\.\.64|num>0|int>0|int|num)$/.test(k.kind);
+  return `<input class="st-input" id="${id}" ${num ? 'type="number" step="any"' : 'type="text"'} ` +
+    `${label ? `aria-label="${label}" ` : ""}value="${esc(text)}" placeholder="default" autocomplete="off">`;
+}
+function cfgField(k) {
+  const id = cfgId(k.key);
+  let control;
+  if (k.kind === "engine") {
+    control = `<input class="st-input" id="${id}" type="text" value="${esc(k.value ?? "")}" placeholder="auto" autocomplete="off">`;
+  } else if (k.kind === "args") {
+    const flags = (k.flags || []).map((f) => `<div class="flag-row"><span class="muted small">${esc(f.help || f.flag)} <code>${esc(f.flag)}</code></span>` +
+      `${cfgKindInput(f, cfgFlagId(k.key, f.flag))}</div>`).join("");
+    const other = (k.other || []).map((o) => `<code class="other-args">${esc(o)}</code>`).join(" ");
+    control = `${flags}<div class="muted small">Other arguments: <span class="other-args">${other || "none"}</span></div>`;
+  } else if (k.kind === "object") {
+    const pairs = k.value == null ? [] : Object.entries(k.value);
+    control = `<div class="kv-grid">` + pairs.map(([kk, vv], i) =>
+      `<div class="kv-row"><input class="st-input" type="text" value="${esc(kk)}" data-kv-key="${id}">` +
+      `<input class="st-input" type="text" value="${esc(vv ?? "")}" data-kv-val="${id}">` +
+      `<button class="st-btn st-btn--icon" type="button" data-kv-del="${id}" aria-label="Remove">${icon("x")}</button></div>`).join("") +
+      `<button class="st-btn st-btn--secondary cfg-adv" type="button" data-kv-add="${id}">Add</button></div>`;
+  } else if (k.kind === "list") {
+    const rows = (k.value || []).map((vv) =>
+      `<div class="list-row"><input class="st-input" type="text" value="${esc(vv ?? "")}" data-list-val="${id}">` +
+      `<button class="st-btn st-btn--icon" type="button" data-list-del="${id}" aria-label="Remove">${icon("x")}</button></div>`).join("");
+    control = `<div class="kv-grid">${rows}<button class="st-btn st-btn--secondary cfg-adv" type="button" data-list-add="${id}">Add</button></div>`;
+  } else if (k.kind === "readonly") {
+    control = `<div class="st-input cfg-readonly" id="${id}">${k.value == null || k.value === "" ? "—" : esc(String(k.value))}</div>`;
+  } else {
+    control = cfgKindInput(k, id);
+  }
+  return `<div class="cfg-field" data-key="${esc(k.key)}" data-advanced="${k.advanced ? "true" : "false"}" data-hidden="${k.advanced ? "true" : "false"}">
+    <label class="st-label" for="${id}">${esc(k.help || k.key)}<code>${esc(k.key)}</code></label>${control}</div>`;
+}
+function renderConfig() {
+  $("config-title").textContent = cfgModel ? `Model configuration — ${cfgModel}` : "Model configuration";
+  $("config-file").textContent = cfgView.file || "";
+  $("config-groups").innerHTML = (cfgView.groups || []).map((g) =>
+    `<div class="set-card config-group"><h3 class="set-card__title">${esc(g.label)}</h3>` +
+    `<div class="cfg-fields">${g.keys.map(cfgField).join("")}</div></div>`).join("");
+  $("config-raw").value = cfgView.raw || "";
+  $("config-msg").textContent = "";
+}
+async function openConfig(modelId) {
+  try {
+    const q = modelId ? `?model=${encodeURIComponent(modelId)}` : "";
+    const r = await fetch(`api/models/config${q}`, {headers: headers()});
+    const b = await r.json();
+    if (!r.ok) throw new Error((b.error || {}).message || `HTTP ${r.status}`);
+    cfgModel = modelId || null;
+    cfgView = b;
+    renderConfig();
+    $("config-dialog").showModal();
+  } catch (e) {
+    toast("error", "Config not opened", String(e.message || e), 8000);
+  }
+}
+$("config-close").onclick = () => $("config-dialog").close();
+$("config-cancel").onclick = () => $("config-dialog").close();
+// object/list add/remove and args flags and bool toggles: delegated clicks on the groups container
+$("config-groups").addEventListener("click", (e) => {
+  const add = e.target.closest("[data-kv-add], [data-list-add]");
+  if (add) {
+    const grid = add.parentElement;
+    const id = add.dataset.kvAdd || add.dataset.listAdd;
+    const isList = add.dataset.listAdd != null;
+    const row = isList
+      ? `<div class="list-row"><input class="st-input" type="text" data-list-val="${id}"><button class="st-btn st-btn--icon" type="button" data-list-del="${id}" aria-label="Remove">${icon("x")}</button></div>`
+      : `<div class="kv-row"><input class="st-input" type="text" placeholder="key" data-kv-key="${id}"><input class="st-input" type="text" placeholder="value" data-kv-val="${id}"><button class="st-btn st-btn--icon" type="button" data-kv-del="${id}" aria-label="Remove">${icon("x")}</button></div>`;
+    grid.insertAdjacentHTML("beforeend", row);
+    return;
+  }
+  const del = e.target.closest("[data-kv-del], [data-list-del]");
+  if (del) { del.closest(".kv-row, .list-row").remove(); return; }
+  const tgl = e.target.closest(".st-toggle");
+  if (tgl) { const on = tgl.getAttribute("aria-checked") !== "true"; tgl.setAttribute("aria-checked", String(on)); }
+});
+function cfgValue(k, id) {
+  // read one non-args field back into a value the server understands (null = remove / default)
+  if (k.kind === "readonly") return k.value ?? null;      // shown, not editable: never a change to send
+  if (k.kind === "object") {
+    const numeric = k.key === "reasoning_budget_by_effort";   // level: token counts; env keeps strings
+    const out = {};
+    document.querySelectorAll(`[data-kv-key="${id}"]`).forEach((keyEl, i) => {
+      const valEl = document.querySelectorAll(`[data-kv-val="${id}"]`)[i];
+      const key = keyEl.value.trim();
+      if (!key) return;
+      const s = valEl.value.trim();
+      if (s === "") { out[key] = null; return; }          // an empty value removes that entry
+      if (numeric && /^-?\d+(\.\d+)?$/.test(s)) out[key] = Number(s);
+      else out[key] = s;
+    });
+    if (!Object.keys(out).length && (k.value == null || Object.keys(k.value).length === 0)) return k.value ?? null;
+    return out;
+  }
+  if (k.kind === "list") {
+    const out = [];
+    document.querySelectorAll(`[data-list-val="${id}"]`).forEach((el) => { const s = el.value.trim(); if (s !== "") out.push(s); });
+    if (!out.length && (k.value == null || (Array.isArray(k.value) && !k.value.length))) return k.value ?? null;
+    return out;
+  }
+  const el = $(id);
+  if (!el) return k.value ?? null;                        // a control that did not render: leave it as it is
+  if (k.kind === "bool") return el.getAttribute("aria-checked") === "true";
+  if (k.kind === "names") {                               // typed as "a, b" -> the list the server stores
+    const s = el.value.trim();
+    return s === "" ? null : s.split(",").map((x) => x.trim()).filter(Boolean);
+  }
+  const s = el.value.trim();
+  if (s === "") return null;
+  if (/^(int>=0|int>0|int)$/.test(k.kind)) return parseInt(s, 10);
+  if (/^(num>=0|num>0|0<x<=1|0<=x<=1|1\.\.64|num)$/.test(k.kind)) return Number(s);
+  return s;
+}
+$("config-save").addEventListener("click", async () => {
+  if (!cfgView) return;
+  const set = {};
+  const readFlag = (f, k) => {
+    const el = $(cfgFlagId(k.key, f.flag));
+    if (!el) return null;
+    if (f.kind === "bool") return el.getAttribute("aria-checked") === "true";
+    const s = el.value.trim();
+    if (s === "") return null;                       // empty = remove (the server drops the flag)
+    return (f.kind === "int" || f.kind === "num") ? Number(s) : s;
+  };
+  try {
+    (cfgView.groups || []).forEach((g) => g.keys.forEach((k) => {
+      if (k.kind === "args") {
+        (k.flags || []).forEach((f) => {
+          const v = readFlag(f, k);
+          const old = f.kind === "bool" ? f.value === true : f.value;   // an off switch is the same as no flag
+          if (JSON.stringify(v) !== JSON.stringify(old ?? null)) set[`arg:${f.flag}`] = v;
+        });
+        return;
+      }
+      const v = cfgValue(k, cfgId(k.key));
+      const old = k.kind === "bool" ? k.value === true : k.value;       // absent and false are the same setting
+      if (JSON.stringify(v) !== JSON.stringify(old ?? null)) set[k.key] = v;
+    }));
+  } catch (e) {
+    toast("error", "Not saved", `Could not read the form: ${e.message || e}`, 8000);
+    return;
+  }
+  if (!Object.keys(set).length) { $("config-msg").textContent = "Nothing changed."; return; }
+  $("config-msg").textContent = "Saving…";
+  try {
+    const q = cfgModel ? `?model=${encodeURIComponent(cfgModel)}` : "";
+    const r = await fetch(`api/models/config${q}`, {method: "POST", headers: headers(true), body: JSON.stringify({set})});
+    const b = await r.json();
+    if (!r.ok) throw new Error((b.error || {}).message || `HTTP ${r.status}`);
+    cfgView = b;
+    renderConfig();
+    $("config-msg").textContent = b.changed.length
+      ? `Saved (${b.changed.join(", ")}); the earlier file is ${b.file}.bak. Start or switch the model to use it.` : "Nothing changed.";
+  } catch (e) {
+    $("config-msg").textContent = "";
+    toast("error", "Not saved", String(e.message || e), 8000);
   }
 });
 

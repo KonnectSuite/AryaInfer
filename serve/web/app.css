@@ -752,3 +752,41 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 [data-device="mobile"] .st-toggle { min-width: 52px; min-height: 32px; }
 [data-device="mobile"] .table-wrap { -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
 [data-device="mobile"] .st-dialog__foot { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+
+/* ------------------------------------------------ Models and Engines views */
+.view--models, .view--engines { overflow-y: auto; }
+.models, .engines { width: min(100% - var(--st-s-12), 1720px); margin: 0 auto; padding: var(--st-s-6);
+                    display: flex; flex-direction: column; gap: var(--st-s-5); }
+.models .st-card, .engines .st-card { display: flex; flex-direction: column; gap: var(--st-s-3); }
+.models .st-table td, .engines .st-table td { white-space: nowrap; }
+.models .st-table td:first-child, .engines .st-table td:first-child { white-space: normal; }
+.model-name { font-weight: var(--st-fw-bold); color: var(--st-ink); display: flex; flex-direction: column; gap: 1px; }
+.model-name code { font: 400 12px var(--st-font-mono); color: var(--st-ink-muted); }
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+.row-actions .st-btn { height: 30px; padding: 0 12px; font-size: var(--st-fs-xs); }
+.eng-status { text-transform: capitalize; }
+@media (max-width: 900px) { .models, .engines { padding: var(--st-s-4); } }
+
+/* ------------------------------------------------ the generic Configure dialog */
+.config-groups { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.config-group { display: flex; flex-direction: column; gap: 10px; }
+.config-group .set-card__title { margin-bottom: 2px; }
+.cfg-field { display: flex; flex-direction: column; gap: 6px; }
+.cfg-field > .muted { line-height: 1.45; }
+.cfg-field > .muted code { padding: 1px 4px; border-radius: 5px; background: var(--st-surface-2); font-size: .95em; }
+.cfg-field[data-advanced="true"][data-hidden="true"] { display: none; }
+.cfg-field .st-input, .cfg-field .st-toggle { align-self: flex-start; }
+.cfg-field .cfg-readonly { display: inline-flex; align-items: center; height: auto; min-height: 40px; padding: 8px 12px;
+  font: 400 12px var(--st-font-mono); color: var(--st-ink-muted); background: var(--st-surface-2); border-style: dashed;
+  overflow-wrap: anywhere; white-space: normal; }
+.cfg-field textarea.st-input { height: auto; min-height: 60px; width: 100%; max-width: 560px; resize: vertical; line-height: 1.45; }
+.cfg-field .kv-grid { display: flex; flex-direction: column; gap: 6px; width: 100%; max-width: 560px; }
+.cfg-field .kv-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px; gap: 6px; align-items: center; }
+.cfg-field .kv-row .st-btn--icon { width: 34px; height: 34px; }
+.cfg-field .list-row { display: grid; grid-template-columns: minmax(0, 1fr) 36px; gap: 6px; align-items: center; width: 100%; max-width: 560px; }
+.cfg-field .flag-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px 16px; align-items: center; width: 100%; }
+.cfg-field .flag-row .st-input { width: 100%; min-width: 0; max-width: 560px; }
+.cfg-field .other-args { font: 400 12px var(--st-font-mono); color: var(--st-ink-muted); overflow-wrap: anywhere; }
+.cfg-adv { text-align: left; }
+#config-raw { width: 100%; font: 400 12px var(--st-font-mono); }
+@media (max-width: 900px) { .cfg-field .flag-row, .cfg-field .kv-row { grid-template-columns: 1fr; } }

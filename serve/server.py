@@ -72,6 +72,8 @@ from serve.toolhub import ToolHub  # noqa: E402
 from serve import websearch  # noqa: E402
 from serve import comfyui  # noqa: E402
 from serve import runconfig  # noqa: E402
+from serve import configschema  # noqa: E402
+from serve import engines  # noqa: E402
 from serve import webconf  # noqa: E402
 from serve import models as registry  # noqa: E402
 from serve.model_gate import Cancelled, ModelGate  # noqa: E402
@@ -3310,6 +3312,7 @@ class Service:
         self.effort_end = False
         self.conv_log = ConvCacheLog()                  # #596: the parked conversations, from the engine's log
         self.config_path = None                         # #564: the run config the web page's Settings view edits
+        self.allow_engine_repair = False                # --allow-engine-repair: POST /api/engines/repair runs setup
         self.config_lock = threading.Lock()
         # #321: browser pages of these origins may call /v1/* (CORS; "*" = any page - only with an api_key that
         # matters); empty = no CORS headers at all, as before
@@ -6428,6 +6431,12 @@ def make_handler(svc: Service):
                         self._json(200, {"models": models, "current": current["id"] if current else None})
                     else:
                         self._json(200, {"model": current, "name": svc.model, "loaded": svc.loaded()})
+            elif path == "/api/models/config":
+                if self._authorized():
+                    self._models_config_get()
+            elif path == "/api/engines":
+                if self._authorized():
+                    self._json(200, engines.as_view(), headers={"Cache-Control": "no-store"})
             else:
                 self._json(404, {"error": {"message": "not found"}})
 
@@ -6465,6 +6474,12 @@ def make_handler(svc: Service):
                 return
             if path in ("/api/models/load", "/api/models/unload"):
                 self._models_post(path)
+                return
+            if path == "/api/models/config":
+                self._models_config_post()
+                return
+            if path == "/api/engines/repair":
+                self._engines_repair()
                 return
             if path in ("/unload", "/load") and not self._control_body():
                 return
@@ -6816,6 +6831,91 @@ def make_handler(svc: Service):
                 print(f"[strata] the Settings view changed {', '.join(changed)} in {Path(svc.config_path).name} "
                       f"(the earlier file: {bak.name}); used from the next start", flush=True)
             self._json(200, {**runconfig.view(new, svc.config_path), "changed": changed})
+
+        def _model_config_path(self):
+            """The run config a model-config request edits: `?model=<name>` picks a model, none means the loaded one."""
+            name = parse_qs(urlsplit(self.path).query).get("model", [None])[0]
+            if not name:
+                if not svc.config_path:
+                    self._json(404, {"error": {"message": "this server was started without a run config"}})
+                    return None
+                return svc.config_path
+            target = registry.resolve(svc.models(), name)
+            if target is None:
+                self._json(404, {"error": {"message": f"no model named {name!r}",
+                                            "models": [e["id"] for e in svc.models()]}})
+                return None
+            return target["config"]
+
+        def _models_config_get(self):
+            """GET /api/models/config?model=<name>: every editable key of one model's run config, grouped."""
+            path = self._model_config_path()
+            if path is None:
+                return
+            try:
+                cfg = configschema.load(path)
+                raw = Path(path).read_text(encoding="utf-8-sig")
+            except (OSError, ValueError) as e:
+                self._json(500, {"error": {"type": "server_error", "message": f"the run config cannot be read: {e}"}})
+                return
+            self._json(200, {**configschema.view(cfg, path), "raw": raw})
+
+        def _models_config_post(self):
+            """POST /api/models/config?model=<name> {"set": {key: value-or-null}}: change a model's run config.
+            JSON from AryaStrata's own page only, as /config; every key is checked before anything is written."""
+            body = self._body()
+            if not self._own_page("a model's run config can be changed"):
+                return
+            path = self._model_config_path()
+            if path is None:
+                return
+            try:
+                req = json.loads(body or b"{}")
+                changes = req.get("set") if isinstance(req, dict) else None
+                with svc.config_lock:
+                    cfg = configschema.load(path)
+                    new, changed = configschema.apply(cfg, changes)
+                    if changed:
+                        bak = configschema.save(path, new)
+            except ValueError as e:
+                self._json(400, {"error": {"type": "invalid_request_error", "message": str(e)}})
+                return
+            except OSError as e:
+                self._json(500, {"error": {"type": "server_error",
+                                            "message": f"the run config cannot be written: {e}"}})
+                return
+            if changed:
+                print(f"[strata] the model config changed {', '.join(changed)} in {Path(path).name} "
+                      f"(the earlier file: {bak.name}); used from the next start of, or switch to, the model", flush=True)
+            self._json(200, {**configschema.view(new, path), "raw": json.dumps(new, indent=2), "changed": changed})
+
+        def _engines_repair(self):
+            """POST /api/engines/repair: run setup.py --repair-engines in the background (downloads/installs the
+            pinned engines).  Opt-in (--allow-engine-repair) and refused while a model is loaded."""
+            body = self._body()
+            if not self._own_page("engines can be repaired"):
+                return
+            if not svc.allow_engine_repair:
+                self._json(403, {"error": {"message": "engine repair is off; start the server with "
+                                                      "--allow-engine-repair"}})
+                return
+            if svc.loaded():
+                self._json(409, {"error": {"message": "stop the loaded model before repairing engines"}})
+                return
+            flags = {"cwd": str(ROOT), "stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL,
+                     "stderr": subprocess.DEVNULL}
+            if os.name == "nt":
+                flags["creationflags"] = subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS
+            else:
+                flags["start_new_session"] = True
+            try:
+                subprocess.Popen([sys.executable, str(ROOT / "setup.py"), "--repair-engines"], **flags)
+            except OSError as e:
+                self._json(500, {"error": {"type": "server_error", "message": f"the repair could not start: {e}"}})
+                return
+            print("[strata] engine repair started (setup.py --repair-engines)", flush=True)
+            self._json(202, {"status": "started", "note": "the engines are downloading and installing in the background"})
+
 
         def _mcp_post(self):
             """POST /mcp: the MCP dialog's editor - add, change, disable, remove or restart one MCP server.  JSON
@@ -8414,6 +8514,9 @@ def main() -> int:
                     help="list every installed model (each strata-<model>.json beside the config) in /v1/models, and "
                          "load the one a request names, the loaded one stopped first (also \"switch_on_request\": "
                          "true in the config; default: every request is answered by the loaded model)")
+    ap.add_argument("--allow-engine-repair", action="store_true",
+                    help="let the Engines view run setup --repair-engines (POST /api/engines/repair) to download or "
+                         "reinstall the pinned engines; off by default")
     a = ap.parse_args()
     cfg_overrides = {}                                  # #37: written into every model's config, this one's and a switch's
     if a.replicas is not None:
@@ -8465,6 +8568,7 @@ def main() -> int:
                   model_name=default_model_name(cfg), vision=vision,
                   sampling_defaults=sampling_defaults)
     svc.overrides, svc.cfg_overrides = overrides, cfg_overrides
+    svc.allow_engine_repair = a.allow_engine_repair      # the Engines view's repair button (opt-in)
     svc.apply_settings(settings)
     svc.search_path = str(search_path)                  # the settings file the page's card edits
     svc.search = websearch.SearchHub(search_settings) if search_settings else None
