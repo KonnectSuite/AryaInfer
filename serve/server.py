@@ -854,8 +854,8 @@ class StrataEngine:
 
     @property
     def disk_sessions(self) -> bool:
-        """SAVE / RESTORE: the Strata project's engine has them, strata-poly and AryaNInfer do not (issue 114)."""
-        return Path(str(self.spawn[0])).stem.lower() not in ("strata-poly", "strata-glm", "arya-ninfer",
+        """SAVE / RESTORE: the Strata project's engine has them; strata-poly, aryainfer and AryaNInfer do not."""
+        return Path(str(self.spawn[0])).stem.lower() not in ("strata-poly", "strata-glm", "aryainfer", "arya-ninfer",
                                                              "ninfer-engine")
 
     def __init__(self, exe: str, args: list[str], cwd: str | None = None, log: str | None = None,

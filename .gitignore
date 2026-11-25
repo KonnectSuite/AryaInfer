@@ -54,6 +54,8 @@ build-vision-cuda12.bat
 /engine/
 /engine-cuda12/
 /engine-poly/
+/engine-arya/
+/engine-inkling/
 /build-strata-poly.bat
 /build-vision-poly.bat
 /engine-glm/
@@ -100,3 +102,4 @@ dist-hip/
 # NInfer backend: the built engine binary (engine-ninfer/build.ps1 writes it)
 /engine-ninfer/*.exe
 /engine-ninfer/*.pdb
+/engine-ninfer/BUILD.json

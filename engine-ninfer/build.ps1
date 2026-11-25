@@ -80,7 +80,7 @@ if ($LASTEXITCODE -ne 0) { throw 'vcpkg install failed' }
 Step 'cmake configure and build'
 $shim = (Join-Path $PSScriptRoot 'shim\main.cpp') -replace '\\', '/'
 $bat = Join-Path $Work 'build-engine.cmd'
-$cmake = "cmake -S `"$Src`" -B `"$Build`" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89 -DCMAKE_CUDA_COMPILER=`"$Cuda\bin\nvcc.exe`" -DNINFER_BUILD_APPS=ON -DNINFER_BUILD_BENCHMARKS=ON -DNINFER_ARYAINFER_SHIM=`"$shim`" -DCMAKE_CXX_FLAGS=/utf-8 -DCMAKE_TOOLCHAIN_FILE=`"$Vcpkg\scripts\buildsystems\vcpkg.cmake`" -DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_MANIFEST_DIR=`"$Src`" -DVCPKG_INSTALLED_DIR=`"$Src\vcpkg_installed`""
+$cmake = "cmake -S `"$Src`" -B `"$Build`" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CUDA_ARCHITECTURES=89 -DCMAKE_CUDA_COMPILER=`"$Cuda\bin\nvcc.exe`" -DNINFER_BUILD_APPS=ON -DNINFER_BUILD_BENCHMARKS=ON -DNINFER_ARYAINFER_SHIM=`"$shim`" -DCMAKE_CXX_FLAGS=`"/utf-8 /FIstdlib.h`" -DCMAKE_TOOLCHAIN_FILE=`"$Vcpkg\scripts\buildsystems\vcpkg.cmake`" -DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_MANIFEST_DIR=`"$Src`" -DVCPKG_INSTALLED_DIR=`"$Src\vcpkg_installed`""
 $lines = @(
     '@echo off',
     "call `"$Vcvars`" || exit /b 1",
