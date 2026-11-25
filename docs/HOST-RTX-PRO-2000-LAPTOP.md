@@ -34,17 +34,30 @@ this machine appear here.
 
 | Engine | Version | Built from | Size |
 |---|---|---|---|
-| `engine\strata.exe` | 0.1.66 | upstream [Niko1221/Strata](https://github.com/Niko1221/Strata) main snapshot downloaded 2026-11-23 (app 0.2.20; the zip has no git metadata) | 64,620,032 B |
-| `engine-poly\strata-poly.exe` | 0.2.20 | upstream [simplexai-labs/PolyStrata](https://github.com/simplexai-labs/PolyStrata) tag `v0.2.20-poly.4-hotfix`, commit `36e654b1b` | 54,883,840 B |
+| `engine\strata.exe` | 0.1.67 | release `strata-engine-0.1.67-windows-x86_64-cuda-cuda13.tar.gz` from [Niko1221/Strata](https://github.com/Niko1221/Strata/releases/tag/v0.2.21), installed by `setup.py --repair-engines` with its SHA-256 checked | 181,013,504 B |
+| `engine-poly\strata-poly.exe` | 0.2.20 | upstream [simplexai-labs/PolyStrata](https://github.com/simplexai-labs/PolyStrata) tag `v0.2.20-poly.4-hotfix`, commit `36e654b1b`, rebuilt here 2026-11-24 | 54,883,840 B |
+| `engine-arya\aryainfer.exe` | 0.1.45 | this fork's release `engines-2026.11` (`aryainfer-windows-x64-cuda13.zip`), archs 75/80/86/89/120 | 367,995,392 B |
+| `engine-inkling\strata-inkling.exe` | 0.1.68 | built here 2026-11-25 by `engine-inkling\build.ps1` from Strata main at `2af30cc`, CUDA 13.5, `sm_120` | 11,522,048 B |
 
-`strata.exe` was compiled here on 2026-11-24 with CUDA 13.5 for `sm_120` only:
-`build-strata-0.1.66\build.cmd` (144 of 144 units). The poly engine was rebuilt
-the same way on 2026-11-24: `polystrata-upstream\build-poly.4.cmd` (120 of 120
-units, `polystrata-upstream\build-poly.4`), from the poly worktree. The binaries
-they replaced (0.1.63 and the 0.1.45 poly build) are in `engine-backup-0.1.63\`
+`engine\strata.exe` is the pinned release binary as of 2026-11-25:
+`python setup.py --repair-engines` downloaded it from Strata's `v0.2.21` release
+and verified `b0bdbed3…a19880` before unpacking. It carries cubins for sm_75,
+sm_86, sm_89 and sm_120 plus PTX, so this card is covered without a local build.
+The 0.1.66 binary compiled here on 2026-11-24 (64,620,032 B, `sm_120` only,
+`build-strata-0.1.66\build.cmd`, 144 of 144 units) is kept in `engine\.previous\`
+and `setup.py --rollback-engine` puts it back; `strata-0.1.63.exe` is still in
+`engine\` as well. The poly engine was rebuilt the same way on 2026-11-24:
+`polystrata-upstream\build-poly.4.cmd` (120 of 120 units,
+`polystrata-upstream\build-poly.4`), from the poly worktree. The binaries they
+replaced (0.1.63 and the 0.1.45 poly build) are in `engine-backup-0.1.63\`
 and `engine-backup-poly.4\`; copying those files back restores them. The older
 fork 0.1.45 and 0.1.59.1 builds are still in `engine-backup-0.1.45\` and
 `engine-backup-0.1.59.1\`.
+
+`engine-arya\aryainfer.exe` is installed because `engines.json` pins it, and
+nothing here runs it: the AQ3 and Turbo quants it exists for are not on this
+machine. AryaNInfer is a manual engine with no download, and there is no
+`.ninfer` artifact here, so it was not installed.
 
 The PolyStrata line is where upstream keeps its version number: the newest tag is
 `v0.2.20-poly.4-hotfix` (2026-11-23), which is `main` at commit `36e654b1b`, and
@@ -124,6 +137,79 @@ commit `36e654b1b`, was built here on 2026-11-24 with
 `polystrata-upstream\build-poly.4.cmd` (120 of 120 units). That release moved the
 tree into `engine/`, vendored ggml and added Inkling 2 to `strata-poly`. The
 engine it replaced (0.1.45, tag `v0.1.45-poly.10`) is in `engine-backup-poly.4\`.
+
+## The 2026-11-25 update: the control center, the pinned engines, Inkling for sm_120
+
+The fork merged `origin/main` (157 commits, 271 files) on 2026-11-25: the web app
+grew a Models view, an Engines view and a Settings editor for every run config,
+`engines.json` pins each engine to a release with a size and a SHA-256, and the
+Inkling lane arrived (`engine-inkling\build.ps1`, `serve/inkling_kind.py`,
+`serve/inkling_dialect.py`). The merge kept this page's host rows and the trellis
+quant names; the fork's hand-rolled Inkling reply splitter was dropped because
+upstream's dialect module does the same job.
+
+`python setup.py --repair-engines` installed the three pinned binaries
+(SHA-256 checked) and `python setup.py --check-engines` then exits 0. The Engines
+view says the same thing: Strata 0.1.67 current, PolyStrata current, AryaInfer
+0.1.45 current, Strata Inkling 0.1.68 manual, AryaNInfer missing.
+
+The Strata engine moved 0.1.63 → 0.1.67 on the Coder, measured the same day with
+`tools/strata_bench.py`, same config, thinking off, median of 3 runs each:
+
+| | strata 0.1.63 | strata 0.1.67 | change |
+|---|---|---|---|
+| chat decode | 28.3 tok/s | 22.0 tok/s | −22% |
+| chat first token | 0.76 s | 0.85 s | +0.09 s |
+| 4K prompt | 451.8 tok/s | 774.4 tok/s | +71% |
+| 16K prompt | 437.4 tok/s | 803.4 tok/s | +84% |
+| 16K first token | 36.80 s | 20.07 s | −45% |
+| agent turn first token | 11.70 s | 6.30 s | −46% |
+| agent decode | 29.6 tok/s | 19.3 tok/s | −35% |
+| agent cache hit | 69.39% | 69.39% | same |
+
+So on this 8 GB card the release buys prompt speed and costs generation speed.
+The two runs differ in more than the version — the release is a fat binary with
+four architectures and PTX — and no knob tried recovered the decode: with
+`--kv-resident` 20480 chat decode is 18.4 tok/s and agent decode 15.9, with 65536
+17.1 and 16.4, so the 32768 already in `strata-coder-iq1_m.json` is the best of
+the three and prefill does not move with it (774.5 and 785.6 tok/s at 4K), which
+rules out KV residency as the cause. The 0.1.63 binary is still in `engine\`, so
+pointing `strata-coder-iq1_m.json` back at it restores 28.3 tok/s of decode with
+451 tok/s of prompt. The config now points at `engine\strata.exe`, which follows
+whatever `setup.py` installs.
+
+Gyro-S loads and answers on 0.1.67: the trellis `TQ1_0` GGUF is accepted at
+172,032 context, MTP window warm-up 1,118 ms, and a 48-token request came back in
+3.59 s. Its decode rate against 0.1.63 was not measured.
+
+`engine-inkling\build.ps1` hardcoded sm_89 and the CUDA 13.1.2 folder under
+`C:\AI\Strata-data`, neither of which exists here, so it now takes `-Arch` and
+reads the card's compute capability from `nvidia-smi` when it is not given, falls
+back to the newest toolkit with an `nvcc` under
+`C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA`, and records what actually
+compiled it. Built from Strata main at `2af30cc` (the commit that puts
+`project(strata VERSION 0.1.68)` in `engine\CMakeLists.txt`; the `v0.2.21` tag is
+still 0.1.67), it produced `strata-inkling.exe` 11,522,048 B with
+`BUILD.json` archs [120] and cuda_toolkit 13.5. `--version` prints `strata-inkling
+0.1.67`, which is the upstream `INKLING_VERSION` string that was never bumped, not
+a stale build.
+
+`--info` on `Inkling-2-Mini-UD-IQ1_S.gguf` reads
+`arch=inkling2_loop format=gguf layers=24 experts=128 images=1 parallel=64`, so
+the native engine runs the GGUF this host already has — no `.strata` download.
+Engine-level bench here (`--bench --prompt-len 2048 --gen 64 --max-context 8192
+--kv k8v4 --draft off --vram-experts-gb 5.5`): prefill 487.2 tok/s, decode
+25.6 tok/s. The card holds 476 of 3,072 experts (1.99 GiB) and a 13.76 GB pinned
+host arena for the rest; the launch probe measured the cold experts at 48.0 ms per
+token computed on the CPU against 97.7 ms per token copied into the card, so they
+are computed where they sit. Through the server,
+`strata-inkling2-mini-native.json` (16,384 context, `k8v4`, `--kv-offload auto`,
+`--draft off`) reaches READY in about 40 s and a chat request returns clean text
+with `finish_reason: stop`.
+
+What was not measured here: Inkling's native vision path (the config has no vision
+section), Inkling in a long conversation, the 35B models on the new Strata engine
+(they run on the poly binary, which did not change), and multi-client behaviour.
 
 ## Models installed 2026-11-20
 

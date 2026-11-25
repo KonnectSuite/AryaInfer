@@ -86,6 +86,7 @@ The roster is the `strata-*.json` files next to the config you start with
 | `qwen3.8-flash-next-gyro-s` | Strata 0.1.63 | 172,032 | Gyro-S, trellis TQK6/TQK7 experts with the PLE table on SSD, KV k8v4; its pack must carry the v5 Hadamard table; 26.3 tok/s at 262K in the app |
 | `inkling-2-mini-poly` | PolyStrata 0.2.20 | 172,032 | The Inkling-2-Mini IQ1_S GGUF through `strata-poly`, which now runs `inkling2_loop`; KV q8_0 and vision on (the 448×320 test image's `HELLO 42` read correctly); 54.7 tok/s decode in the app at 262K with a warm expert cache (97.8% hit), 14.75 tok/s steady from cold |
 | `inkling-2-mini-poly-q4` | PolyStrata 0.2.20 | 172,032 | The same model at Q4_K_XL (16.4 GB), KV q8_0 and vision on; 851 of 3,072 experts stay in VRAM and it decodes at about 20 tok/s in the app, so Q4 costs roughly 2.5x the speed of IQ1_S on an 8 GB card |
+| `inkling-2-mini-native` | Strata Inkling 0.1.68 (built here) | 16,384 | The same IQ1_S GGUF through `strata-inkling --native`, which reads it directly; 476 of 3,072 experts in VRAM and a 13.76 GB pinned host arena for the rest, 487.2 tok/s prefill and 25.6 tok/s decode at a 2,048-token prompt on an 8 GB card; no vision section |
 
 ## Measured on this host
 
@@ -95,10 +96,14 @@ the Flash-Next and AQ3 rows read JSON/HTTP requests, the NInfer row reads a
 fixed token corpus, and the 35B rows read long synthetic prompts. Compare
 within a row, not across engines.
 
-The four profiles at 172,032 in the table above are not on that machine: they run
-on the second host in [HOST-RTX-PRO-2000-LAPTOP.md](HOST-RTX-PRO-2000-LAPTOP.md)
-(RTX PRO 2000 Blackwell Generation Laptop, 8 GB VRAM), where the KV format and the
-expert budget are the whole design.
+The five profiles at 172,032 and 16,384 in the table above are not on that
+machine: they run on the second host in
+[HOST-RTX-PRO-2000-LAPTOP.md](HOST-RTX-PRO-2000-LAPTOP.md) (RTX PRO 2000
+Blackwell Generation Laptop, 8 GB VRAM), where the KV format and the expert budget
+are the whole design. The Coder and Gyro-S rows were measured on Strata 0.1.63;
+since 2026-11-25 their configs point at `engine\strata.exe`, which is the pinned
+0.1.67 release, and that same-day comparison (prompt +71% at 4K, decode −22%) is
+in the host page.
 
 Two installed profiles have **no speed row here**: Qwen3.8-27B Turbo IQ3_XXS,
 Qwen3.5-4B Q4_K_M. They run daily on this host; their speeds were not re-measured
