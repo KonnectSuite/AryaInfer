@@ -52,8 +52,24 @@ The first card offers measured starting points for the engine you are editing.
 A chip fills the fields as an *unsaved change* — the Changes card then shows each
 value it would write, and Save decides. `Recommended for a 16 GB card` on
 Strata Inkling, for example, sets `--max-context 65536`, `--vram-experts-gb 9.5`,
-`--kv k8v4` and `--draft off`, which is the configuration measured at 48.9 tok/s
-decode at 32K on this host.
+`--ram-experts-gb 1.62`, `--kv k8v4`, `--kv-offload auto`, `--draft off` and
+`--parallel 1`, which is the configuration measured at 48.9 tok/s decode at 32K
+on this host. Under the chips a sentence says what the chip leaves alone, so it
+is clear the rest of the file stays as it is.
+
+The Sampling card has its own chips. `Precise`, `Balanced` and `Creative` each
+set the whole sampler — temperature, top-p, top-k, min-p and the repetition
+penalty — not just the temperature, and the card says so. A chip is not applied
+until you Save, exactly like a hand edit.
+
+## The "?" tooltip
+
+The `?` beside a Reset button explains that one setting: what kind of value it
+takes, the documented default and its unit, the allowed range, whether this
+engine lists the setting at all, what the file holds now, and — for the three
+lossy routing flags — that it changes the words the model produces. The hint
+under the field says how the setting behaves; the tooltip says what the value
+may be.
 
 ## Environment variables
 

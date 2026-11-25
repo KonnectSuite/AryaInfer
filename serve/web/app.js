@@ -1857,8 +1857,19 @@ const cfgId = (key) => `cfgk-${String(key).replace(/[^a-zA-Z0-9]/g, "-")}`;
 const cfgFlagId = (key, flag) => `${cfgId(key)}-f-${String(flag).replace(/[^a-zA-Z0-9]/g, "-")}`;
 const NUMERIC_KIND = /^(int>=0|num>=0|0<x<=1|0<=x<=1|1\.\.64|num>0|int>0|int|num)$/;
 const INT_KIND = /^(int>=0|int>0|int)$/;
-const SAMPLING_PRESETS = [{name: "Precise", temperature: 0.3}, {name: "Balanced", temperature: 0.7},
-                          {name: "Creative", temperature: 1.0}];
+const SAMPLING_PRESETS = [
+  // a preset that only moved the temperature left every other sampler at whatever the file said, which is
+  // why "Precise" and "Creative" produced the same kind of text.  Each one now sets the whole sampler.
+  {name: "Precise", note: "Narrow: the top few tokens, little room for a surprise.",
+   values: {"sampling.temperature": 0.3, "sampling.top_p": 0.9, "sampling.top_k": 20,
+            "sampling.min_p": 0.05, "sampling.repetition_penalty": 1.05}},
+  {name: "Balanced", note: "The default mix: mostly the likely token, some room to vary.",
+   values: {"sampling.temperature": 0.7, "sampling.top_p": 0.95, "sampling.top_k": 40,
+            "sampling.min_p": 0.02, "sampling.repetition_penalty": 1.02}},
+  {name: "Creative", note: "Wide: a long tail stays possible, so wording varies more.",
+   values: {"sampling.temperature": 1.0, "sampling.top_p": 0.98, "sampling.top_k": 80,
+            "sampling.min_p": 0.0, "sampling.repetition_penalty": 1.0}},
+];
 const PATH_BROWSE = {                                    // string keys that get a Browse… button
   "vision.exe": {want: "file", ext: ".exe"},
   "vision.mmproj": {want: "file", ext: ".gguf"},
@@ -1933,12 +1944,30 @@ function cfgControl(k, id, ph) {
 // One field row: the plain-language name with the raw key beside it, and the tools on the right - a hint
 // carrying the default, a "changed" pill, and Reset. The explanation sits under the control, so the label
 // stays a name rather than a paragraph.
-function fieldShell({id, label, tag, help, unit, base, def, risk, control, extra}) {
-  const tip = "Default: " + (def == null || def === "" ? "the engine decides" : String(def))
-    + (risk === "quality" ? ". Changes the words the model produces." : "");
+// The "?" tooltip: the facts a hint under the field cannot carry - what the value means, what it may be,
+// whether this engine takes the setting at all, and what the file holds right now.  It used to print
+// "Default: the engine decides" on every row, which told a reader nothing.
+function cfgTip({tag, kind, unit, def, range, risk, applicable, base, known}) {
+  const parts = [];
+  if (tag) parts.push(tag);
+  const kindName = {bool: "on or off", enum: "a choice", int: "a whole number", num: "a number",
+                    text: "text", path: "a file or folder", object: "a group of values",
+                    list: "a list", readonly: "read-only", args: "the engine's flags"}[kind];
+  if (kindName) parts.push(kindName);
+  if (def != null && def !== "") parts.push(`default ${def}${unit ? ` ${unit}` : ""}`);
+  else if (known === false) parts.push("no default: the engine takes it from the model");
+  if (range) parts.push(`allowed ${range[0]} to ${range[1]}${range[2] ? `, steps of ${range[2]}` : ""}`);
+  if (applicable === false) parts.push("this engine does not list it, but the file may still set it");
+  const now = base == null || base === "" ? "empty" : String(base);
+  parts.push(base == null || base === "" ? "not set in the file" : `in the file: ${now}`);
+  if (risk === "quality") parts.push("Changes the words the model produces");
+  return parts.join(" · ");
+}
+function fieldShell({id, label, tag, help, unit, base, def, risk, control, extra, tip}) {
+  const text = tip || ("Default: " + (def == null || def === "" ? "no documented value" : String(def)));
   return `<div class="cfg-field" data-base="${esc(base == null ? "" : String(base))}" data-def="${esc(def == null ? "" : String(def))}">
     <div class="cfg-head"><label class="st-label" for="${id}"><span class="cfg-name">${esc(label)}</span><code>${esc(tag)}</code>${extra || ""}</label>
-    <span class="cfg-tools"><span class="cfg-pill" data-pill="changed"${risk === "quality" ? ` title="Changes the words the model produces"` : ""} hidden>changed</span><button class="st-btn st-btn--text cfg-reset" type="button" data-reset="${id}">Reset</button><span class="st-tip" tabindex="0" role="note" data-tip="${esc(tip)}">?</span></span></div>
+    <span class="cfg-tools"><span class="cfg-pill" data-pill="changed"${risk === "quality" ? ` title="Changes the words the model produces"` : ""} hidden>changed</span><button class="st-btn st-btn--text cfg-reset" type="button" data-reset="${id}">Reset</button><span class="st-tip" tabindex="0" role="note" aria-label="About ${esc(tag)}" data-tip="${esc(text)}">?</span></span></div>
     <div class="cfg-body">${control}${unit ? `<span class="cfg-unit">${esc(unit)}</span>` : ""}</div>
     ${help ? `<p class="cfg-hint">${esc(help)}</p>` : ""}</div>`;
 }
@@ -1948,6 +1977,8 @@ function cfgFieldHtml(k) {
   return fieldShell({
     id, label: k.label || k.help || k.key, tag: k.key, help: k.help, unit: k.unit, base: k.value, def: k.default,
     risk: k.risk, extra: out, control: cfgControl(k, id, cfgPlaceholder(k.default)),
+    tip: cfgTip({tag: k.key, kind: k.kind, unit: k.unit, def: k.default, range: k.range, risk: k.risk,
+                 base: k.value}),
   }).replace('class="cfg-field"', `class="cfg-field" data-key="${esc(k.key)}" data-advanced="${k.advanced ? "true" : "false"}" data-hidden="${k.advanced ? "true" : "false"}"`);
 }
 function flagControl(f, id, ph) {
@@ -1982,6 +2013,8 @@ function flagFieldHtml(f) {
   return fieldShell({
     id, label: f.label || f.help || f.flag, tag: f.flag, help: f.help, unit: f.unit, base: f.value, def: f.default,
     risk: f.risk, extra: out, control: flagControl(f, id, cfgPlaceholder(f.default)),
+    tip: cfgTip({tag: f.flag, kind: f.kind, unit: f.unit, def: f.default, range: f.range, risk: f.risk,
+                 applicable: f.applicable, base: f.value}),
   }).replace('class="cfg-field"', `class="cfg-field" data-flag="${esc(f.flag)}"`);
 }
 // ---- environment variables (the knobs with no flag) --------------------------------------------------------
@@ -2017,6 +2050,8 @@ function envRowHtml(e) {
   return fieldShell({
     id, label: e.label || e.name, tag: e.name, help: e.help, unit: e.unit, base: envValue(e),
     def: e.default, risk: e.risk, extra: out, control: envControl(e, id),
+    tip: cfgTip({tag: e.name, kind: e.kind, unit: e.unit, def: e.default, range: e.range, risk: e.risk,
+                 base: envValue(e)}),
   }).replace('class="cfg-field"', `class="cfg-field" data-env="${esc(e.name)}" data-env-kind="${esc(e.kind)}"${adv}`);
 }
 function unknownEnvRow(name, value) {
@@ -2208,30 +2243,41 @@ function presetCard() {
     <p class="cfg-note" data-preset-note></p>
   </section>`;
 }
+// Put one value into one field's control, whatever kind it is, and let the page's own listeners notice.
+// Returns false when the field has no control this can write (a readonly row, or one the preset cannot reach).
+function cfgSetValue(field, value) {
+  if (!field) return false;
+  const tgl = field.querySelector(".st-toggle");
+  if (tgl) {
+    tgl.setAttribute("aria-checked", String(value === true || value === "true"));
+    tgl.dispatchEvent(new Event("input", {bubbles: true}));
+    tgl.dispatchEvent(new Event("change", {bubbles: true}));
+    return true;
+  }
+  const box = field.querySelector("select") || field.querySelector("input[type=number]") ||
+              field.querySelector("input.st-input");
+  if (!box) return false;
+  box.value = String(value);
+  box.dispatchEvent(new Event("input", {bubbles: true}));
+  box.dispatchEvent(new Event("change", {bubbles: true}));
+  return true;
+}
 function cfgApplyPreset(i) {
   const ps = (cfgView && cfgView.engine && cfgView.engine.presets) || [];
   const p = ps[i];
   if (!p) return;
   const missing = [];
+  let n = 0;
   for (const [flag, val] of Object.entries(p.flags || {})) {
     const field = Array.from(document.querySelectorAll(".cfg-field")).find((el) => el.dataset.flag === flag);
     if (!field) { missing.push(flag); continue; }
-    const tgl = field.querySelector(".st-toggle");
-    let el = null;
-    if (tgl) {
-      tgl.setAttribute("aria-checked", String(val === true || val === "true"));
-      el = tgl;
-    } else {
-      const box = field.querySelector("select") || field.querySelector("input[type=number]") || field.querySelector("input.st-input");
-      if (box) { box.value = String(val); el = box; }
-    }
-    if (el) {
-      el.dispatchEvent(new Event("input", {bubbles: true}));
-      el.dispatchEvent(new Event("change", {bubbles: true}));
-    }
+    if (cfgSetValue(field, val)) n += 1;
   }
   const note = document.querySelector("[data-preset-note]");
-  if (note) note.textContent = (p.note || "") + (missing.length ? `  Not in this editor: ${missing.join(", ")}.` : "");
+  if (note) {
+    note.textContent = `${p.note || ""} Set ${n} setting${n === 1 ? "" : "s"} as an unsaved change` +
+      (p.stays ? `. ${p.stays}` : ".") + (missing.length ? `  Not in this editor: ${missing.join(", ")}.` : "");
+  }
   document.querySelectorAll("[data-preset]").forEach((c) =>
     c.setAttribute("aria-pressed", String(Number(c.dataset.preset) === i)));
   cfgMarkDirty();
@@ -2239,16 +2285,37 @@ function cfgApplyPreset(i) {
 function samplingCard() {
   const g = (cfgView.groups || []).find((x) => x.key === "sampling");
   if (!g) return "";
-  const temp = (g.keys || []).find((k) => k.key === "sampling.temperature");
-  const cur = temp && temp.value != null ? Number(temp.value) : null;
-  const chips = SAMPLING_PRESETS.map((p) =>
-    `<button type="button" class="chip" data-preset-temp="${p.temperature}" aria-pressed="${cur === p.temperature}">${esc(p.name)} ${p.temperature}</button>`).join("");
+  const cur = {};
+  for (const k of g.keys || []) {
+    if (k.key in (SAMPLING_PRESETS[0].values)) cur[k.key] = k.value == null ? null : Number(k.value);
+  }
+  const matches = (p) => Object.keys(p.values).every((k) => cur[k] == null ? false : Math.abs(cur[k] - p.values[k]) < 1e-9);
+  const chips = SAMPLING_PRESETS.map((p, i) =>
+    `<button type="button" class="chip" data-sampling-preset="${i}" title="${esc(p.note)}" ` +
+    `aria-pressed="${matches(p)}">${esc(p.name)} ${p.values["sampling.temperature"]}</button>`).join("");
   return `<section class="cfg-card" id="cfg-sampling">
     ${cfgCardTitle("cfg-sampling", "gauge", g.label)}
-    <p class="cfg-note">Defaults for every request; the chat drawer and API calls override them per request.</p>
-    <div class="chips" role="group" aria-label="Temperature presets">${chips}</div>
+    <p class="cfg-note">Defaults for every request; the chat drawer and API calls override them per request.
+      A chip sets every sampler below, not only the temperature.</p>
+    <div class="chips" role="group" aria-label="Sampling presets">${chips}</div>
+    <p class="cfg-note" id="cfg-sampling-note"></p>
     <div class="cfg-fields">${(g.keys || []).map(cfgFieldHtml).join("")}</div>
   </section>`;
+}
+function cfgApplySampling(i) {
+  const p = SAMPLING_PRESETS[i];
+  if (!p) return;
+  let n = 0;
+  for (const [key, value] of Object.entries(p.values)) {
+    const field = document.querySelector(`#cfg-sections .cfg-field[data-key="${CSS.escape(key)}"]`);
+    if (field && cfgSetValue(field, String(value))) n += 1;
+  }
+  for (const c of document.querySelectorAll("#cfg-sampling [data-sampling-preset]")) {
+    c.setAttribute("aria-pressed", String(Number(c.dataset.samplingPreset) === i));
+  }
+  const note = document.getElementById("cfg-sampling-note");
+  if (note) note.textContent = `${p.name}: ${p.note} Set ${n} field${n === 1 ? "" : "s"} as an unsaved change.`;
+  cfgMarkDirty();
 }
 function exeFieldHtml(k) {
   const id = cfgId("exe");
@@ -2634,18 +2701,8 @@ $("cfg-sections").addEventListener("click", (e) => {
   }
   const del = e.target.closest("[data-kv-del], [data-list-del], [data-env-del]");
   if (del) { del.closest(".kv-row, .list-row").remove(); cfgMarkDirty(); return; }
-  const chip = e.target.closest("[data-preset-temp]");
-  if (chip) {
-    const id = cfgId("sampling.temperature");
-    const v = chip.dataset.presetTemp;
-    const n = $(id), r = $(id + "-r"), o = $(id + "-o");
-    if (n) n.value = v;
-    if (r) r.value = v;
-    if (o) o.textContent = v;
-    chip.parentElement.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", String(c === chip)));
-    cfgMarkDirty();
-    return;
-  }
+  const chip = e.target.closest("[data-sampling-preset]");
+  if (chip) { cfgApplySampling(Number(chip.dataset.samplingPreset)); return; }
   const tgl = e.target.closest(".st-toggle");
   if (tgl) {
     tgl.setAttribute("aria-checked", String(tgl.getAttribute("aria-checked") !== "true"));

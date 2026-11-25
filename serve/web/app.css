@@ -806,7 +806,7 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
   padding: var(--st-s-4) var(--st-s-5); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .cfg-card > .set-card__title { display: flex; align-items: center; gap: 8px; margin: 0; }
 /* a card's own Reset sits at the end of its title, so a whole group can go back to the file in one click */
-.cfg-card-reset { margin-left: auto; }
+.cfg-card-reset { margin-left: auto; font-size: var(--st-fs-xs); }
 .cfg-card-reset[hidden] { display: none; }
 .cfg-reset-all { align-self: flex-start; margin-top: 4px; }
 /* the advanced reveal: a plain checkbox, styled from the tokens so it needs no new component */

@@ -895,27 +895,37 @@ PRESETS: dict[str, list[dict]] = {
         {"key": "recommended", "label": "Recommended for a 16 GB card",
          "note": "64K context, 9.5 GB of experts on the card, 4-bit V, no drafting: 48.9 tok/s decode at a "
                  "32K prompt, 2122 tok/s prefill at 8K.",
+         "stays": "Leaves sampling, the engine executable, the tokenizer and the vision encoder alone.",
          "source": "bench/results/2026-11-25-host-rtx-4070-ti-super-inkling-2-mini-sq-15/README.md",
-         "flags": {"--max-context": "65536", "--vram-experts-gb": "9.5", "--kv": "k8v4", "--draft": "off"}},
+         "flags": {"--max-context": "65536", "--vram-experts-gb": "9.5", "--ram-experts-gb": "1.62",
+                   "--kv": "k8v4", "--kv-offload": "auto", "--draft": "off", "--parallel": "1"}},
         {"key": "long-context", "label": "Longest context",
          "note": "262144 tokens declared; the KV over ~16K tokens reads from host RAM, so decode drops to "
                  "~8 tok/s at a 65K prompt.  4-bit V is the lever that keeps it usable.",
+         "stays": "Same experts, KV format and drafting as the recommended chip; only the declared context grows.",
          "source": "bench/results/2026-11-25-host-rtx-4070-ti-super-inkling-2-mini-sq-15/README.md",
-         "flags": {"--max-context": "262144", "--vram-experts-gb": "9.5", "--kv": "k8v4", "--draft": "off"}},
+         "flags": {"--max-context": "262144", "--vram-experts-gb": "9.5", "--ram-experts-gb": "1.62",
+                   "--kv": "k8v4", "--kv-offload": "auto", "--draft": "off", "--parallel": "1"}},
     ],
     "strata": [
         {"key": "recommended", "label": "Recommended for this host",
          "note": "DFlash2 with the widest window, a 700 MiB VRAM reserve so the expert cache grows about 765 "
-                 "slots (+10-11% decode measured), and the adaptive cache on.",
+                 "slots (+10-11% decode measured), and the adaptive cache on: 71.5 tok/s decode at 4K/16K.",
+         "stays": "Leaves sampling, the pack and profile paths, and the environment alone.",
          "source": "docs/host-tuning/README.md",
          "flags": {"--draft": "dflash2", "--draft-cap": "8", "--expert-cache": "auto",
-                   "--vram-reserve-mib": "700", "--adapt-every": "1"}},
-        {"key": "stock", "label": "Stock (no tuning)", "note": "Remove every tuning flag and let the engine decide.",
-         "source": "", "flags": {}},
+                   "--vram-reserve-mib": "700", "--adapt-every": "1", "--kv": "int8",
+                   "--max-context": "262144", "--spec": "4", "--spec-min-p": "0.70",
+                   "--pcie-frac": "0.20", "--pool-workers": "12"}},
     ],
     "poly": [
-        {"key": "stock", "label": "Stock (no tuning)", "note": "Remove every tuning flag.",
-         "source": "", "flags": {}},
+        {"key": "recommended", "label": "Recommended for this host",
+         "note": "The settings the tuning record on this card used: int8 KV, a 700 MiB reserve, twelve pool "
+                 "workers and the adaptive cache on.",
+         "stays": "Leaves sampling, the draft and pack paths, and the environment alone.",
+         "source": "docs/host-tuning/README.md",
+         "flags": {"--kv": "int8", "--vram-reserve-mib": "700", "--pool-workers": "12",
+                   "--adapt-every": "1", "--expert-cache": "auto"}},
     ],
 }
 
