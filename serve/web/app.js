@@ -1867,18 +1867,29 @@ const PATH_BROWSE = {                                    // string keys that get
 };
 
 // one control for one kind; the label (with its live <output>) is added by cfgFieldHtml
-function sliderNumber(id, range, value, label, anyStep) {
+// The placeholder is the value the engine uses when the setting is absent, so an empty field still
+// says what happens if you leave it alone ("engine default" when nothing is documented).
+function cfgPlaceholder(def) {
+  if (def == null || def === "") return "default";
+  if (typeof def === "boolean") return def ? "on" : "off";
+  return String(def);
+}
+function sliderNumber(id, range, value, label, anyStep, ph, def) {
   const [min, max, step] = range;
   const has = value != null && value !== "";
-  const pos = has ? Math.min(max, Math.max(min, Number(value))) : min;
+  // Unset shows the documented default under the handle, so the picture matches what the engine does;
+  // the number box stays empty, which is how "follow the default" is stored.
+  const shown = has ? value : (def != null && def !== "" && !isNaN(Number(def)) ? def : null);
+  const pos = shown == null ? min : Math.min(max, Math.max(min, Number(shown)));
   return `<span class="cfg-slider">` +
     `<input class="st-slider" type="range" id="${id}-r" min="${min}" max="${max}" step="${step}" value="${pos}" aria-label="${esc(label)} slider">` +
     `<input class="st-input" type="number" id="${id}" min="${min}" max="${max}" step="${anyStep ? "any" : step}" ` +
-    `value="${has ? esc(String(value)) : ""}" placeholder="default" autocomplete="off" aria-label="${esc(label)}"></span>`;
+    `value="${has ? esc(String(value)) : ""}" placeholder="${esc(ph || "default")}" autocomplete="off" aria-label="${esc(label)}"></span>`;
 }
-function cfgControl(k, id) {
+function cfgControl(k, id, ph) {
   const v = k.value;
-  const label = k.help || k.key;
+  // the accessible name is the plain-language label; the long help lives under the control
+  const label = k.label || k.key;
   if (k.kind === "bool") {
     return `<button class="st-toggle" type="button" role="switch" id="${id}" aria-checked="${v === true}" aria-label="${esc(label)}"></button>`;
   }
@@ -1905,11 +1916,11 @@ function cfgControl(k, id) {
     return `<div class="cfg-readonly" id="${id}">${v == null || v === "" ? "—" : esc(String(v))}</div>`;
   }
   if (NUMERIC_KIND.test(k.kind)) {
-    if (k.range) return sliderNumber(id, k.range, v, label, !INT_KIND.test(k.kind));
-    return `<input class="st-input" id="${id}" type="number" step="any" value="${v == null ? "" : esc(String(v))}" placeholder="default" autocomplete="off" aria-label="${esc(label)}">`;
+    if (k.range) return sliderNumber(id, k.range, v, label, !INT_KIND.test(k.kind), ph, k.default);
+    return `<input class="st-input" id="${id}" type="number" step="any" value="${v == null ? "" : esc(String(v))}" placeholder="${esc(ph || "default")}" autocomplete="off" aria-label="${esc(label)}">`;
   }
   const text = v == null ? "" : Array.isArray(v) ? v.join(", ") : String(v);
-  const inp = `<input class="st-input" id="${id}" type="text" value="${esc(text)}" placeholder="default" autocomplete="off" spellcheck="false" aria-label="${esc(label)}">`;
+  const inp = `<input class="st-input" id="${id}" type="text" value="${esc(text)}" placeholder="${esc(ph || "default")}" autocomplete="off" spellcheck="false" aria-label="${esc(label)}">`;
   const br = PATH_BROWSE[k.key];
   if (br && k.kind === "string") {
     return `<span class="cfg-path">${inp}<button class="st-btn st-btn--secondary" type="button" data-browse="${id}" ` +
@@ -1917,14 +1928,28 @@ function cfgControl(k, id) {
   }
   return inp;
 }
+// One field row: the plain-language name with the raw key beside it, and the tools on the right - a hint
+// carrying the default, a "changed" pill, and Reset. The explanation sits under the control, so the label
+// stays a name rather than a paragraph.
+function fieldShell({id, label, tag, help, unit, base, def, risk, control, extra}) {
+  const tip = "Default: " + (def == null || def === "" ? "the engine decides" : String(def))
+    + (risk === "quality" ? ". Changes the words the model produces." : "");
+  return `<div class="cfg-field" data-base="${esc(base == null ? "" : String(base))}" data-def="${esc(def == null ? "" : String(def))}">
+    <div class="cfg-head"><label class="st-label" for="${id}"><span class="cfg-name">${esc(label)}</span><code>${esc(tag)}</code>${extra || ""}</label>
+    <span class="cfg-tools"><span class="cfg-pill" data-pill="changed"${risk === "quality" ? ` title="Changes the words the model produces"` : ""} hidden>changed</span><button class="st-btn st-btn--text cfg-reset" type="button" data-reset="${id}">Reset</button><span class="st-tip" tabindex="0" role="note" data-tip="${esc(tip)}">?</span></span></div>
+    <div class="cfg-body">${control}${unit ? `<span class="cfg-unit">${esc(unit)}</span>` : ""}</div>
+    ${help ? `<p class="cfg-hint">${esc(help)}</p>` : ""}</div>`;
+}
 function cfgFieldHtml(k) {
   const id = cfgId(k.key);
   const out = k.range && NUMERIC_KIND.test(k.kind) ? ` <output id="${id}-o">${k.value == null ? "" : esc(String(k.value))}</output>` : "";
-  return `<div class="cfg-field" data-key="${esc(k.key)}" data-advanced="${k.advanced ? "true" : "false"}" data-hidden="${k.advanced ? "true" : "false"}">
-    <label class="st-label" for="${id}">${esc(k.help || k.key)}<code>${esc(k.key)}</code>${out}</label>${cfgControl(k, id)}</div>`;
+  return fieldShell({
+    id, label: k.label || k.help || k.key, tag: k.key, help: k.help, unit: k.unit, base: k.value, def: k.default,
+    risk: k.risk, extra: out, control: cfgControl(k, id, cfgPlaceholder(k.default)),
+  }).replace('class="cfg-field"', `class="cfg-field" data-key="${esc(k.key)}" data-advanced="${k.advanced ? "true" : "false"}" data-hidden="${k.advanced ? "true" : "false"}"`);
 }
-function flagControl(f, id) {
-  const label = f.help || f.flag;
+function flagControl(f, id, ph) {
+  const label = f.label || f.flag;
   if (f.kind === "bool") {
     return `<button class="st-toggle" type="button" role="switch" id="${id}" aria-checked="${f.value === true}" aria-label="${esc(label)}"></button>`;
   }
@@ -1934,21 +1959,42 @@ function flagControl(f, id) {
       (f.choices || []).map((x) => `<option value="${esc(x)}"${cur === x ? " selected" : ""}>${esc(x)}</option>`).join("") + `</select>`;
   }
   if (f.kind === "int" || f.kind === "num") {
-    if (f.range) return sliderNumber(id, f.range, f.value, label, f.kind === "num");
-    return `<input class="st-input" id="${id}" type="number" step="any" value="${f.value == null ? "" : esc(String(f.value))}" placeholder="default" autocomplete="off" aria-label="${esc(label)}">`;
+    if (f.range) return sliderNumber(id, f.range, f.value, label, f.kind === "num", ph, f.default);
+    return `<input class="st-input" id="${id}" type="number" step="any" value="${f.value == null ? "" : esc(String(f.value))}" placeholder="${esc(ph || "default")}" autocomplete="off" aria-label="${esc(label)}">`;
   }
-  const inp = `<input class="st-input" id="${id}" type="text" value="${f.value == null ? "" : esc(String(f.value))}" placeholder="default" autocomplete="off" spellcheck="false" aria-label="${esc(label)}">`;
+  const inp = `<input class="st-input" id="${id}" type="text" value="${f.value == null ? "" : esc(String(f.value))}" placeholder="${esc(ph || "default")}" autocomplete="off" spellcheck="false" aria-label="${esc(label)}">`;
   if (f.kind === "path") {
     return `<span class="cfg-path">${inp}<button class="st-btn st-btn--secondary" type="button" data-browse="${id}" ` +
       `data-want="file" data-ext="" aria-label="Browse for ${esc(label)}">${icon("folder", "st-icon st-icon--sm")}</button></span>`;
   }
   return inp;
 }
-function flagFieldHtml(f, key) {
+function flagFieldHtml(f) {
+  const key = "args";
   const id = cfgFlagId(key, f.flag);
   const out = f.range && (f.kind === "int" || f.kind === "num") ? ` <output id="${id}-o">${f.value == null ? "" : esc(String(f.value))}</output>` : "";
-  return `<div class="cfg-field" data-flag="${esc(f.flag)}">
-    <label class="st-label" for="${id}">${esc(f.help || f.flag)}<code>${esc(f.flag)}</code>${out}</label>${flagControl(f, id)}</div>`;
+  return fieldShell({
+    id, label: f.label || f.help || f.flag, tag: f.flag, help: f.help, unit: f.unit, base: f.value, def: f.default,
+    risk: f.risk, extra: out, control: flagControl(f, id, cfgPlaceholder(f.default)),
+  }).replace('class="cfg-field"', `class="cfg-field" data-flag="${esc(f.flag)}"`);
+}
+// A field is "changed" when its control no longer holds the value the file had. Reset puts that value back,
+// so the pill is the same signal the Changes rail uses: pending here, not yet saved.
+function cfgFieldOf(el) {
+  return el && el.closest ? el.closest(".cfg-field") : null;
+}
+function cfgSyncPill(el) {
+  const field = cfgFieldOf(el);
+  if (!field) return;
+  const tgl = field.querySelector(".st-toggle");
+  const box = field.querySelector("input, select, textarea");
+  const base = field.dataset.base === "" && tgl ? "false" : (field.dataset.base ?? "");
+  const cur = tgl ? (tgl.getAttribute("aria-checked") === "true" ? "true" : "false")
+                  : (box && box.value != null ? String(box.value) : "");
+  const changed = cur !== base;
+  field.dataset.changed = changed ? "true" : "false";
+  const pill = field.querySelector('[data-pill="changed"]');
+  if (pill) pill.hidden = !changed;
 }
 
 // The Thinking card is the honest effort knob: one row per level with the sentence it puts in the prompt and the
@@ -2309,6 +2355,22 @@ async function cfgSave() {
 
 // ---- delegated editing on the sections container ------------------------------------------------------------
 $("cfg-sections").addEventListener("click", (e) => {
+  const rst = e.target.closest("[data-reset]");
+  if (rst) {
+    const field = rst.closest(".cfg-field");
+    const id = rst.dataset.reset;
+    const base = field ? (field.dataset.base ?? "") : "";
+    const tgl = field && field.querySelector(".st-toggle");
+    const box = $(id) || (field && field.querySelector("select"));
+    if (tgl) tgl.setAttribute("aria-checked", String(base === "true"));
+    if (box) box.value = base;
+    const r = $(id + "-r"), o = $(id + "-o");
+    if (r) r.value = base === "" ? r.min : base;
+    if (o) o.textContent = base;
+    cfgSyncPill(box || tgl || rst);
+    cfgMarkDirty();
+    return;
+  }
   const br = e.target.closest("[data-browse]");
   if (br) {
     const inp = $(br.dataset.browse);
@@ -2344,7 +2406,12 @@ $("cfg-sections").addEventListener("click", (e) => {
     return;
   }
   const tgl = e.target.closest(".st-toggle");
-  if (tgl) { tgl.setAttribute("aria-checked", String(tgl.getAttribute("aria-checked") !== "true")); cfgMarkDirty(); return; }
+  if (tgl) {
+    tgl.setAttribute("aria-checked", String(tgl.getAttribute("aria-checked") !== "true"));
+    cfgSyncPill(tgl);
+    cfgMarkDirty();
+    return;
+  }
   const row = e.target.closest(".think-row");
   if (row && !e.target.closest(".cfg-slider")) {                   // slider/number clicks do not pick the level
     const txt = e.target.closest(".think-row__text");
@@ -2377,9 +2444,11 @@ $("cfg-sections").addEventListener("input", (e) => {
   } else if (t.id === cfgId("exe")) {
     cfgExeTouched = true;                                          // typing a custom path is a picked exe
   }
+  cfgSyncPill(t);
   cfgMarkDirty();
 });
 $("cfg-sections").addEventListener("change", (e) => {
+  cfgSyncPill(e.target);
   if (e.target.id === cfgId("exe") + "-sel") {
     const wrap = $(cfgId("exe") + "-wrap");
     if (wrap) wrap.hidden = e.target.value !== "custom";

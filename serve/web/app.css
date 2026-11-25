@@ -814,6 +814,44 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 .cfg-field[data-advanced="true"][data-hidden="true"] { display: none; }
 .cfg-field .st-input, .cfg-field .st-toggle { align-self: flex-start; }
 .cfg-field .st-input { max-width: 560px; }
+/* a field's head: plain-language name, the raw key, the tools on the right */
+.cfg-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.cfg-head > .st-label { flex: 1 1 auto; min-width: 0; }
+.cfg-name { color: var(--st-ink); }
+.cfg-tools { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.cfg-pill { padding: 1px 8px; border-radius: var(--st-r-pill); background: var(--st-accent-tint);
+  color: var(--st-accent-text); font-size: var(--st-fs-xs); font-weight: 600; }
+.cfg-pill[hidden] { display: none; }
+.cfg-reset { font-size: var(--st-fs-xs); padding: 2px 6px; color: var(--st-ink-muted);
+  opacity: 0; transition: opacity var(--st-dur) var(--st-ease); }
+.cfg-field:hover > .cfg-head .cfg-reset, .cfg-reset:focus-visible,
+.cfg-field[data-changed="true"] > .cfg-head .cfg-reset { opacity: 1; }
+@media (hover: none) { .cfg-reset { opacity: 1; } }
+.cfg-reset:hover, .cfg-reset:focus-visible { color: var(--st-accent-text); }
+.cfg-body { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cfg-unit { font-size: var(--st-fs-xs); color: var(--st-ink-muted); }
+.cfg-hint { margin: 0; max-width: 68ch; font-size: var(--st-fs-xs); line-height: var(--st-lh-body);
+  color: var(--st-ink-muted); }
+.cfg-field[data-changed="true"] > .cfg-head .cfg-name { color: var(--st-accent-text); }
+/* the "?" tooltip: the default value, and a note when the knob changes the words a model produces */
+.st-tip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px;
+  height: 16px; border: 1px solid var(--st-line); border-radius: 50%; color: var(--st-ink-muted);
+  font-size: 11px; font-weight: 600; line-height: 1; cursor: help; user-select: none; }
+.st-tip:hover, .st-tip:focus-visible { border-color: var(--st-accent); color: var(--st-accent-text); outline: none; }
+.st-tip::after { content: attr(data-tip); position: absolute; right: 0; bottom: calc(100% + 6px);
+  width: max-content; max-width: min(280px, 62vw); padding: 6px 9px; border-radius: var(--st-r-sm);
+  background: var(--st-ink); color: var(--st-bg); font-size: var(--st-fs-xs); font-weight: 400;
+  line-height: var(--st-lh-body); white-space: normal; text-align: left; opacity: 0; visibility: hidden;
+  transition: opacity var(--st-dur) var(--st-ease), visibility var(--st-dur); z-index: var(--st-z-pop);
+  pointer-events: none; }
+.st-tip:hover::after, .st-tip:focus-visible::after { opacity: 1; visibility: visible; }
+@media (max-width: 560px) {
+  /* the tools keep the first line even when the name is long, so nothing sits alone under the label */
+  .cfg-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 6px; }
+  .cfg-head > .st-label { min-width: 0; }
+  .cfg-tools { margin-left: 0; grid-column: 2; }
+  .st-tip::after { right: auto; left: 0; }
+}
 .cfg-slider { display: grid; grid-template-columns: minmax(0, 1fr) 104px; gap: 12px; align-items: center; width: 100%; max-width: 560px; }
 .cfg-slider .st-input { width: 104px; max-width: none; }
 .cfg-path { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; width: 100%; max-width: 560px; }
