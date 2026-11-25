@@ -2029,6 +2029,48 @@ function thinkCard() {
     <div class="cfg-fields">${rest.map(cfgFieldHtml).join("")}</div>
   </section>`;
 }
+// One click from a measured starting point. A chip fills the fields below as unsaved changes, so the
+// Changes list shows exactly what it would write and Save stays the only thing that writes.
+function presetCard() {
+  const ps = (cfgView && cfgView.engine && cfgView.engine.presets) || [];
+  if (!ps.length) return "";
+  const chips = ps.map((p, i) =>
+    `<button type="button" class="chip" data-preset="${i}" title="${esc(p.note || "")}" aria-pressed="false">${esc(p.label)}</button>`).join("");
+  return `<section class="cfg-card" id="cfg-presets">
+    <h3 class="set-card__title">${icon("bolt", "st-icon st-icon--sm")} Quick presets</h3>
+    <p class="cfg-note">A measured starting point for this engine. A chip fills the fields below as an unsaved change; the Changes list shows exactly what it would write.</p>
+    <div class="chips" role="group" aria-label="Engine presets">${chips}</div>
+    <p class="cfg-note" data-preset-note></p>
+  </section>`;
+}
+function cfgApplyPreset(i) {
+  const ps = (cfgView && cfgView.engine && cfgView.engine.presets) || [];
+  const p = ps[i];
+  if (!p) return;
+  const missing = [];
+  for (const [flag, val] of Object.entries(p.flags || {})) {
+    const field = Array.from(document.querySelectorAll(".cfg-field")).find((el) => el.dataset.flag === flag);
+    if (!field) { missing.push(flag); continue; }
+    const tgl = field.querySelector(".st-toggle");
+    let el = null;
+    if (tgl) {
+      tgl.setAttribute("aria-checked", String(val === true || val === "true"));
+      el = tgl;
+    } else {
+      const box = field.querySelector("select") || field.querySelector("input[type=number]") || field.querySelector("input.st-input");
+      if (box) { box.value = String(val); el = box; }
+    }
+    if (el) {
+      el.dispatchEvent(new Event("input", {bubbles: true}));
+      el.dispatchEvent(new Event("change", {bubbles: true}));
+    }
+  }
+  const note = document.querySelector("[data-preset-note]");
+  if (note) note.textContent = (p.note || "") + (missing.length ? `  Not in this editor: ${missing.join(", ")}.` : "");
+  document.querySelectorAll("[data-preset]").forEach((c) =>
+    c.setAttribute("aria-pressed", String(Number(c.dataset.preset) === i)));
+  cfgMarkDirty();
+}
 function samplingCard() {
   const g = (cfgView.groups || []).find((x) => x.key === "sampling");
   if (!g) return "";
@@ -2135,7 +2177,7 @@ function renderRail() {
     </button>`).join("");
 }
 function renderSections() {
-  $("cfg-sections").innerHTML = thinkCard() + samplingCard() + engineCard() +
+  $("cfg-sections").innerHTML = presetCard() + thinkCard() + samplingCard() + engineCard() +
     groupCard("vision", "image", "The external encoder for picture inputs; empty when the model has no vision.") +
     groupCard("behavior", "bolt") + groupCard("lifecycle", "clock") + groupCard("identity", "cube") + advancedCard();
   cfgMarkDirty();
@@ -2380,6 +2422,8 @@ $("cfg-sections").addEventListener("click", (e) => {
                  onPick: (p) => { if (inp) { inp.value = p; inp.dispatchEvent(new Event("input", {bubbles: true})); } }});
     return;
   }
+  const pchip = e.target.closest("[data-preset]");
+  if (pchip) { cfgApplyPreset(Number(pchip.dataset.preset)); return; }
   const add = e.target.closest("[data-kv-add], [data-list-add]");
   if (add) {
     const grid = add.parentElement;
