@@ -415,7 +415,7 @@ function roomViewerRender() {
   $("room-viewer-count").textContent = `${at + 1} of ${items.length}`;
   $("room-viewer-prev").disabled = at <= 0;
   $("room-viewer-next").disabled = at >= items.length - 1;
-  const bits = [item.workflow, item.width && item.height ? `${item.width}Ã—${item.height}` : "",
+  const bits = [item.workflow, item.width && item.height ? `${item.width}×${item.height}` : "",
                 item.seed != null ? `seed ${item.seed}` : "", item.created ? roomWhen(item.created) : ""].filter(Boolean);
   $("room-viewer-meta").innerHTML = `<p class="room-viewer__prompt"></p><p class="muted small"></p>`;
   $("room-viewer-meta").querySelector(".room-viewer__prompt").textContent = item.prompt || "(no prompt)";

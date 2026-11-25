@@ -27,6 +27,12 @@ All five are configured per model in a `strata-*.json` run config: `exe`,
 `vision`, `switch_on_request`. Nothing about the API, the web app or the tools
 changes when the engine does.
 
+The web app edits those files on the Settings page: each row carries the flag it
+writes, the engine's documented default, a hint and a Reset, the engine's
+environment variables are rows rather than hand-typed JSON, and the catalog only
+offers a flag to an engine that takes it. [SETTINGS.md](SETTINGS.md) lists what
+each control does and how the catalog stays honest as the engines change.
+
 ### Who owns which engine
 
 | Engine | Built and released by | AryaInfer's part |
