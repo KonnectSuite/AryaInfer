@@ -16,8 +16,8 @@ in the same roster.
 
 | Backend | Binary | Source | Models on this host | Context | Vision |
 | --- | --- | --- | --- | ---: | --- |
-| **Strata** (native Qwen engine) | `strata.exe` 0.1.67 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | Qwen3.8-Flash-Next IQ3_S, Gyro-M, Swift 1.5 abliterated | 262,144, int8 KV | `strata-vision.exe` + mmproj, GPU |
-| **Strata Inkling** | `strata-inkling.exe` 0.1.67 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | Inkling-2-Mini SQ-15 | 262,144, host KV offload | native vision encoder |
+| **Strata** (native Qwen engine) | `strata.exe` 0.1.67 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | Qwen3.8-Flash-Next IQ3_S, Gyro-M | 262,144, int8 KV | `strata-vision.exe` + mmproj, GPU |
+| **Strata Inkling** | `engine-inkling\strata-inkling.exe`, built here from 0.1.68 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | Inkling-2-Mini SQ-15 | 65,536, host KV offload | native vision encoder |
 | **PolyStrata** (`strata-poly`) | `engine-poly\strata-poly.exe` 0.1.66 | `src/poly`, from [VecSzn/PolyStrata](https://github.com/simplexai-labs/PolyStrata) | Qwen3.6-35B-A3B UD-Q4_K_XL and abliterated, Ornith 1.5 APEX, and the GGUF families in [BACKENDS.md](BACKENDS.md) | 262,144, q8_0 KV | `strata-vision.exe` + mmproj, GPU |
 | **AryaInfer** (fork build) | `engine-arya\aryainfer.exe` 0.1.45 | `src/poly` fork target, from [KonnectSuite/AryaInfer](https://github.com/KonnectSuite/AryaInfer); CUDA `sm_89`; AQ3 kernels in `src/poly/prefill_f16.cu` | Qwen3.8-27B AQ3 (GSQ 3-bit), Qwen3.8-27B Turbo IQ3_XXS, Qwen3.5-4B Q4_K_M | 131,072 (27B), 65,536 (4B), q4_0 KV | `strata-vision.exe` + mmproj, CPU |
 | **AryaNInfer** (ported core) | `engine-ninfer\arya-ninfer.exe` 0.1.0 | [roofkid/ninfer-4080](https://github.com/roofkid/ninfer-4080) at `rtx4080-port` commit `2469b57`, plus `engine-ninfer/shim/main.cpp` | Qwen3.8-27B GSQ3 `.ninfer` | 131,072, rk4v4-e8 KV | external `.sve` embeddings from `strata-vision.exe`, CPU |
@@ -31,7 +31,8 @@ changes when the engine does.
 
 | Engine | Built and released by | AryaInfer's part |
 | --- | --- | --- |
-| Strata, Strata Inkling | [Niko1221/Strata](https://github.com/Niko1221/Strata) — [releases](https://github.com/Niko1221/Strata/releases) | installs the pinned binary from `engines.json`; no source changes |
+| Strata | [Niko1221/Strata](https://github.com/Niko1221/Strata) — [releases](https://github.com/Niko1221/Strata/releases) | installs the pinned binary from `engines.json`; no source changes |
+| Strata Inkling | [Niko1221/Strata](https://github.com/Niko1221/Strata) — [releases](https://github.com/Niko1221/Strata/releases) | builds it here from the vendored 0.1.68 sources (`engine-inkling/`). Measured against the 0.1.67 release it is the same engine at short context; what made Inkling 2 Mini usable was the K/V and expert budget in the run config, which 0.1.67 could also set. Having the source means the next such question is a patch, not a wait: [INKLING.md](INKLING.md) |
 | PolyStrata (`strata-poly`) | [VecSzn/PolyStrata](https://github.com/simplexai-labs/PolyStrata) — [releases](https://github.com/simplexai-labs/PolyStrata/releases) | installs the pinned binary; `strata-poly` stays upstream-identical |
 | AryaInfer (`aryainfer`) | this fork — [AryaInfer releases](https://github.com/KonnectSuite/AryaInfer/releases) | our build of the pinned PolyStrata source, with the AQ3/q4_0 changes behind `ARYAINFER_ENGINE` |
 | AryaNInfer (`arya-ninfer`) | core by [roofkid](https://github.com/roofkid/ninfer-4080), shim/patches by this fork | manual build; the core stays pinned at `2469b57` |
@@ -39,8 +40,9 @@ changes when the engine does.
 The source snapshot in this checkout is still Strata `v0.1.45` / PolyStrata
 `0.1.45-poly.9` (`upstream.json`). `--build` compiles that pin, so it produces
 0.1.45 engines; the default install takes the current upstream binaries pinned in
-`engines.json` (Strata 0.1.67, Inkling 0.1.67, PolyStrata 0.1.66). Updating the
-source pin is a separate merge, not something this installer pretends happened.
+`engines.json` (Strata 0.1.67, PolyStrata 0.1.66) and builds Strata Inkling 0.1.68
+from `engine-inkling/src`. Updating the source pin is a separate merge, not
+something this installer pretends happened.
 
 ## One protocol
 
@@ -71,7 +73,7 @@ The roster is the `strata-*.json` files next to the config you start with
 | Model | Engine | Context | Why it is here |
 | --- | --- | ---: | --- |
 | `qwen3.8-flash-next-gyro-m` | Strata 0.1.67 | 262,144 | Gyro-M TQ2_0 (~92 GB); 61.6 tok/s decode, 270 tok/s prompt, 262K vision |
-| `inkling-2-mini-sq-15` | Strata Inkling 0.1.67 | 262,144 | Native Inkling 2 Mini SQ-15 (~14.3 GB); 88.8 tok/s text, 73.8 tok/s with vision; native encoder |
+| `inkling-2-mini-sq-15` | Strata Inkling 0.1.68 (built here) | 65,536 | Native Inkling 2 Mini SQ-15 (~14.3 GB); 52.9 tok/s decode at 8K, 48.9 at 32K, 2,122 / 1,843 tok/s prefill; native encoder |
 | `qwen3.8-27b-aq3` | AryaInfer | 131,072 | Dense 27B quality at 3-bit codes, 1.2K tok/s prompt reads |
 | `qwen3.8-27b-ninfer` | AryaNInfer | 114,688 | Highest measured prefill on this card (2,039 tok/s at 8K); 131,072 overruns a 16 GiB card with vision |
 | `qwen3.6-35b-a3b-ud-q4_k_xl` | PolyStrata | 262,144 | Best validated 35B MoE for agent work |
@@ -79,7 +81,6 @@ The roster is the `strata-*.json` files next to the config you start with
 | `ornith-1.5-35b-a3b-apex-i-quality` | PolyStrata | 262,144 | 18/18 bounded coding with low reasoning |
 | `qwen3.8-27b-turbo-iq3xxs` | AryaInfer | 131,072 | Daily-driver 27B with MTP |
 | `inkling-2-mini-ud-q4_k_xl` | PolyStrata 0.1.66 | 262,144 | Unsloth UD-Q4_K_XL text fallback; 262K, vision via `mmproj-F16.gguf` |
-| `swift-1.5-abliterated-iq3_xxs` | Strata 0.1.67 | 262,144 | Unrestricted Swift 1.5 |
 | `qwen3.5-4b` | AryaInfer | 65,536 | Small, fast, vision-capable |
 
 ## Measured on this host
@@ -90,11 +91,16 @@ the Flash-Next and AQ3 rows read JSON/HTTP requests, the NInfer row reads a
 fixed token corpus, and the 35B rows read long synthetic prompts. Compare
 within a row, not across engines.
 
-Four installed profiles have **no speed row here**: Qwen3.8-27B Turbo IQ3_XXS,
-Qwen3.5-4B Q4_K_M, Swift 1.5 IQ3_XXS and Swift 1.5 Abliterated IQ3_XXS. They
-run daily on this host; their speeds were not re-measured on the current
-engine builds, so no number is claimed for them. The Swift 1.5 IQ3_XXS
-headline against a cloud API is documented in
+Two installed profiles have **no speed row here**: Qwen3.8-27B Turbo IQ3_XXS,
+Qwen3.5-4B Q4_K_M. They run daily on this host; their speeds were not re-measured
+on the current engine builds, so no number is claimed for them. Swift 1.5 IQ3_XXS
+and Swift 1.5 Abliterated IQ3_XXS had no row either and no longer have files
+here: the plain Swift config was dropped on 2026-11-13 and the abliterated
+shards, expert pack, MTP layer and run config were uninstalled on 2026-11-25
+([ARYAINFER.md](ARYAINFER.md)); the rows in
+[PLC_SAMPLING.md](PLC_SAMPLING.md) and [host-tuning](host-tuning/README.md) stay
+as their record. The Swift 1.5 IQ3_XXS headline against a cloud API is documented
+in
 [BENCHMARK_GOJO_SWIFT_VS_DEEPSEEK.md](BENCHMARK_GOJO_SWIFT_VS_DEEPSEEK.md).
 
 ### Strata 0.1.58 (November 7, 2026) - Qwen3.8-Flash-Next IQ3_XXS

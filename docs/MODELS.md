@@ -10,14 +10,13 @@
 
 ## What is installed on this host (November 2026)
 
-The RAM advice below is the upstream Flash-Next sizing guide. The ten profiles
+The RAM advice below is the upstream Flash-Next sizing guide. The nine profiles
 actually running on this machine are:
 
 | Profile | Backend | Context |
 | --- | --- | ---: |
 | Qwen3.8 Flash Next IQ3_XXS | Strata 0.1.67 | 262,144 |
 | Swift 1.5 IQ3_XXS | Strata 0.1.67 | 262,144 |
-| Swift 1.5 Abliterated IQ3_XXS | Strata 0.1.67 | 262,144 |
 | Qwen3.8-27B AQ3 | AryaInfer | 131,072 |
 | Qwen3.8-27B Turbo IQ3_XXS | AryaInfer | 131,072 |
 | Qwen3.8-27B GSQ3 `.ninfer` | AryaNInfer | 131,072 |
@@ -27,6 +26,10 @@ actually running on this machine are:
 | Qwen3.5-4B Q4_K_M | AryaInfer | 65,536 |
 
 Per-profile numbers and the five-backend comparison: [ENGINES.md](ENGINES.md).
+Swift 1.5 Abliterated IQ3_XXS is no longer one of them: its shards, expert pack,
+MTP layer and run config were uninstalled on November 25, 2026 (72.8 GiB freed);
+its measured settings stay in [host-tuning](host-tuning/README.md) and
+[PLC_SAMPLING.md](PLC_SAMPLING.md).
 
 **Where the files come from.** The base Qwen3.8 models are the
 [Qwen team's](https://huggingface.co/Qwen/Qwen3.8-27B); the Flash-Next quants are

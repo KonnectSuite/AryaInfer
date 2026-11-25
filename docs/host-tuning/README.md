@@ -26,7 +26,9 @@ runs with one), and no model file or log is copied.
 
 `strata-qwen36s-q8_0.json` is kept as the record of a measured profile: its 35.2 GB file was uninstalled on
 November 3, 2026 after the four-file comparison in [the Qwen3.6 results](../QWEN36_HOST_RESULTS.md). The
-`strata-qwen36s-opus-reasoning.json` example went with its model on November 5, 2026. The two Qwen3.8
+`strata-qwen36s-opus-reasoning.json` example went with its model on November 5, 2026. `strata-swift-abliterated-iq3_xxs.json`
+is kept the same way: its model was uninstalled on November 25, 2026 (70.6 GiB of shards, with its 1.44 GiB pack,
+0.77 GiB MTP block and the run config; the archived copy is `run-config-backups/strata-swift-abliterated-iq3_xxs.json.uninstalled`). The two Qwen3.8
 27B profiles run on the Arya engine (`aryainfer.exe`) with a prompt batch of 1,024; the Poly profiles use 2,048.
 
 The two 27B profiles keep **1024 MiB** free rather than 512. After an hour of use the engine's footprint had reached

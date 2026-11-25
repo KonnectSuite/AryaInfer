@@ -163,8 +163,10 @@ engine into `engine/` and the image encoder with it, and does everything else ex
 compiled again after a `git pull` that touched its sources (a minute or two for the changed files).
 
 The default install does not compile this checkout and does not use its old `v0.1.45` tag. It reads `engines.json`,
-which pins the current upstream binaries - Strata 0.1.67, Strata Inkling 0.1.67, PolyStrata 0.1.66 - and downloads each
-one from its own project's release with a recorded size and SHA-256. `--check-engines` reports what is installed and
+which pins the current upstream binaries - Strata 0.1.67, PolyStrata 0.1.66 - and downloads each one from its own
+project's release with a recorded size and SHA-256. Strata Inkling is the exception: it is `"manual": true` and this
+checkout builds it from the vendored 0.1.68 sources instead of downloading it, so setup prints the two commands and
+points at [INKLING.md](INKLING.md). `--check-engines` reports what is installed and
 exits 1 if a required engine is missing or older than the pin; `--repair-engines` installs or upgrades the missing ones
 and exits. The fork's `aryainfer` engine is pinned by the same file.
 
@@ -200,7 +202,8 @@ cmake --build build --target aryainfer     # the same src/poly tree with this fo
 - The image encoder is a separate target: `cmake -S tools/vision -B build-vision -G Ninja` and
   `cmake --build build-vision --target strata-vision`.
 - The engine binary goes wherever your run config's `"exe"` points; setup looks in `engine/`
-  (`engine-poly/` for `strata-poly`, `engine-arya/` for `aryainfer`, `engine-inkling/` for Inkling).
+  (`engine-poly/` for `strata-poly`, `engine-arya/` for `aryainfer`, `engine-inkling/` for Inkling, built by
+  `engine-inkling\build.ps1` - see [INKLING.md](INKLING.md)).
 
 Every other platform and card family has its own build page, with the toolchain and the flags that family needs -
 they are not covered here: [AMD (HIP)](AMD_HIP.md), [Apple Silicon Mac](MAC.md), [Intel Arc (SYCL)](INTEL_ARC.md),

@@ -31,24 +31,12 @@
       "title": "Strata Inkling",
       "binary": "strata-inkling.exe",
       "dir": "engine-inkling",
-      "min_version": "0.1.67",
-      "version": "0.1.67",
+      "min_version": "0.1.68",
+      "version": "0.1.68",
       "upstream": "https://github.com/Niko1221/Strata/releases/tag/v0.2.21",
       "required": false,
-      "assets": {
-        "windows-cuda13": {
-          "url": "https://github.com/Niko1221/Strata/releases/download/v0.2.21/strata-inkling-0.1.67-windows-x86_64-cuda-cuda13.tar.gz",
-          "asset": "strata-inkling-0.1.67-windows-x86_64-cuda-cuda13.tar.gz",
-          "size": 419139591,
-          "sha256": "26b88c312be09b9f828da32136a808ad7148d1d4d2174755cd7a800982967bed"
-        },
-        "windows-cuda12": {
-          "url": "https://github.com/Niko1221/Strata/releases/download/v0.2.21/strata-inkling-0.1.67-windows-x86_64-cuda12.tar.gz",
-          "asset": "strata-inkling-0.1.67-windows-x86_64-cuda12.tar.gz",
-          "size": 588490782,
-          "sha256": "1844598e794e7893ee98af5f8f7b0d88b3dcd67ac367ea8c8cdcee6a850c32b4"
-        }
-      }
+      "manual": true,
+      "assets": {}
     },
     "poly": {
       "title": "PolyStrata",

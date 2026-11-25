@@ -18,8 +18,8 @@ budget, tools, images, API, web app) is shared:
 
 | Backend | Binary here | Runs | Context |
 | --- | --- | --- | ---: |
-| Strata (native Qwen engine, upstream 0.1.67) | `engine\strata.exe` | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5, Swift abliterated | 262,144 |
-| Strata Inkling (upstream 0.1.67) | `engine-inkling\strata-inkling.exe` | Inkling 2 Mini | 131,072 |
+| Strata (native Qwen engine, upstream 0.1.67) | `engine\strata.exe` | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5 | 262,144 |
+| Strata Inkling (built here from 0.1.68) | `engine-inkling\strata-inkling.exe` | Inkling 2 Mini | 65,536 |
 | PolyStrata (`strata-poly`, upstream 0.1.66) | `engine-poly\strata-poly.exe` | Qwen3.6-35B-A3B UD-Q4, abliterated, Ornith 1.5, and the GGUF families | 262,144 |
 | AryaInfer build (`aryainfer`, 0.1.45) | `engine-arya\aryainfer.exe` | Qwen3.8-27B AQ3, 27B Turbo IQ3_XXS, Qwen3.5-4B | 131,072 / 65,536 |
 | AryaNInfer (ported core 0.1.0) | `engine-ninfer\arya-ninfer.exe` (pinned `2469b57` + shim) | Qwen3.8-27B GSQ3 `.ninfer` | 131,072; the entry ships 114,688 to fit a 16 GiB card |
@@ -371,3 +371,36 @@ SHA-256), so the `.sve` files NInfer reads are unchanged and nothing downstream 
 same encoder also loaded the other two mmproj files here (5120 and 2560 wide) and encoded the same image in 6-9 s
 each.  The `strata-0.1.54` folder was then deleted (0.88 GiB), and so were `strata-0.1.56` and `strata-0.1.58`
 (0.90 and 0.91 GiB): `strata-0.1.59` is the only native engine on this host.
+
+## Swift 1.5 Abliterated uninstalled (2026-11-25)
+
+The user asked to remove the uncensored Swift profile.  Everything installed for
+`swift-1.5-abliterated-iq3_xxs` is gone:
+
+| Removed | Size |
+| --- | ---: |
+| `C:\AI\Strata-data\models\sc117-swift-abliterated-IQ3_XXS` (the two GGUF shards, 39,771,812,960 + 36,056,143,040 bytes) | 70.62 GiB |
+| `C:\AI\Strata-data\packs\sc117-swift-abliterated-iq3_xxs` (`dense.bin` 1,538,035,200 bytes, `conversions.json`, `index.txt`, `native_experts.txt`, the tokenizer pack) | 1.44 GiB |
+| `C:\AI\Strata-data\mtp\sc117-swift-rt` (its MTP draft block) | 0.77 GiB |
+| `strata-swift-abliterated-iq3_xxs.json`, its `.json.bak` and its engine log beside the server | 4 KB |
+
+72.83 GiB freed: `C:` went from 583.2 to 656.0 GiB free (`Win32_LogicalDisk`), the sum of the four rows above.
+No process held any of it - the running engine was the IQ3_S one (`--pack C:\AI\Strata-data\packs\iq3_s`) and the
+server on 127.0.0.1:8080 was started with `--config strata-gyro-m` - so nothing had to be stopped and no other
+profile lost a file.  The config is not deleted from the record: `serve/models.py` lists models with
+`root.glob("strata-*.json")`, so the removed entry is simply absent, and the last two versions are kept as
+`run-config-backups/strata-swift-abliterated-iq3_xxs.json.uninstalled` and
+`...json.bak.uninstalled`.
+
+Left here because none of it is specific to the abliterated file: `models\mmproj-Swift-Qwen3.8-Flash-Next-BF16.gguf`
+(0.85 GiB, also named by the plain Swift 1.5 profile), `packs\swift-iq3_xxs` (1.44 GiB, the plain Swift pack) and
+`mtp\sc117-rt` (0.77 GiB, which no run config on this host names).  Removing those three more would free another
+3.06 GiB.
+
+Worth recording: the live config had been rewritten at 00:06 on 2026-11-25 down to
+`--kv-resident 32768 --conversation-cache-mib 4096 --draft-cap 8` - no `--pack`, `--native`, `--ple-gguf`,
+`--mtp` or `--max-context` - so as it stood it could not have started an engine.  Its full 0.1.67 argument list is
+in the archived copies above and its measured settings in [host-tuning/README.md](host-tuning/README.md); the
+8-fixture scores are in [PLC_SAMPLING.md](PLC_SAMPLING.md).  Reinstalling means the abliterated IQ3_XXS shards from
+[UkisAI's Swift 1.5 repository](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF) and a pack
+build; `setup.py` still offers the Swift family (`--family swift`), not the abliterated files.

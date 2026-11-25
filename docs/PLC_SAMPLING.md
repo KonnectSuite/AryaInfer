@@ -85,6 +85,11 @@ IQ3_XXS for PLC/HMI work.
 The Coder's files — model shards, expert pack and run config — were uninstalled on
 November 9, 2026; the measurements above remain as the record.
 
+Swift 1.5 Abliterated IQ3_XXS was uninstalled on November 25, 2026: 72.8 GiB of two
+GGUF shards, its expert pack, its MTP draft block and its run config were removed.
+The eight-model table above is still the record of the pass as it ran; seven of
+those eight are installed here now.
+
 Per fixture, across the eight models:
 
 | fixture | coding | coding-0.5 | family | precise |

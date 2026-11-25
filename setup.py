@@ -981,6 +981,8 @@ KQ_LIB = "strata_kq.dll" if WIN else "libstrata_kq.so"
 MANIFEST_PATH = ROOT / "engines.json"
 ENGINE_ARYA_DIR = "engine-arya"
 ENGINE_INKLING_DIR = "engine-inkling"
+# A manual engine is built on this PC instead of downloaded: the message that says so names its own doc.
+MANUAL_ENGINE_DOCS = {"ninfer": "docs/NINFER.md", "inkling": "docs/INKLING.md"}
 
 
 # ------------------------------------------------------------------------------------------------ output
@@ -7762,7 +7764,8 @@ def engine_manifest_cli(a, gpu, hip, cuda_tk) -> int:
             say(f"  {title:12s} {rec.get('version') or ''}: not published yet (engines.json says pending)")
             continue
         if rec.get("manual"):
-            say(f"  {title:12s} {rec.get('version') or ''}: manual build (docs/NINFER.md)")
+            say(f"  {title:12s} {rec.get('version') or ''}: manual build "
+                f"({MANUAL_ENGINE_DOCS.get(name, 'docs/ENGINES.md')})")
             continue
         eng, ver, ok_now, why = manifest_installed(name, gpu, cuda_tk)
         if ok_now:
