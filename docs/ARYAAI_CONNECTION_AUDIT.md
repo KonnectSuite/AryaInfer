@@ -36,13 +36,13 @@ assuming every model implements the same effort scale.
 
 | Installed model | Actual controls | AryaAI mapping |
 |---|---|---|
-| Qwen3.8 Flash Next IQ3_XXS | Off, Low, Medium, High, XHigh | `off: none`, `low: low`, `medium: medium`, `high: high`, `xhigh: xhigh` |
+| Qwen3.8 Flash Next IQ3_XXS | Off, Low, Medium, High | `off: none`, `low: low`, `medium: medium`, `high: high` |
 | Qwen3.6 UD-Q4_K_XL | Off / On | Off sends `none`; Low/Medium/High alias native On (`high`) |
 | Qwen3.6 Q8_0 | Off / On | Same binary-control mapping |
 | MiniCPM-V 4.7 Q4_K_M | Off / On | Same binary-control mapping |
 | Ornith APEX-I-QUALITY | Off / On | Same binary-control mapping |
 | Gemma 4 UD-Q4_K_M | Off / On | Same binary-control mapping |
-| Tiel Coder UD-Q4_K_XL | Off, Low, Medium, High, XHigh | Same distinct-effort mapping as Qwen3.8 |
+| Tiel Coder UD-Q4_K_XL | Off, Low, Medium, High | Same distinct-effort mapping as Qwen3.8 |
 | LFM2.5 UD-Q4_K_XL | Native thinking; no Off choice | Low/Medium/High all send `high`; these are aliases |
 
 The development selector groups equivalent enabled efforts into **On** for

@@ -19,7 +19,7 @@ from serve import runconfig  # its _number/save/load and value helpers stay the 
 
 # ------------------------------------------------------------------ catalog
 
-EFFORTS = ["none", "low", "medium", "high", "xhigh"]
+EFFORTS = ["none", "low", "medium", "high"]
 BUDGET_LEVELS = ["off", "low", "medium", "high"]
 
 # (key, kind, help, choices, advanced).  kind:

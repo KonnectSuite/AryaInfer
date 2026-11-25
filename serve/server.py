@@ -170,13 +170,11 @@ def effort_info(cfg: dict) -> list[dict]:
     by = by if isinstance(by, dict) else {}
     fallback = cfg.get("reasoning_budget_tokens")
     out = []
-    for level in ("none", "low", "medium", "high", "xhigh"):
+    for level in ("none", "low", "medium", "high"):
         if level == "none":
             out.append({"level": level, "instruction": "Thinking off: the model answers directly.", "budget": None})
             continue
         budget = by.get(level)
-        if budget is None and level == "xhigh":
-            budget = by.get("high")                      # the same xhigh-falls-back-to-high rule reasoning_budget() uses
         if budget is None:
             budget = fallback
         out.append({"level": level, "instruction": EFFORT_TEXT.get(level, EFFORT_TEXT["medium"]), "budget": budget})
@@ -3276,27 +3274,23 @@ def budget_tokens(value) -> int | None:
     return value if value > 0 else None
 
 
-EFFORT_LEVELS = ("off", "low", "medium", "high", "xhigh")   # the levels a per-level thinking budget can name
+EFFORT_LEVELS = ("off", "low", "medium", "high")   # the levels a per-level thinking budget can name
 
 
 def effort_level(value) -> str | None:
     """An effort as a client writes it ("high", "xhigh", "none", False, ...) as one of EFFORT_LEVELS, or None.
 
-    The five levels are the ones the web app offers and the ones a per-level budget names.  high and xhigh share
-    the template's careful-think wording (EFFORT renders both as xhigh); only the thinking budget tells them
-    apart, so they stay separate here.  Off is every no-thinking spelling; anything else is unknown (None)."""
+    The four levels are the ones the web app offers and the ones a per-level budget names; the aliases are the ones
+    the template's own mapping takes (high and xhigh are the same depth, and none/off/disabled the same off)."""
     if value is None or value == "":
         return None
     if value is False:
         return "off"
     key = str(value).strip().lower()
-    if key in ("none", "off", "minimal", "disabled", "false"):
-        return "off"
-    if key in ("low", "medium", "high"):
-        return key
-    if key in ("xhigh", "max", "maximum"):
-        return "xhigh"
-    return None
+    if key not in EFFORT:
+        return None
+    level = EFFORT[key]
+    return "off" if level is None else ("high" if level == "xhigh" else level)
 
 
 class Service:
@@ -3940,9 +3934,6 @@ class Service:
             level = self.request_effort(req)
             if level in self.reasoning_budget_by_effort:
                 return budget_tokens(self.reasoning_budget_by_effort[level])
-            # a table written before xhigh existed gives it the high ceiling: xhigh is never less than high
-            if level == "xhigh" and "high" in self.reasoning_budget_by_effort:
-                return budget_tokens(self.reasoning_budget_by_effort["high"])
         return budget_tokens(self.reasoning_budget_tokens)
 
     def _vision_down(self) -> bool:

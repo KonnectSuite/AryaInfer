@@ -850,30 +850,31 @@ r = client.chat.completions.create(model="strata", messages=[{"role": "user", "c
 print(r.choices[0].message.content)
 ```
 
-- **Thinking levels: none, low, medium, high, xhigh.** The model thinks before it answers (streamed as
+- **Thinking levels: none, low, medium, high.** The model thinks before it answers (streamed as
   `reasoning_content`, Anthropic: `thinking` blocks). Choose how much per request - in the chat page (the "Thinking"
   menu), in `chat.py` (`/think low`), or over the API:
 
   | API | how |
   | --- | --- |
-  | OpenAI | `"reasoning_effort": "none" \| "low" \| "medium" \| "high" \| "xhigh"` (also `"reasoning": {"effort": ...}`, or `"chat_template_kwargs": {"enable_thinking": false}`) |
-  | Anthropic | `"output_config": {"effort": "low" \| "medium" \| "high" \| "xhigh"}`, `"thinking": {"type": "disabled"}`, or `"thinking": {"type": "enabled", "budget_tokens": N}` (under 2K = low, under 8K = medium, more = high) |
+  | OpenAI | `"reasoning_effort": "none" \| "low" \| "medium" \| "high"` (also `"reasoning": {"effort": ...}`, or `"chat_template_kwargs": {"enable_thinking": false}`) |
+  | Anthropic | `"output_config": {"effort": "low" \| "medium" \| "high"}`, `"thinking": {"type": "disabled"}`, or `"thinking": {"type": "enabled", "budget_tokens": N}` (under 2K = low, under 8K = medium, more = high) |
 
   Without a setting the model uses its own default, **high**. `none` answers at once (fastest); `low` keeps the thinking
-  short. The levels are instructions the model was trained with, not a hard token limit: on easy questions the graded
-  levels think briefly, on hard ones `high`/`xhigh` think longest. A model config can cap them with
-  `reasoning_budget_by_effort` (the five shipped configs use low 2,048 / medium 8,192 / high 16,384 / xhigh 0 = no cap).
+  short. The levels are instructions the model was trained with, not a hard token limit: on easy questions all three
+  think briefly, on hard ones `high` thinks longest and is most accurate.
   To start with another level for every request that names none, put `"reasoning_effort": "low"` (or `none`, `medium`,
   `high`) in `strata-<model>.json`, outside `"args"` (#1641): the engine has no such option, and `--reasoning-effort` in
   `"args"` is moved to this key with a note at startup. The web app's shared Chat settings ("Use for other apps too") and a
   request's own level win over it.
 - **What a thinking level actually changes.** A level does exactly three things, and nothing else: `none` turns thinking
   off; each level puts its own instruction sentence into the prompt (the sentences the model was trained with — the
-  graded levels are told to think briefly, `high` and `xhigh` to think longer; `xhigh` uses the same sentence as `high`
-  plus a bigger ceiling); and, when the config has `reasoning_budget_by_effort`, the level picks the thinking cap.
-  Sampling is never touched by a level: temperature, top_p, top_k and the rest stay exactly as the model config and the
-  request set them. The web app's Settings page (a model's card → Settings → Thinking) shows every level with its
-  sentence and its cap, so what a level does is visible instead of implied.
+  graded levels are told to think briefly, `high` to think longer; the template spells `high` as its own top level,
+  which is why API clients may also write `xhigh` for it); and, when the config has `reasoning_budget_by_effort`, the
+  level picks the thinking cap. Sampling is never touched by a level — but thinking itself is: the model card's sampling
+  defaults differ between thinking on and thinking off (Qwen3.8: 1.0/0.95/20 thinking, 0.7 not), so choosing `none`
+  changes those defaults the same way a request that disables thinking does. The web app's Settings page (a model's
+  card → Settings → Thinking) shows every level with its sentence and its cap, so what a level does is visible instead
+  of implied.
 - **Keep Windows awake while it works (opt-in, #1727).** `"prevent_sleep": true` in `strata-<model>.json` keeps the PC
   from going to sleep while at least one request is running or waiting (Windows' `SetThreadExecutionState` with
   `ES_SYSTEM_REQUIRED`; the screen may still turn off), and gives the normal sleep rules back when the server is idle

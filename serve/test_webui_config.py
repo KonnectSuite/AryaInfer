@@ -24,7 +24,8 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from serve import configschema, engines  # noqa: E402
 from serve.frontend import ChatTemplate  # noqa: E402
-from serve.server import EFFORT_TEXT, ByteTokenizer, MockEngine, Service, effort_info, serve  # noqa: E402
+from serve.server import (EFFORT_LEVELS, EFFORT_TEXT, ByteTokenizer, MockEngine, Service,  # noqa: E402
+                          effort_info, effort_level, serve)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -105,9 +106,9 @@ class ConfigSchema(unittest.TestCase):
 
     def test_apply_sets_dotted_keys_enums_and_aliases(self):
         new, changed = configschema.apply(self.cfg, {
-            "sampling.temperature": 0.42, "reasoning_effort": "xhigh", "aliases": ["mini", "daily"]})
+            "sampling.temperature": 0.42, "reasoning_effort": "high", "aliases": ["mini", "daily"]})
         self.assertEqual(new["sampling"]["temperature"], 0.42)
-        self.assertEqual(new["reasoning_effort"], "xhigh")
+        self.assertEqual(new["reasoning_effort"], "high")
         self.assertEqual(new["aliases"], ["mini", "daily"])
         self.assertEqual(changed, ["sampling.temperature", "reasoning_effort", "aliases"])
 
@@ -141,30 +142,30 @@ class EffortSemantics(unittest.TestCase):
 
     def test_every_level_has_a_sentence_and_a_cap(self):
         rows = effort_info(SAMPLE)
-        self.assertEqual([r["level"] for r in rows], ["none", "low", "medium", "high", "xhigh"])
+        self.assertEqual([r["level"] for r in rows], ["none", "low", "medium", "high"])
         by = {r["level"]: r for r in rows}
         self.assertIsNone(by["none"]["budget"])        # none turns thinking off: no sentence, no cap
         self.assertEqual(by["low"]["budget"], 4800)    # from reasoning_budget_by_effort
         self.assertEqual(by["medium"]["budget"], 9600)
         self.assertEqual(by["high"]["budget"], 4800)   # no high entry: falls back to reasoning_budget_tokens
-        self.assertEqual(by["xhigh"]["budget"], 4800)  # no xhigh entry: falls back like reasoning_budget() does
-        for lv in ("low", "medium", "high", "xhigh"):
+        for lv in ("low", "medium", "high"):
             self.assertTrue(by[lv]["instruction"], lv)
         self.assertEqual(EFFORT_TEXT["high"], by["high"]["instruction"])
-        self.assertEqual(by["high"]["instruction"], by["xhigh"]["instruction"])   # the template maps high to xhigh
 
-    def test_xhigh_falls_back_to_the_high_cap(self):
-        cfg = {**SAMPLE, "reasoning_budget_by_effort": {"high": 7777}}
-        by = {r["level"]: r for r in effort_info(cfg)}
-        self.assertEqual(by["xhigh"]["budget"], 7777)  # the same rule reasoning_budget() uses at request time
-        self.assertEqual(by["low"]["budget"], 4800)    # a level without an entry uses reasoning_budget_tokens
-        self.assertEqual(by["medium"]["budget"], 4800)
+    def test_xhigh_is_no_longer_a_level(self):
+        # the fifth level was removed: a client can still spell it (it collapses to high), but the table and the
+        # Settings page only know off/low/medium/high
+        self.assertEqual(effort_level("xhigh"), "high")
+        self.assertEqual(effort_level("max"), "high")
+        self.assertNotIn("xhigh", EFFORT_LEVELS)
+        with self.assertRaises(ValueError):
+            configschema.apply(SAMPLE, {"reasoning_effort": "xhigh"})
 
     def test_a_level_carries_no_sampling(self):
         # the knob is honest: a level reports an instruction and a budget, never a sampling change
         for r in effort_info(SAMPLE):
             self.assertEqual(sorted(r), ["budget", "instruction", "level"])
-        self.assertEqual(set(EFFORT_TEXT), {"low", "medium", "high", "xhigh"})
+        self.assertEqual(set(EFFORT_TEXT), {"low", "medium", "high", "xhigh"})   # xhigh stays: the template's own spelling of high
 
 
 class EngineInventory(unittest.TestCase):
@@ -253,7 +254,7 @@ class Endpoints(unittest.TestCase):
         code, body = self.call("/api/models/config?model=mini")
         self.assertEqual(code, 200)
         self.assertEqual([r["level"] for r in body["efforts"]],
-                         ["none", "low", "medium", "high", "xhigh"])
+                         ["none", "low", "medium", "high"])
         self.assertTrue(all("instruction" in r and "budget" in r for r in body["efforts"]))
 
     def test_fs_lists_a_directory_dirs_first(self):

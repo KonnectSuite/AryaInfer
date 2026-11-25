@@ -283,19 +283,14 @@ template has neither `enable_thinking` nor `reasoning_effort` and the model alwa
 The server now answers per model. `ChatTemplate` records whether the template reads
 `reasoning_effort` (graded, its own wording) and `enable_thinking` (Off possible); `/v1/models`
 and `/api/models` publish the resulting levels; a template that does not read the level gets it as
-an instruction in front of its system turn (`with_effort_instruction`), so the four graded levels
+an instruction in front of its system turn (`with_effort_instruction`), so the three graded levels
 are real requests on every model.
 
 | Model | Levels served | How the level reaches the model |
 | --- | --- | --- |
-| Qwen3.8 IQ3_XXS, abliterated IQ2_XS | off, low, medium, high, xhigh | the model's own template (`medium` = no instruction, `high`/`xhigh` = the careful-think sentence; only the budget tells them apart) |
-| Qwen3.6 Q4 / Q8 / Q2, Ornith | off, low, medium, high, xhigh | Off closes the thinking block; the graded levels are the injected instruction (high and xhigh share its careful-think wording) |
-| Flint 40B-A2.5B | **low, medium, high, xhigh** (no off) | injected instruction; the model always thinks, so Off is not offered |
-
-A model config caps how long each level may think with `reasoning_budget_by_effort` — the five shipped
-configs use `{"low": 2048, "medium": 8192, "high": 16384, "xhigh": 0}` (0 = no cap). `high` and
-`xhigh` send the same careful-think wording and differ only in that cap; a request's own
-`reasoning_budget_tokens` wins over the level.
+| Qwen3.8 IQ3_XXS, abliterated IQ2_XS | off, low, medium, high | the model's own template (`medium` = no instruction, `xhigh` = the careful-think sentence) |
+| Qwen3.6 Q4 / Q8 / Q2, Ornith | off, low, medium, high | Off closes the thinking block; low/medium/high are the injected instruction |
+| Flint 40B-A2.5B | **low, medium, high** (no off) | injected instruction; the model always thinks, so Off is not offered |
 
 Rendered prompts, one SHA-256 each, same conversation and tools (`serve/test_effort_modes.py`
 and the effort matrix cover this):
@@ -336,9 +331,8 @@ How much the model changes its thinking is the model's own behaviour; what the s
 is that the request it sends is the level asked for.
 
 **The wire**, from the adapter's own test (`tests/effort-wire.test.mjs` in the plugin): Off sends
-`enable_thinking: false`; the graded levels send `reasoning_effort: low|medium|xhigh` (`high` and `xhigh`
-both send `xhigh`). A model that cannot stop thinking publishes four levels; an engine that predates the
-field still falls back to five.
+`enable_thinking: false`; low/medium/high send `reasoning_effort: low|medium|xhigh`. A model that
+offers three levels publishes three; an engine that predates the field still falls back to four.
 
 ## 5. Tested and not adopted
 

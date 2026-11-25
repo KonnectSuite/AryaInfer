@@ -13,11 +13,11 @@ from serve.frontend import (ChatTemplate, effort_levels, openai_to_messages, wit
 class Levels(unittest.TestCase):
     def test_a_template_that_reads_enable_thinking_offers_off(self):
         self.assertEqual(effort_levels("{% if enable_thinking is false %}x{% endif %}", True),
-                         ["off", "low", "medium", "high", "xhigh"])
+                         ["off", "low", "medium", "high"])
 
     def test_a_model_that_always_thinks_offers_no_off(self):
         # Flint's template has neither switch: it cannot stop thinking, so Off must not be offered.
-        self.assertEqual(effort_levels("<|im_start|>{{ messages }}", True), ["low", "medium", "high", "xhigh"])
+        self.assertEqual(effort_levels("<|im_start|>{{ messages }}", True), ["low", "medium", "high"])
 
     def test_no_system_turn_means_no_levels(self):
         # A template that cannot render a system role cannot carry the instruction either.
@@ -116,7 +116,7 @@ class Registry(unittest.TestCase):
             efforts = self._efforts(model_id)
             self.assertTrue(efforts, f"{model_id} publishes no levels")
             graded = efforts[1:] if efforts[0] == "off" else efforts
-            self.assertEqual(graded, ["low", "medium", "high", "xhigh"], model_id)
+            self.assertEqual(graded, ["low", "medium", "high"], model_id)
             self.assertIn(efforts[0], ("off", "low"), model_id)
 
     def test_the_models_that_cannot_stop_thinking_offer_no_off(self):
@@ -124,7 +124,7 @@ class Registry(unittest.TestCase):
         if flint is None:
             self.skipTest("Flint is not installed here")
         self.assertNotIn("off", flint)
-        self.assertEqual(self._efforts("qwen3.8-flash-next-iq3_xxs"), ["off", "low", "medium", "high", "xhigh"])
+        self.assertEqual(self._efforts("qwen3.8-flash-next-iq3_xxs"), ["off", "low", "medium", "high"])
 
 
 if __name__ == "__main__":

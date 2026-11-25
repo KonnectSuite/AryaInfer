@@ -138,9 +138,8 @@ def _text_of(content) -> str:
 
 IMAGE_PARTS = ("image_url", "input_image", "image")
 
-# Thinking levels.  The server offers five (off, low, medium, high, xhigh) and a thinking budget can name
-# each one; the model's own template knows low, medium and xhigh (its careful-think wording, which "high"
-# also renders) and enable_thinking=false for off.  Clients spell these many ways; everything maps onto them.
+# Thinking levels.  The model's template knows low, medium and xhigh (its default; "high" means xhigh), and
+# enable_thinking=false for none.  Clients spell these many ways; everything maps onto those four.
 EFFORT = {"none": None, "off": None, "minimal": None, "disabled": None, "false": None,
           "low": "low", "medium": "medium", "high": "xhigh", "xhigh": "xhigh", "max": "xhigh", "maximum": "xhigh"}
 
@@ -153,7 +152,7 @@ def effort_kwargs(value) -> dict:
         return {"enable_thinking": False}
     key = str(value).strip().lower()
     if key not in EFFORT:
-        raise ValueError(f"unknown reasoning effort {value!r}: use none, low, medium, high or xhigh")
+        raise ValueError(f"unknown reasoning effort {value!r}: use none, low, medium or high")
     level = EFFORT[key]
     return {"enable_thinking": False} if level is None else {"reasoning_effort": level}
 
@@ -183,12 +182,11 @@ EFFORT_INSTRUCTION = {
 def effort_levels(source: str, system_ok: bool = True) -> list[str]:
     """The thinking levels a model can honestly offer, from its chat template.
 
-    Off needs a template that reads "enable_thinking" (a model that always thinks cannot turn it off).  The four
+    Off needs a template that reads "enable_thinking" (a model that always thinks cannot turn it off).  The three
     graded levels are always offered: a template that reads "reasoning_effort" carries the instruction itself, and
-    one that does not gets it from with_effort_instruction() - which needs a system turn it can render.  high and
-    xhigh share the careful-think wording; only the thinking budget tells them apart.
+    one that does not gets it from with_effort_instruction() - which needs a system turn it can render.
     """
-    levels = ["low", "medium", "high", "xhigh"] if system_ok else []
+    levels = ["low", "medium", "high"] if system_ok else []
     return (["off"] + levels) if "enable_thinking" in source else levels
 
 
@@ -198,7 +196,7 @@ def with_effort_instruction(messages: list[dict], level: str) -> list[dict]:
     For a template that does not read "reasoning_effort", this is what makes low and high different requests: the
     model is told how much to think.  Off is not this path (enable_thinking closes the thinking block instead).
     """
-    text = EFFORT_INSTRUCTION.get(level) or (EFFORT_INSTRUCTION["xhigh"] if level == "high" else None)
+    text = EFFORT_INSTRUCTION.get(level)
     if not text:
         return messages
     out = list(messages)
