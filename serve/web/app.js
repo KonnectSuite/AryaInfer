@@ -1960,7 +1960,7 @@ function cfgTip({tag, kind, unit, def, range, risk, applicable, base, known}) {
 function fieldShell({id, label, tag, help, unit, base, def, risk, control, extra, tip}) {
   const text = tip || ("Default: " + (def == null || def === "" ? "no documented value" : String(def)));
   return `<div class="cfg-field" data-base="${esc(base == null ? "" : String(base))}" data-def="${esc(def == null ? "" : String(def))}">
-    <div class="cfg-head"><label class="st-label" for="${id}"><span class="cfg-name">${esc(label)}</span><code>${esc(tag)}</code>${extra || ""}</label>
+    <div class="cfg-field__head"><label class="st-label" for="${id}"><span class="cfg-name">${esc(label)}</span><code>${esc(tag)}</code>${extra || ""}</label>
     <span class="cfg-tools"><span class="cfg-pill" data-pill="changed"${risk === "quality" ? ` title="Changes the words the model produces"` : ""} hidden>changed</span><button class="st-btn st-btn--text cfg-reset" type="button" data-reset="${id}">Reset</button><span class="st-tip" tabindex="0" role="note" aria-label="About ${esc(tag)}" data-tip="${esc(text)}">?</span></span></div>
     <div class="cfg-body">${control}${unit ? `<span class="cfg-unit">${esc(unit)}</span>` : ""}</div>
     ${help ? `<p class="cfg-hint">${esc(help)}</p>` : ""}</div>`;
@@ -2074,10 +2074,10 @@ function envSection(advanced) {
   }
   if (!rows) return "";
   const title = advanced ? "More environment" : "Environment";
-  return `<div class="flag-group"><div class="flag-group__title">${esc(title)}</div>
-    <p class="cfg-note">Variables the engine reads at startup, for the settings that have no command-line flag.
+  return foldGroup(advanced ? "env-more" : "env", title,
+    `<p class="cfg-note">Variables the engine reads at startup, for the settings that have no command-line flag.
       Empty means "not set": the engine's own default applies.</p>
-    <div class="cfg-fields">${rows}</div></div>`;
+    <div class="cfg-fields">${rows}</div>`);
 }
 // read every env row back into the file's shape: {NAME: "text"}, an empty value leaving the name out
 function collectEnv() {
@@ -2115,11 +2115,13 @@ function cfgResetField(field) {
   const base = field.dataset.base ?? "";
   const tgl = field.querySelector(".st-toggle");
   // The engine picker is two controls over one value (an installed engine, or a typed path), so put both
-  // back and let the select decide whether the path box shows at all.
+  // back and let the select decide whether the path box shows at all. Match the option the same way the
+  // render does — separators and case can differ between the config file and the engine inventory.
   const sel = field.querySelector(`select[id$="-sel"]`);
   if (sel) {
-    const opt = [...sel.options].find((o) => o.value === base);
-    sel.value = opt ? base : "custom";
+    const norm = (p) => String(p || "").replace(/\\/g, "/").toLowerCase();
+    const opt = [...sel.options].find((o) => norm(o.value) === norm(base));
+    sel.value = opt ? opt.value : "custom";
     const inp = field.querySelector("input.st-input");
     const wrap = field.querySelector(".cfg-path");
     if (inp) inp.value = base;
@@ -2148,15 +2150,124 @@ function cfgResetAll() {
   cfgMarkDirty();
 }
 // A card title carries one Reset for the group, shown only when something in the group differs from the file.
-function cfgCardTitle(cardId, iconName, label) {
-  return `<h3 class="set-card__title">${icon(iconName, "st-icon st-icon--sm")} ${esc(label)}` +
-    `<button class="st-btn st-btn--text cfg-card-reset" type="button" data-card-reset="${esc(cardId)}" hidden>Reset card</button></h3>`;
-}
 function cfgSyncCardResets() {
   document.querySelectorAll("[data-card-reset]").forEach((b) => {
     const card = document.getElementById(b.dataset.cardReset);
     b.hidden = !(card && card.querySelector('.cfg-field[data-changed="true"]'));
   });
+}
+// ---- accordions -------------------------------------------------------------------------------------------
+// Two hundred and eighty fields on one page is a scroll marathon. Every card and every flag group folds to
+// its title, the open/closed choice is remembered per browser, and a fold that holds anything differing from
+// the file says so on its header and opens itself - a preset or an edit can never hide what it changed.
+const FOLD_DEFAULTS = {
+  "cfg-presets": true, "cfg-think": true, "cfg-sampling": true, "cfg-engine": false,
+  "cfg-group-vision": false, "cfg-group-behavior": false, "cfg-group-lifecycle": false,
+  "cfg-group-identity": false, "cfg-advanced": false,
+  "fg-context": true, "fg-drafting": false, "fg-experts": false, "fg-prefill": false,
+  "fg-quality": false, "fg-misc": false, "fg-absent": false, "fg-sampling": false,
+  "fg-env": false, "fg-env-more": false,
+};
+function cfgFoldState(id) {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem("cfg-folds") || "null"); } catch (e) { /* private mode */ }
+  if (saved && typeof saved === "object" && id in saved) return !!saved[id];
+  return FOLD_DEFAULTS[id] !== false;
+}
+function cfgSaveFold(d) {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("cfg-folds") || "{}") || {}; } catch (e) { saved = {}; }
+  saved[d.dataset.fold] = !!d.open;
+  try { localStorage.setItem("cfg-folds", JSON.stringify(saved)); } catch (e) { /* private mode */ }
+}
+function cfgCardReset(cardId) {
+  return `<button class="st-btn st-btn--text cfg-card-reset" type="button" data-card-reset="${esc(cardId)}" hidden>Reset card</button>`;
+}
+// the header of a card fold: icon, name, a count badge, the card's Reset, and the chevron at the end
+function foldHead(iconName, label, extra) {
+  return `<summary class="set-card__title cfg-fold__head">${icon(iconName, "st-icon st-icon--sm")} ${esc(label)}` +
+    `<span class="cfg-fold__count" data-fold-count hidden></span>${extra || ""}` +
+    `${icon("chevron", "st-icon st-icon--sm st-chev")}</summary>`;
+}
+function foldCard(id, iconName, label, body, extra) {
+  return `<details class="cfg-card cfg-fold" id="${esc(id)}" data-fold="${esc(id)}">` +
+    foldHead(iconName, label, extra) + body + `</details>`;
+}
+// the same fold one level down, inside the Engine card: a flag group folded to its small-caps title
+function foldGroup(key, label, body) {
+  return `<details class="flag-group cfg-fold" data-fold="fg-${esc(key)}">` +
+    `<summary class="flag-group__title cfg-fold__head--sm">${esc(label)}` +
+    `<span class="cfg-fold__count" data-fold-count hidden></span>` +
+    `${icon("chevron", "st-icon st-icon--sm st-chev")}</summary>` +
+    `<div class="flag-group__body">${body}</div></details>`;
+}
+// badges and self-opening, recomputed on every edit: "N set" counts what the file holds, "N changed" wins
+function cfgSyncFolds() {
+  for (const d of document.querySelectorAll("#cfg-sections details[data-fold]")) {
+    let set = 0, changed = 0;
+    for (const f of d.querySelectorAll(".cfg-field")) {
+      if ((f.dataset.base || "") !== "") set += 1;
+      if (f.dataset.changed === "true") changed += 1;
+    }
+    for (const row of d.querySelectorAll("[data-env-unknown]")) {
+      const n = row.querySelector("[data-env-name]");
+      if (n && n.value.trim()) set += 1;
+    }
+    const c = d.querySelector("[data-fold-count]");
+    if (c) {
+      c.hidden = set === 0 && changed === 0;
+      c.textContent = changed ? `${changed} changed` : set ? `${set} set` : "";
+      c.classList.toggle("cfg-fold__count--changed", changed > 0);
+    }
+    if (changed && !d.open) d.open = true;
+  }
+}
+function cfgFoldAll(open) {
+  for (const d of document.querySelectorAll("#cfg-sections details[data-fold]")) {
+    d.open = open;
+    cfgSaveFold(d);
+  }
+}
+// one box to find a setting by name, key or hint instead of scrolling for it: non-matching rows hide, folds
+// with a match open, and a card with none leaves the page entirely. Clearing the box restores what was folded.
+function cfgFilter(query) {
+  const q = (query || "").trim().toLowerCase();
+  const rows = document.querySelectorAll("#cfg-sections .cfg-field, #cfg-sections .think-row");
+  if (!q) {
+    for (const r of rows) r.hidden = false;
+    for (const d of document.querySelectorAll("#cfg-sections details[data-fold]")) {
+      d.hidden = false;
+      d.open = cfgFoldState(d.dataset.fold);
+    }
+    cfgSyncFolds();
+  } else {
+    let hits = 0;
+    for (const r of rows) {
+      const m = (r.textContent || "").toLowerCase().includes(q);
+      r.hidden = !m;
+      if (m) hits += 1;
+    }
+    for (const d of document.querySelectorAll("#cfg-sections details[data-fold]")) {
+      const any = d.querySelector(".cfg-field:not([hidden]), .think-row:not([hidden])");
+      d.open = !!any;
+      if (d.classList.contains("cfg-card")) d.hidden = !any;
+    }
+  }
+  const c = document.querySelector("[data-search-count]");
+  if (c) c.textContent = q ? ((() => {
+    const n = document.querySelectorAll("#cfg-sections .cfg-field:not([hidden]), #cfg-sections .think-row:not([hidden])").length;
+    return n ? `${n} match${n === 1 ? "" : "es"}` : "nothing matches";
+  })()) : "";
+}
+function foldToolbar() {
+  return `<div class="cfg-toolbar">
+    <input class="st-input cfg-search" type="search" placeholder="Search settings" aria-label="Search settings"
+      data-cfg-search autocomplete="off">
+    <span class="cfg-search-count" data-search-count></span>
+    <span class="cfg-toolbar__spacer"></span>
+    <button class="st-btn st-btn--text" type="button" data-fold-all="open">Expand all</button>
+    <button class="st-btn st-btn--text" type="button" data-fold-all="close">Collapse all</button>
+  </div>`;
 }
 // A value outside the range the control states is caught here instead of by the server after Save: the field says
 // what is wrong, and Save stays disabled until it is fixed.
@@ -2193,6 +2304,19 @@ function cfgSyncPill(el) {
   const field = cfgFieldOf(el);
   if (!field) return;
   const tgl = field.querySelector(".st-toggle");
+  // the engine picker holds its value across two controls, and the option text may spell the path with
+  // different separators than the file: compare the picked-or-typed path, normalized, not the select value
+  const pick = field.querySelector('select[id$="-sel"]');
+  if (pick) {
+    const inp = field.querySelector(".cfg-path input");
+    const cur = pick.value === "custom" ? (inp ? inp.value : "") : pick.value;
+    const norm = (p) => String(p || "").replace(/\\/g, "/").toLowerCase();
+    const changed = norm(cur) !== norm(field.dataset.base);
+    field.dataset.changed = changed ? "true" : "false";
+    const pill = field.querySelector('[data-pill="changed"]');
+    if (pill) pill.hidden = !changed;
+    return;
+  }
   // the value control, not the slider that drives it: a slider row's range input always holds a number, so
   // reading it would report "changed" for a field that is back at the file's (empty) value.
   const box = field.querySelector('select, input:not([type="range"]), textarea');
@@ -2229,13 +2353,11 @@ function thinkCard() {
   const g = (cfgView.groups || []).find((x) => x.key === "reasoning") || {keys: []};
   const skip = new Set(["reasoning_effort", "reasoning_budget_by_effort"]);
   const rest = (g.keys || []).filter((k) => !skip.has(k.key));
-  return `<section class="cfg-card" id="cfg-think">
-    <h3 class="set-card__title">${icon("thinking", "st-icon st-icon--sm")} Thinking</h3>
+  return foldCard("cfg-think", "thinking", "Thinking", `
     <p class="cfg-note">The level a request uses when it does not ask for one. It picks the instruction sentence below and
       the thinking cap — nothing else: your sampling settings stay exactly as they are. Click a sentence to read it in full.</p>
     <div class="think-rows" role="radiogroup" aria-label="Default thinking level">${auto}${rows}</div>
-    <div class="cfg-fields">${rest.map(cfgFieldHtml).join("")}</div>
-  </section>`;
+    <div class="cfg-fields">${rest.map(cfgFieldHtml).join("")}</div>`);
 }
 // One click from a measured starting point. A chip fills the fields below as unsaved changes, so the
 // Changes list shows exactly what it would write and Save stays the only thing that writes.
@@ -2244,12 +2366,10 @@ function presetCard() {
   if (!ps.length) return "";
   const chips = ps.map((p, i) =>
     `<button type="button" class="chip" data-preset="${i}" title="${esc(p.note || "")}" aria-pressed="false">${esc(p.label)}</button>`).join("");
-  return `<section class="cfg-card" id="cfg-presets">
-    <h3 class="set-card__title">${icon("bolt", "st-icon st-icon--sm")} Quick presets</h3>
+  return foldCard("cfg-presets", "bolt", "Quick presets", `
     <p class="cfg-note">A measured starting point for this engine. A chip fills the fields below as an unsaved change; the Changes list shows exactly what it would write.</p>
     <div class="chips" role="group" aria-label="Engine presets">${chips}</div>
-    <p class="cfg-note" data-preset-note></p>
-  </section>`;
+    <p class="cfg-note" data-preset-note></p>`);
 }
 // Put one value into one field's control, whatever kind it is, and let the page's own listeners notice.
 // Returns false when the field has no control this can write (a readonly row, or one the preset cannot reach).
@@ -2312,14 +2432,12 @@ function samplingCard() {
   const chips = ps.map((p, i) =>
     `<button type="button" class="chip" data-sampling-preset="${i}" title="${esc(p.note || "")}" ` +
     `aria-pressed="${matches(p)}">${esc(p.name)} ${esc(String(Number(p.values["sampling.temperature"])))}</button>`).join("");
-  return `<section class="cfg-card" id="cfg-sampling">
-    ${cfgCardTitle("cfg-sampling", "gauge", g.label)}
+  return foldCard("cfg-sampling", "gauge", g.label, `
     <p class="cfg-note">Defaults for every request; the chat drawer and API calls override them per request.
       A chip sets every sampler below, not only the temperature.</p>
     <div class="chips" role="group" aria-label="Sampling presets">${chips}</div>
     <p class="cfg-note" id="cfg-sampling-note"></p>
-    <div class="cfg-fields">${(g.keys || []).map(cfgFieldHtml).join("")}</div>
-  </section>`;
+    <div class="cfg-fields">${(g.keys || []).map(cfgFieldHtml).join("")}</div>`, cfgCardReset("cfg-sampling"));
 }
 function cfgApplySampling(i) {
   const p = samplingPresets()[i];
@@ -2374,41 +2492,38 @@ function engineCard() {
   const fgroups = args && args.flag_groups && args.flag_groups.length ? args.flag_groups
     : (args && args.flags ? [{key: "flags", label: "Engine flags", flags: args.flags}] : []);   // older server: no groups, render flat
   const groups = fgroups.map((fg) =>
-    `<div class="flag-group"><div class="flag-group__title">${esc(fg.label)}</div>` +
-    (fg.flags || []).map((f) => flagFieldHtml(f, args.key)).join("") + `</div>`).join("");
-  return `<section class="cfg-card" id="cfg-engine">
-    ${cfgCardTitle("cfg-engine", "cpu", g.label)}
+    foldGroup(fg.key, fg.label, (fg.flags || []).map((f) => flagFieldHtml(f, args.key)).join(""))).join("");
+  return foldCard("cfg-engine", "cpu", g.label, `
     ${byKey.exe ? exeFieldHtml(byKey.exe) : ""}
     ${args ? `<div class="cfg-args-head" data-key="args"><span class="cfg-name">Engine flags</span></div>${groups}` : ""}
     ${envSection(false)}
-    <div class="cfg-fields">${rest.map(cfgFieldHtml).join("")}</div>
-  </section>`;
+    <div class="cfg-fields">${rest.map(cfgFieldHtml).join("")}</div>`, cfgCardReset("cfg-engine"));
 }
 function groupCard(key, iconName, note) {
   const g = (cfgView.groups || []).find((x) => x.key === key);
   if (!g || !(g.keys || []).length) return "";
   const id = `cfg-group-${key}`;
-  return `<section class="cfg-card" id="${esc(id)}">
-    ${cfgCardTitle(id, iconName, g.label)}
+  return foldCard(id, iconName, g.label, `
     ${note ? `<p class="cfg-note">${note}</p>` : ""}
-    <div class="cfg-fields">${g.keys.map(cfgFieldHtml).join("")}</div>
-  </section>`;
+    <div class="cfg-fields">${g.keys.map(cfgFieldHtml).join("")}</div>`, cfgCardReset(id));
 }
 function advancedCard() {
   const g = (cfgView.groups || []).find((x) => x.key === "engine") || {keys: []};
   const byKey = Object.fromEntries((g.keys || []).map((k) => [k.key, k]));
   const fields = ["cwd", "lib_dirs"].map((n) => byKey[n]).filter(Boolean).map(cfgFieldHtml).join("");
   const other = byKey.args && (byKey.args.other || []).length
-    ? `<div class="cfg-field"><div class="cfg-head"><span class="st-label"><span class="cfg-name">Other arguments</span><code>args</code></span>` +
+    ? `<div class="cfg-field"><div class="cfg-field__head"><span class="st-label"><span class="cfg-name">Other arguments</span><code>args</code></span>` +
       `<span class="cfg-tools"><span class="st-tip" tabindex="0" role="note" aria-label="About other arguments" ` +
       `data-tip="Flags this editor has no row for. They are passed to the engine unchanged; edit them in the file.">?</span></span></div>` +
       `<div class="other-args">${byKey.args.other.map((o) => `<code>${esc(o)}</code>`).join(" ")}</div>` +
       `<p class="cfg-hint">Arguments this editor does not know; they pass through unchanged. Edit them in the file.</p></div>` : "";
-  return `<details class="st-collapse" id="cfg-advanced">
-    <summary>Advanced${icon("chevron", "st-icon st-icon--sm st-chev")}</summary>
+  return `<details class="st-collapse cfg-fold cfg-card" id="cfg-advanced" data-fold="cfg-advanced">
+    <summary class="cfg-fold__head--sm">${icon("settings", "st-icon st-icon--sm")} Advanced` +
+    `<span class="cfg-fold__count" data-fold-count hidden></span>` +
+    `${icon("chevron", "st-icon st-icon--sm st-chev")}</summary>
     <div class="st-collapse__body"><div class="cfg-fields">${fields}${other}</div>
       ${envSection(true)}
-      <div class="cfg-fields"><div class="cfg-field"><div class="cfg-head"><label class="st-label" for="config-raw"><span class="cfg-name">Raw run config</span><code>${esc(cfgView.file || "")}</code></label><span class="cfg-tools"><span class="st-tip" tabindex="0" role="note" aria-label="About the raw config" data-tip="Read-only view of the file on disk. Every edit above is checked by the server before it is written, and the earlier file is kept as .bak.">?</span></span></div>
+      <div class="cfg-fields"><div class="cfg-field"><div class="cfg-field__head"><label class="st-label" for="config-raw"><span class="cfg-name">Raw run config</span><code>${esc(cfgView.file || "")}</code></label><span class="cfg-tools"><span class="st-tip" tabindex="0" role="note" aria-label="About the raw config" data-tip="Read-only view of the file on disk. Every edit above is checked by the server before it is written, and the earlier file is kept as .bak.">?</span></span></div>
       <textarea class="st-input" id="config-raw" rows="14" readonly spellcheck="false">${esc(cfgView.raw || "")}</textarea>
       <p class="cfg-hint">The file as stored. Every edit above is checked by the server before it is written, and the
         earlier file is kept as <code>.bak</code>.</p></div></div>
@@ -2436,9 +2551,13 @@ function renderRail() {
     </button>`).join("");
 }
 function renderSections() {
-  $("cfg-sections").innerHTML = presetCard() + thinkCard() + samplingCard() + engineCard() +
+  $("cfg-sections").innerHTML = foldToolbar() + presetCard() + thinkCard() + samplingCard() + engineCard() +
     groupCard("vision", "image", "The external encoder for picture inputs; empty when the model has no vision.") +
     groupCard("behavior", "bolt") + groupCard("lifecycle", "clock") + groupCard("identity", "cube") + advancedCard();
+  for (const d of document.querySelectorAll("#cfg-sections details[data-fold]")) {
+    d.open = cfgFoldState(d.dataset.fold);
+    d.addEventListener("toggle", () => cfgSaveFold(d));
+  }
   cfgApplyAdvanced();
   cfgMarkDirty();
 }
@@ -2666,6 +2785,7 @@ function cfgMarkDirty() {
   const rail = $("cfg-reset-all");
   if (rail) rail.disabled = !keys.length;
   cfgSyncCardResets();
+  cfgSyncFolds();                    // fold badges follow the same truth the Save button reads
   cfgApplyAdvanced();                 // a changed advanced field shows itself even while the rest stay tucked away
 }
 async function cfgSave() {
@@ -2698,8 +2818,10 @@ async function cfgSave() {
 
 // ---- delegated editing on the sections container ------------------------------------------------------------
 $("cfg-sections").addEventListener("click", (e) => {
+  const fa = e.target.closest("[data-fold-all]");
+  if (fa) { cfgFoldAll(fa.dataset.foldAll === "open"); return; }
   const cardRst = e.target.closest("[data-card-reset]");
-  if (cardRst) { cfgResetCard(cardRst.dataset.cardReset); return; }
+  if (cardRst) { e.preventDefault(); cfgResetCard(cardRst.dataset.cardReset); return; }
   const rst = e.target.closest("[data-reset]");
   if (rst) {
     cfgResetField(rst.closest(".cfg-field"));
@@ -2755,6 +2877,7 @@ $("cfg-sections").addEventListener("click", (e) => {
 });
 $("cfg-sections").addEventListener("input", (e) => {
   const t = e.target;
+  if (t.matches("[data-cfg-search]")) { cfgFilter(t.value); return; }   // the search box filters, it edits nothing
   if (t.type === "range") {
     const base = t.id.replace(/-r$/, "");
     const n = $(base);
