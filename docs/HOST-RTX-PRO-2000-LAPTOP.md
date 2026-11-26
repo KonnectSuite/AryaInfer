@@ -806,6 +806,17 @@ flags already in the run config. That is left alone on purpose: the panel's flag
 tables are per engine family, and a family it does not know is safer read-only than
 half-editable.
 
+That file did get replaced. On 2026-11-26 at 16:04 the plugin updated in place to
+0.24.4 and its list came back as a plain array (`const ENGINE_IMAGES = [` at
+`lib/index.js:2135`, four names, `strata-inkling.exe` and `basalt.exe` gone), so the
+lane read as foreign again — the second time an update has undone the patch. The two
+names were put back (backup `index.js.bak-2026-11-26b`) and the replay script
+(`local-data\check-engine-images.mjs`, which now reads either the array or the old
+`Set` form) reports `engine found=true loaded=true -> running` against a live
+`basalt.exe`. The plugin's code is loaded into the running app, so the patch takes
+effect on the next AryaCode restart, and the next plugin update will drop it again:
+this wants an upstream change, not a fourth local edit.
+
 ## What was not measured here
 
 - The Strata-native engine beyond `--version`: with the Coder removed there is no
