@@ -79,6 +79,37 @@ def _gguf(path: Path) -> dict:
     return out
 
 
+def _basalt(path: Path) -> dict:
+    """What a Basalt `.basalt` says of itself: the container's own sections, read once per file as it is now.
+
+    The file carries the GGUF metadata it was converted from (`meta`), so the architecture, the trained context
+    and the expert count come from them, and the tokenizer rides inside so a pack directory is never needed.
+    """
+    st = path.stat()
+    key = (str(path), st.st_size, st.st_mtime_ns)
+    if key in _seen:
+        return _seen[key]
+    from basalt_model import summary
+    s = summary(path)
+    out = {
+        "backend": BACKENDS.get(s["arch"], s["arch"] or "unknown"),
+        "runnable": s["arch"] in BACKENDS,
+        "display_name": s["name"],
+        "size_label": s["size_label"],
+        "context_trained": s["context"],
+        "layers": s["block_count"],
+        "experts": s["expert_count"],
+        # the draft head is a section of the file (`mtp/dense`), which is what --suffix-draft draws on
+        "mtp": bool(s["mtp"]),
+        "vision": bool(s["vision"]),
+        "dense_bytes": s["dense_bytes"], "expert_bytes": s["expert_bytes"],
+        "parts": 1, "file_bytes": st.st_size,
+        "types": {},
+    }
+    _seen[key] = out
+    return out
+
+
 def _params(label) -> tuple[str | None, str | None]:
     """("35B", "3B") from a size label like "35B-A3B": all the parameters, and the ones a token uses."""
     m = re.match(r"^(\d+(?:\.\d+)?[BMK])(?:-A(\d+(?:\.\d+)?[BMK]))?", str(label or ""), re.I)
@@ -188,6 +219,28 @@ def describe(config: Path) -> dict | None:
                                     "all": round((dense + experts) / 1e9 + 1.0, 1)}
                 if not g["runnable"]:
                     e["status"], e["problem"] = "unavailable", f"no engine here runs a '{g['backend']}' model"
+    elif path is not None and path.suffix == ".basalt":
+        # Basalt's own container: one file with the weights, the tokenizer, the draft head and the vision shard in it
+        if not path.exists():
+            e["status"], e["problem"] = "unavailable", f"the model file is missing ({path})"
+        else:
+            try:
+                b = _basalt(path)
+            except (OSError, ValueError, KeyError) as err:
+                e["status"], e["problem"] = "unavailable", f"the model file cannot be read ({err})"
+            else:
+                e["backend"] = b["backend"]
+                e["display_name"] = b["display_name"]
+                e["params_total"], e["params_active"] = _params(b["size_label"])
+                e["quantization"] = _quant(path.name, b["types"])
+                e["mtp"] = (e["mtp"] or b["mtp"]) and "--no-draft" not in args
+                # the engine keeps the experts in RAM (--resident-experts) and the dense weights on the card
+                dense, experts = b["dense_bytes"], b["expert_bytes"]
+                e["ram_gb"] = round((dense + experts) / 1e9, 1)
+                e["vram_gb"] = {"least": round(dense / 1e9 + 1.0, 1),
+                                "all": round((dense + experts) / 1e9 + 1.0, 1)}
+                if not b["runnable"]:
+                    e["status"], e["problem"] = "unavailable", f"no engine here runs a '{b['backend']}' model"
     elif path is not None:
         # a pack directory or a .strata file: the engine's own artifact, so the config's "arch" says its family
         if not path.exists():

@@ -1,0 +1,25 @@
+Engine log for this record, copied from strata-basalt-qwen38-ud-iq1_s.log (the server's log for this run config).
+Lines are verbatim and hand-picked: the first load, one short chat request, and two 16K prompt requests.
+The decode expert cache hit rate is low here on purpose - 998 of 3,072 experts fit in VRAM on an 8 GB card, so most expert work is CPU-side by design.
+
+[strata] 2026-11-26 13:11:36 engine started: C:\Users\kphung\Documents\deepseek-harness\default-workspace\basalt-src\basalt-main\bin\basalt.exe --serve --model C:\Users\kphung\Documents\deepseek-harness\default-workspace\basalt-src\basalt-main\models\Qwen3.8-FN-UD-IQ1_S.basalt --gpu 0 --max-context 131072 --kv q4_0 --resident-experts --suffix-draft 3 --vram-reserve-mib 320 --ram-reserve-mib 4096
+basalt: system: Windows, CUDA driver 13.2 / runtime 13.2
+basalt: gpus: RTX PRO 2000 Blackwell Generation Laptop GPU (nvidia-smi 0)
+basalt mtp: draft layer loaded, 766 MiB of VRAM (experts 675, dense 73), files read in 0.02 s (34217 MiB/s)
+basalt generate: expert cache auto: 1.86 GiB free, 352 MiB reserved (320 asked, raised to hold 96 MiB that loads into it and the 256 MiB floor) (+39 MiB for the draft head, +208 MiB for what loads after) -> 903 slots
+basalt generate: elastic KV: 32768 cells backed per session, the other 0.84 GiB of KV are the expert cache's last 659 slots until a request needs them
+basalt generate: expert cache 998 slots, 1.27 GiB of VRAM; policy is
+basalt generate: R4 hit path ON - resident experts are computed on the GPU
+basalt: FileExpertSource: allocating 31.61 GiB page-locked cache complement
+basalt: FileExpertSource: 384 free places for the adaptive swaps (3 blob sizes, 498 MiB)
+basalt: FileExpertSource: cache complement: allocation 8.6 s, registration 0.0 s, 33.40 GB read in the start's pass (unbuffered)
+--- one short chat request ---
+basalt serve: prompt 62 tokens = 0 reused + 62 read in 711 ms (87.2 tok/s), 34 generated in 651 ms (52.2 tok/s), drafts accepted 25 of 32, 1 checkpoints
+basalt serve: decode expert cache hit rate: 23.9% (5624 hits / 23520 lookups)
+basalt serve: expert tiers: GPU 5624 hits this request; since the start RAM 27139 blobs, files 0 blobs 0.0 MB read
+basalt serve: decode expert cache hit rate: 23.9% (14941 hits / 62400 lookups)
+--- a 16K prompt request ---
+basalt serve: prompt 16782 tokens = 0 reused + 16782 read in 15494 ms (1083.1 tok/s), 24 generated in 498 ms (48.2 tok/s), drafts accepted 19 of 25, 1 checkpoints
+basalt serve: prompt 16782 tokens = 0 reused + 16782 read in 15672 ms (1070.8 tok/s), 24 generated in 394 ms (61.0 tok/s), drafts accepted 15 of 18, 1 checkpoints
+basalt serve: adaptive swaps: 271 into the VRAM tier this request, 0 deferred (no free RAM place)
+basalt serve: suffix drafts: 2 windows, 10 of 10 drafts accepted

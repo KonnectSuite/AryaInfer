@@ -796,6 +796,14 @@ def ninfer_engine(cfg: dict) -> bool:
     return Path(str(cfg.get("exe") or "")).stem.lower() in ("arya-ninfer", "ninfer-engine")
 
 
+def basalt_engine(cfg: dict) -> bool:
+    """Basalt (jesdga95/basalt, a Strata fork the user builds themselves): the same line protocol and the same
+    READY/DONE shape, but no SAVE/RESTORE - its conversation cache answers CONV, never a session file.  Its model
+    files are .basalt containers, which serve/models.py reads; the engine keeps no BUILD.json, so the version it
+    reports comes from its own INFO line (`engine=0.5.7`)."""
+    return Path(str(cfg.get("exe") or "")).stem.lower() == "basalt"
+
+
 def conversation_slots(engine) -> int | None:
     """How many conversations the engine's cache holds: its --conversation-cache-slots argument, which is known
     before the engine has started (a lazy start has reported no INFO line yet), else the INFO line it reported."""
@@ -878,9 +886,9 @@ class StrataEngine:
 
     @property
     def disk_sessions(self) -> bool:
-        """SAVE / RESTORE: the Strata project's engine has them; strata-poly, aryainfer and AryaNInfer do not."""
+        """SAVE / RESTORE: the Strata project's engine has them; strata-poly, aryainfer, AryaNInfer and Basalt do not."""
         return Path(str(self.spawn[0])).stem.lower() not in ("strata-poly", "strata-glm", "aryainfer", "arya-ninfer",
-                                                             "ninfer-engine")
+                                                             "ninfer-engine", "basalt")
 
     def __init__(self, exe: str, args: list[str], cwd: str | None = None, log: str | None = None,
                  env: dict | None = None, lazy: bool = False, cpus: list[int] | None = None, _attempt: int = 0):

@@ -163,6 +163,8 @@ class EngineCatalog(unittest.TestCase):
             "engine-ninfer/arya-ninfer.exe": "ninfer",
             "ninfer-engine.exe": "ninfer",
             "arya-ada.exe": "strata",
+            "C:\\basalt\\bin\\basalt.exe": "basalt",
+            "basalt.exe": "basalt",
             "something-else.exe": "other",
             "": "other",
             None: "other",
@@ -207,6 +209,15 @@ class EngineCatalog(unittest.TestCase):
         self.assertIn("--vram-experts-gb", inkling["experts"])
         poly = self.groups(configschema.view(self.cfg("strata-poly.exe"), "a.json"))
         self.assertEqual(sorted(poly["quality"]), ["--cache-bias", "--skip-weight", "--tail-skip"])
+
+    def test_the_basalt_lane_keeps_the_flags_basalt_takes(self):
+        view = configschema.view(self.cfg("basalt.exe"), "a.json")
+        self.assertEqual(view["engine"]["family"], "basalt")
+        groups = self.groups(view)
+        self.assertIn("--resident-experts", groups["experts"])
+        self.assertIn("--pack", groups["absent"])             # a Strata container flag, not a basalt one
+        self.assertIn("--kv", self.flags(view))               # and the KV words basalt accepts
+        self.assertEqual(self.flags(view)["--kv"]["choices"], ["fp16", "int8", "q4_0", "k8v4"])
 
     def test_a_flag_is_listed_in_one_group_only(self):
         view = configschema.view(self.cfg("strata.exe"), "a.json")

@@ -626,12 +626,14 @@ with `--suffix-draft 3`. Each large file was opened read/write before deletion t
 prove it was unlocked, and `models\inkling2\Inkling-2-Mini-UD-IQ3_XXS.gguf` went
 with its family even though no run config named it.
 
-Four profiles remain installed, all on `engine-poly\strata-poly.exe`:
+Five profiles remain installed: the four PolyStrata ones on
+`engine-poly\strata-poly.exe` —
 `strata-qwen36-200k.json`, `strata-qwen36-nail-qwen3.6-35b-a3b-ud-q4_k_xl.json`,
 `strata-ornith-apex-i-quality.json` and
 `strata-qwen36-ornith-1.5-35b-a3b-apex-mtp-i-balanced.json`, over 90.9 GiB in
 `models\{nail-qwen3.6-35b-a3b, ornith-APEX-I-QUALITY, ornith-balanced,
-qwen36-UD-Q4_K_M}` and their four pack folders. No file was shared between the
+qwen36-UD-Q4_K_M}` and their four pack folders — plus the Basalt lane in the
+section below. No file was shared between the
 removed families and these four, so nothing kept lost a weight, an mmproj or a
 tokenizer. `serve/models.py:208` lists the picker by globbing `strata-*.json`
 beside the server, so removing the configs is what takes the models out of the
@@ -675,6 +677,71 @@ The request had reused 44,557 of 44,850 prompt tokens and was 137 tokens into a
 dumps (`strata-stall-16660.dmp` 1,796,449 B, `strata-stall-23468.dmp` 1,821,082 B)
 are still beside the server, untracked, if that ever wants filing upstream.
 
+## The Basalt lane: one server for both engines
+
+The engine this machine moved to, Basalt, has its own server. Running it beside
+AryaInfer meant two servers to start and stop by hand and two places to look for
+a model, which is the complaint that started this lane: AryaInfer should start
+Basalt and switch to it like it starts and switches to `strata-poly`.
+
+It does now, because Basalt is a Strata fork and `basalt.exe --serve` speaks the
+same line protocol. Four pieces make that a lane rather than a second program:
+
+| Piece | What it does |
+| --- | --- |
+| `tools/basalt_model.py` | reads the `.basalt` container: header, section table, metadata, and the five tokenizer files, which the server needs on disk |
+| `tools/basalt_import.py` | turns a `.basalt` file into the `strata-*.json` run config the roster is built from |
+| `serve/models.py` (`_basalt`) | the roster row: `qwen4exp` backend, display name, `UD-IQ1_S` quant from the file name, 131,072 context from the config, draft head, RAM and VRAM estimates, and a reason when a file, tokenizer or engine is missing |
+| `serve/server.py` (`basalt_engine`) | classifies the process: same protocol, no `SAVE`/`RESTORE`, no `BUILD.json`, so the version comes from the engine's own `INFO engine=0.5.7` |
+
+The model is Basalt's own 70.4 GB container, `--max-context 131072`, `--kv q4_0`,
+`--resident-experts`, `--vram-reserve-mib 320`, sampling 0.6 / 0.95 / 20 from the
+user's Basalt config. Its run config is `strata-basalt-qwen38-ud-iq1_s.json` beside
+the server, its tokenizer is `PolyStrata-data\packs\basalt-qwen38-ud-iq1_s\tokenizer`,
+and the lane listens on port 8081 because basalt's own server keeps 8080.
+
+Measured through `serve/server.py` with `tools/strata_bench.py`, 3 runs, medians:
+
+| Test | Result |
+| --- | ---: |
+| Short chat decode | 55.9 tok/s (52.3-69.2, n=9), first token 0.51 s |
+| 4K prompt, fresh | 1,218.2 tok/s prompt, first token 3.37 s |
+| 16K prompt, fresh | 1,211.3 tok/s prompt, first token 13.36 s |
+| Agent follow-up turns | 45.5 tok/s decode, first token 3.80 s, 69.3% cache hit |
+| Load | 24.8 s to `READY`; 365 MiB VRAM free afterwards on an 8 GB card |
+
+The same prompts sent straight to Basalt's own server the same day: 4K prompt
+1,071 and 1,059 tok/s against 1,059 and 1,059 here, 16K 1,066 and 1,059 against
+1,076 and 1,063, decode 47-67 tok/s on both. The engine binary is the same one in
+both cases, so the difference being measured is the server in between: none.
+
+One server switches both ways: Basalt UD → `ornith-1.5-35b-a3b-apex-i-quality`
+11.97 s and its next chat answered in 5.09 s; that → Basalt UD 27.44 s and its next
+chat answered in 1.41 s. Chat, thinking, forced tool calls and `/api/models` behave
+as they do on the GGUF lanes. An image request answers 400 in 0.02 s instead of
+hanging, because this lane runs without an encoder.
+
+`Qwen3.8-FN-Coder-IQ1_M.basalt` does not run here: on its first prompt the engine's
+verification window times out and the engine ends itself. Seven configurations of
+the same container were tried — `--kv q4_0` (layers 2 and 33), `--vram-reserve-mib
+700` (36), no `--resident-experts` (9), `--kv k8v4` (21), `--max-context 8192` (6),
+`--pool-workers 4` (1) — driven by AryaInfer's own engine class with no HTTP server
+in the path, so the port is not the cause. The layer wanders, the prompt is the
+trigger, and the UD container with the identical flags answers in 1.25 s. Its run
+config is parked in `configs-unused\` so the picker does not offer a model that
+always fails. The log line, verbatim:
+
+```text
+basalt serve: error: verify: timed out at layer 33; device plan: ring 33 published (entries: VRAM 1, peer 0, CPU 9), host flag 33; its GPU waits were released but the GPU did not finish within 5 s
+basalt serve: error: the GPU did not finish a released window: ending without the CUDA teardown
+```
+
+Images are off in this lane by design: the containers carry a 0.91 GB `vision/mmproj`
+and the engine can encode in-process, but this server has no path that hands an image
+to an engine's own encoder, so reserving that memory would buy nothing the page can
+reach. [BASALT.md](BASALT.md) has the reader, the importer and the credentials;
+nothing of Basalt is vendored, shipped or pinned here.
+
 ## What was not measured here
 
 - The Strata-native engine beyond `--version`: with the Coder removed there is no
@@ -690,7 +757,7 @@ are still beside the server, untracked, if that ever wants filing upstream.
 
 ## Bench records this host keeps in the repo
 
-Five folders under `bench/results/` carry this machine's measurements, each with its
+Six folders under `bench/results/` carry this machine's measurements, each with its
 raw rows and its harness so the run can be repeated:
 
 | Folder | What it holds |
@@ -700,6 +767,7 @@ raw rows and its harness so the run can be repeated:
 | `2026-11-20-community-rtx-pro-2000-blackwell-generat-qwen3-6-35b-a3b-ud-q4-k-m-poly-engine` | the two `strata-poly` builds, warm and after 120 s idle, with every arm's engine log: no decode difference, 1,788 experts resident against 1,684 |
 | `2026-11-25-community-rtx-pro-2000-blackwell-generat-qwen3-8-flash-next-coder-iq1-m` and `-2` | the same-day Coder comparison of `strata.exe` 0.1.63 against 0.1.67 |
 | `2026-11-25-community-rtx-pro-2000-blackwell-generat-inkling-2-mini-sq-10` | the native Inkling lane: prefill and decode at 2,048 / 8,192 / 32,768 with drafting on and off, the load telemetry, and the chat, picture and tool-call checks |
+| `2026-11-26-community-rtx-pro-2000-blackwell-generat-basalt-qwen38-ud-iq1-s` | the Basalt lane through `serve/server.py`: the `strata_bench.py` suite plus the same prompts against Basalt's own server, and the engine log
 
 The harnesses are inside those folders as `harness.py`. `tune_kv_ab.jsonl` and the
 2026-11-20 logs came from `C:\Users\kphung\AryaCode\KonnectSuite\tune_ab2.py`,

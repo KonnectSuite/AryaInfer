@@ -382,6 +382,7 @@ ENGINE_FLAGS: dict[str, tuple] = {
 # name; "other" (an engine this page does not know) keeps the whole union, because a wrong guess must
 # never hide a knob that is in the file.
 _EXE_FAMILY: tuple[tuple[str, str], ...] = (
+    ("basalt", "basalt"),
     ("strata-inkling", "inkling"),
     ("inkling", "inkling"),
     ("strata-poly", "poly"),
@@ -412,6 +413,31 @@ def engine_family(exe) -> str:
 # omits flags that still work, so EXTRA_ACCEPTED adds back the ones a recorded run on this host used;
 # a flag outside both sets is only ever moved to one collapsed group, never dropped.
 ENGINE_FLAGS_OF: dict[str, frozenset] = {
+    # basalt (basalt.exe) from its own --help, which it prints on stderr and then exits 1: 107 long options on
+    # 0.5.7. It is a Strata fork, so the vocabulary is Strata's, but the set is not: no --pack/--native, and
+    # --vision is the in-engine encoder with --vision-external as the sidecar.
+    "basalt": frozenset({
+        "--adapt-decay", "--adapt-every", "--adapt-swaps", "--batch", "--config", "--control-vector",
+        "--control-vector-layer-range", "--control-vector-scaled", "--conversation-cache-dir",
+        "--conversation-cache-disk-mib", "--conversation-cache-mib", "--conversation-cache-min-free-mib",
+        "--conversation-cache-min-tokens", "--conversation-cache-slots", "--cvec-dir", "--cvec-mode",
+        "--decode-timing", "--draft-experts", "--draft-log", "--dump-mixed", "--dump-residual", "--dump-routing",
+        "--eos-ids", "--exp", "--expert-cache", "--expert-profile", "--expert-profile-save",
+        "--expert-profile-save-every", "--force-zero-doorbell", "--gpu", "--gpu-mode", "--gpu-only-full",
+        "--gpu-plan", "--gpu-share", "--gpu-stages", "--grammar", "--graph-only", "--greedy", "--help", "--kv",
+        "--kv-resident", "--max-context", "--max-new", "--mmap-experts", "--model", "--mtp-max-t", "--mtp-window",
+        "--no-capture", "--no-pool", "--no-prompt-skip", "--peer-adapt-swaps", "--peer-exclusive",
+        "--peer-reserve-mib", "--ple-delay-us", "--ple-inflight", "--ple-io", "--ple-row-cache", "--pool-affinity",
+        "--pool-workers", "--ppl-base", "--ppl-out", "--prefill", "--prefill-cpu-share", "--profile",
+        "--prompt-cache", "--prompt-cache-every", "--prompt-cache-root", "--python", "--ram-reserve-mib",
+        "--relaxed-drafting", "--resident-budget-gib", "--resident-cpu-experts", "--resident-experts",
+        "--rope-freq-base", "--rope-freq-scale", "--rope-scale", "--rope-scaling", "--route-prior",
+        "--route-tail-skip", "--seed", "--serve", "--shared-expert-arena", "--short-read", "--slots", "--spec",
+        "--stage-timing", "--stats", "--stop-eos", "--suffix-draft", "--tail-role-token", "--temperature",
+        "--tokens", "--tokens-file", "--top-k", "--top-p", "--turn-token", "--vision", "--vision-external",
+        "--vram-elastic", "--vram-reserve-mib", "--vram-segment-mib", "--wait-stats", "--yarn-attn-factor",
+        "--yarn-beta-fast", "--yarn-beta-slow", "--yarn-ext-factor", "--yarn-orig-ctx",
+    }),
     "strata": frozenset({
         "--adapt-async", "--adapt-every", "--adapt-min-gain", "--adapt-swaps", "--aux-cpus", "--batch",
         "--batch-groups", "--batch-mtp", "--calibrate", "--check-logits", "--control-vector",
@@ -533,7 +559,8 @@ NOT_EDITABLE: dict[str, dict[str, str]] = {
 # Per-flag, per-engine options.  Only where the engine's own --help states the set; everything else
 # stays free text with the suggestions in FLAG_META, so a value the page does not know still saves.
 FLAG_CHOICES: dict[str, dict[str, list]] = {
-    "--kv": {"inkling": ["auto", "fp16", "fp8", "k8v8", "k8v4"],
+    "--kv": {"basalt": ["fp16", "int8", "q4_0", "k8v4"],
+             "inkling": ["auto", "fp16", "fp8", "k8v8", "k8v4"],
              "strata": ["fp16", "int8", "q4_0", "k8v4"]},
     "--kv-offload": {"inkling": ["auto", "on", "off"]},
     "--draft": {"inkling": ["off", "auto", "dspark"], "strata": ["mtp", "dflash2", "auto"]},

@@ -876,6 +876,11 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
   .cfg-field__head > .st-label > output { display: none; }
   .cfg-tools { margin-left: 0; grid-column: 2; }
   .st-tip::after { right: auto; left: 0; }
+  /* A hidden tooltip still counts towards scrollWidth, and on a phone its max-content box made the
+     settings view scroll 178 px sideways into empty space. It is shown on hover or focus only, so it
+     can wait outside layout until then. */
+  .st-tip::after { display: none; }
+  .st-tip:hover::after, .st-tip:focus-visible::after { display: block; }
 }
 .cfg-slider { display: grid; grid-template-columns: minmax(0, 1fr) 104px; gap: 12px; align-items: center; width: 100%; max-width: 560px; }
 .cfg-slider .st-input { width: 104px; max-width: none; }

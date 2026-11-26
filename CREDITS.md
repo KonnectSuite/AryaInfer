@@ -17,7 +17,11 @@ AryaInfer now serves five engine backends from one server: the upstream
 sibling, [PolyStrata](https://github.com/simplexai-labs/PolyStrata)'s
 `strata-poly`, our `aryainfer` build of the same `src/poly` tree with the AQ3
 kernels, and AryaNInfer, a ported NInfer core with our shim
-(`engine-ninfer`). [docs/ENGINES.md](docs/ENGINES.md) describes the split.
+(`engine-ninfer`). A sixth lane, [Basalt](https://github.com/jesdga95/basalt),
+can be pointed at by a run config without being shipped: AryaInfer reads its
+`.basalt` containers and classifies its process, and neither its binary nor its
+source is vendored here ([docs/BASALT.md](docs/BASALT.md)).
+[docs/ENGINES.md](docs/ENGINES.md) describes the split.
 
 The Strata, Strata Inkling and PolyStrata engines are built, released and
 supported upstream: [Strata releases](https://github.com/Niko1221/Strata/releases)
@@ -32,6 +36,14 @@ the core is pinned at commit `2469b57` and keeps its Apache-2.0 license. NInfer
 builds in turn on ideas from [Neroued's ninfer](https://github.com/Neroued/ninfer).
 The renamed build is **AryaNInfer** (`arya-ninfer.exe`, 0.1.0); the core keeps its
 own name and commit so its provenance stays readable.
+
+We credit [jesdga95/basalt](https://github.com/jesdga95/basalt) (MIT) for the
+Basalt engine and its `.basalt` container. Basalt is a fork of Strata, so it
+carries the same debt to Niko1221 and the Strata contributors, plus the Infernix
+kernels (Apache-2.0) and llama.cpp/ggml (MIT) it builds on. AryaInfer ships
+none of it: `tools/basalt_model.py` reads the container's documented header, and
+the run config points at a binary the user builds. The reader was written from
+the format, not copied from Basalt's own code.
 
 We credit [ISTA-DASLab](https://huggingface.co/ISTA-DASLab) for the 3-bit GSQ
 checkpoints this fork runs on the dense 27B path (the
