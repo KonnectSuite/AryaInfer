@@ -742,6 +742,29 @@ to an engine's own encoder, so reserving that memory would buy nothing the page 
 reach. [BASALT.md](BASALT.md) has the reader, the importer and the credentials;
 nothing of Basalt is vendored, shipped or pinned here.
 
+### AryaCode starts this lane now
+
+The point of the lane was one place to start and switch, so AryaCode's own local
+engine row drives it: `configPath` is `strata-basalt-qwen38-ud-iq1_s.json`,
+`logPath` is the matching `.log`, `baseUrl` and `port` are `127.0.0.1:8081`. Basalt's
+own server on 8080 is no longer needed and nothing listens there.
+
+The plugin needs to recognise the process it did not start by name, and its list of
+engine images held only the five shipped binaries. That is the same defect the
+Inkling lane had (see above): a port that answers, a process the scan does not know,
+`phase: foreign`, and a request that is never sent. `basalt.exe` is in
+`ENGINE_IMAGES` in
+`%USERPROFILE%\.aryacode\profiles\desktop\node_modules\@aryacode\dsh-local-llm\lib\index.js`
+now, beside `strata-inkling.exe`, with a backup at `index.js.bak-2026-11-26`; a
+plugin update replaces that file, so the name has to go upstream. The scan then
+reads a running engine as `running` with its own version, measured here as
+`enginePid 37184`, `engineVersion 0.5.7`, `context 131072`.
+
+Its tuning panel still classifies `basalt.exe` as `other`, so it offers only the
+flags already in the run config. That is left alone on purpose: the panel's flag
+tables are per engine family, and a family it does not know is safer read-only than
+half-editable.
+
 ## What was not measured here
 
 - The Strata-native engine beyond `--version`: with the Coder removed there is no
