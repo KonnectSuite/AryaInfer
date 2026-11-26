@@ -44,8 +44,10 @@ own timings back from the log).
 - `*-cool-*`: the same two arms after the card had been idle for 120 s, so a warm
   card does not decide the comparison
 
-Per-request rows: `rows.jsonl`. Engine logs of every arm: `engine-logs\`, and the
-first lines of one warm arm of each build in `engine-log-excerpt.txt`.
+Per-request rows: `rows.jsonl`. The first lines of one warm arm of each build are in
+`engine-log-excerpt.txt`; the full per-arm logs (nine engine logs and nine server
+logs) stayed beside the checkout in `poly-update-2026-11-20\`, since `*.log` is
+gitignored here.
 
 ## Results
 
