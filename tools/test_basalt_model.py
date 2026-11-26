@@ -199,6 +199,33 @@ class Importer(unittest.TestCase):
                          {"temperature": 0.7, "top_p": 0.9, "top_k": 40})
         self.assertEqual(imp.sampling(c.summary(), {})["temperature"], 0.6)   # general.sampling.temp
 
+    def test_the_profile_is_named_so_a_flattened_install_still_finds_it(self):
+        # setup.py --with-basalt puts basalt.exe in engine-basalt\, so the folder above the binary is the
+        # checkout, not the engine's own data/.  Naming the profile file is what makes the lane start there.
+        c = self.container()
+        root = Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(root, ignore_errors=True))
+        exe = root / "engine-basalt" / "basalt.exe"
+        exe.parent.mkdir(parents=True)
+        exe.write_bytes(b"exe")
+        self.assertIsNone(imp.profiles_dir(exe))                    # nothing to name yet
+        profiles = root / "engine-basalt" / "data" / "profiles"
+        profiles.mkdir(parents=True)
+        want = profiles / f"{c.summary()['arch']}-{c.summary()['block_count']}x{c.summary()['expert_count']}.prof"
+        self.assertIsNone(imp.profiles_dir(exe))                    # a folder with no .prof in it is not one
+        want.write_bytes(b"p")
+        self.assertEqual(imp.profiles_dir(exe), profiles)
+        self.assertEqual(imp.profile_for(c, profiles), want)
+        args = imp.build_args(c, engine={}, first={}, gpu=0, max_context=None, kv=None, profile=want)
+        self.assertEqual(args[args.index("--expert-profile") + 1], str(want))
+        # and a bin\ install (data\ beside bin\) is found one level up, as the engine's own error describes
+        other = root / "basalt" / "bin" / "basalt.exe"
+        other.parent.mkdir(parents=True)
+        other.write_bytes(b"exe")
+        (root / "basalt" / "data" / "profiles").mkdir(parents=True)
+        (root / "basalt" / "data" / "profiles" / "x.prof").write_bytes(b"p")
+        self.assertEqual(imp.profiles_dir(other), root / "basalt" / "data" / "profiles")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

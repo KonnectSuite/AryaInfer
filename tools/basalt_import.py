@@ -6,8 +6,10 @@ arguments, a tokenizer directory and a log path.  A Basalt model needs three thi
 1. **Its tokenizer as a directory.**  `.basalt` carries the tokenizer inside (`tokenizer/vocab.json` and
    friends); AryaInfer's server loads a directory, so the sections are written out under
    `<packs>\\<name>\\tokenizer`.
-2. **Its cwd.**  `basalt.exe` resolves `--expert-profile` against `data/profiles` relative to the working
-   directory, so the config's `cwd` is the Basalt source tree the binary lives in.
+2. **Its expert profile.**  `basalt.exe` looks for `data/profiles` above its own binary and refuses to start
+   when the profile for the model's shape is absent.  The config therefore names the profile file with
+   `--expert-profile`, which works whether the install keeps `bin\` or flattens it (as `setup.py --with-basalt`
+   does), and `cwd` is the folder that owns `data\`.
 3. **Its flags.**  `--from-config` copies what the user already runs by hand (`official_config.json`), so the
    imported model behaves exactly like the standalone server did; the file's own sampling is the fallback.
 
@@ -68,8 +70,37 @@ def from_config(path: Path) -> tuple[dict, dict, str | None]:
     return cfg.get("engine") or {}, first, (first.get("model") if isinstance(first, dict) else None)
 
 
+def profiles_dir(exe: Path) -> Path | None:
+    """Where the engine keeps its expert profiles: `data/profiles` above the binary.
+
+    The engine resolves the folder from its own location, not from the working directory ("run the binary
+    from its install folder", its own error says).  Both installs in the wild put `data/` beside `bin/` or
+    beside the binary, so look in both places.
+    """
+    for parent in (exe.parent, exe.parent.parent):
+        cand = parent / "data" / "profiles"
+        if cand.is_dir() and any(cand.glob("*.prof")):
+            return cand
+    return None
+
+
+def profile_for(model: basalt_model.Container, profiles: Path) -> Path | None:
+    """The profile the engine would place for this model: `<arch>-<layers>x<experts>.prof`.
+
+    Naming it explicitly beats relying on the default: a pinned install flattens `bin/`, so the folder above
+    the binary is the checkout and the engine would look in `<checkout>/data/profiles`, not in its own.
+    """
+    s = model.summary()
+    arch, layers, experts = s.get("arch"), s.get("block_count"), s.get("expert_count")
+    if not (arch and layers and experts):
+        return None
+    cand = profiles / f"{arch}-{int(layers)}x{int(experts)}.prof"
+    return cand if cand.is_file() else None
+
+
 def build_args(model: basalt_model.Container, *, engine: dict, first: dict,
-               gpu: int, max_context: int | None, kv: str | None) -> list[str]:
+               gpu: int, max_context: int | None, kv: str | None,
+               profile: Path | None = None) -> list[str]:
     """The engine words, in the order the file's own server passes them."""
     s = model.summary()
     args: list[str] = ["--model", str(model.path), "--gpu", str(gpu)]
@@ -86,6 +117,8 @@ def build_args(model: basalt_model.Container, *, engine: dict, first: dict,
         args += ["--vram-reserve-mib", str(int(engine["vram-reserve-mib"]))]
     if engine.get("ram-reserve-mib") is not None:
         args += ["--ram-reserve-mib", str(int(engine["ram-reserve-mib"]))]
+    if profile is not None:
+        args += ["--expert-profile", str(profile)]
     # Deliberately NOT passed in v1: `--vision` makes the engine load its own image encoder, and AryaInfer
     # cannot send it an image yet (it spawns a separate encoder for a dict vision config, which this lane has
     # none of).  Switching the encoder on would cost VRAM for a feature the server would never use.  The
@@ -140,15 +173,18 @@ def main() -> int:
 
     s = model.summary()
     tokdir = args.packs / name / "tokenizer"
+    profiles = profiles_dir(exe)
+    profile = profile_for(model, profiles) if profiles else None
     wrote: dict[str, int] = {}
     if not args.print_only:
         wrote = model.export_tokenizer(tokdir)
     cfg = {
         "exe": str(exe),
         "args": build_args(model, engine=engine, first=first, gpu=args.gpu,
-                           max_context=args.max_context, kv=args.kv),
-        # the engine looks for data/profiles next to where it is run, and its cache lives under the user's home
-        "cwd": str(exe.parent.parent),
+                           max_context=args.max_context, kv=args.kv, profile=profile),
+        # the engine looks for data/profiles above its own binary; the run config names the profile file as
+        # well, so a flattened install (setup.py --with-basalt puts the binary in engine-basalt\) still finds it
+        "cwd": str(profiles.parent.parent) if profiles else str(exe.parent),
         "tokenizer": str(tokdir),
         "model_name": name,
         "display_name": s["name"] or name,

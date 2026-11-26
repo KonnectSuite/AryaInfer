@@ -26,6 +26,21 @@ nothing is downloaded and the default install is unchanged; the Engines page sho
 The engine itself is the same 0.5.7 either way, so a checkout that already has a `basalt.exe` can skip the download:
 copy it into `engine-basalt\` with a `BUILD.json` saying `{"version": "0.5.7"}` and `manifest_installed()` accepts it.
 
+**The expert profile.** Basalt places experts from a profile it keeps in `data/profiles` *above its own binary*, and it
+refuses to start when the one for the model's shape is absent:
+
+```text
+basalt: error: expert profile ...\AryaInfer/data/profiles/qwen4exp-48x512.prof is missing: data/ must sit
+next to bin/ (the engine reads data/profiles from the directory above its own executable), so run the binary
+from its install folder, or pass --expert-profile
+```
+
+A release archive carries no `data/`, so an install gets one of three ways: copy `data/profiles` from an install that
+has it, let `basalt-bench` build one for the model (its own tool, minutes per shape), or pass the file explicitly.
+`tools/basalt_import.py` does the last: it looks for `data/profiles` above the binary and writes
+`--expert-profile <arch>-<layers>x<experts>.prof` for the container it imported, so the lane starts whether the install
+kept `bin\` or was flattened.
+
 ## What AryaInfer does with it
 
 | Part | File | What it does |
@@ -84,7 +99,10 @@ Facts the importer takes from the file rather than guessing:
 - `--kv q4_0`, the value Basalt accepts for a card this size (its other choices are `fp16`, `int8`, `k8v4`);
 - `--suffix-draft` only when the file carries a draft head (`mtp/`). Basalt drafts from that head even without the
   flag, so the flag is a hint, not a requirement;
-- `cwd` = the folder above `bin\`, because the engine resolves `--expert-profile` against the working directory;
+- `--expert-profile` naming the profile for the file's shape (`<arch>-<layers>x<experts>.prof`, found under
+  `data/profiles` above the binary). The engine would otherwise look for `data/profiles` above *its own* binary and
+  refuse to start; naming the file also survives a flattened install, which is what `--with-basalt` produces;
+- `cwd` = the folder that owns `data\`, so a profile that is not named is still found the default way;
 - `lib_dirs` = the CUDA 13 `bin` folders the binary needs on this host.
 
 Images are off in this lane. The containers carry a vision encoder (`vision/mmproj`, 0.91 GB in both files) and the

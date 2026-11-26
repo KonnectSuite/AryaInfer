@@ -706,18 +706,26 @@ Where its moving parts live now: the engine is `engine-basalt\basalt.exe`
 (167,554,560 B, the pinned 0.5.7 release, installed by
 `setup.py --repair-engines --with-basalt` from
 `basalt-v0.5.7-windows-x64.zip`, 70,553,484 B, sha256 `dfb71d0a…122881`), the six
-expert profiles it reads out of its own working directory in
-`engine-basalt\data\profiles`, and the container in
+expert profiles in `engine-basalt\data\profiles`, and the container in
 `PolyStrata-data\models\Qwen3.8-FN-UD-IQ1_S.basalt`. The checkout the engine used
 to sit in (`...\deepseek-harness\...\basalt-src`) was deleted on 2026-11-26 after
 those three things were moved: 60.04 GiB, `C:` 931.3 → 991.3 GiB free. It also
 held `Qwen3.8-FN-Coder-IQ1_M.basalt` (57.29 GiB), a container that does not run on
-this card, and 2.58 GiB of build objects. The run config's `cwd` is
-`engine-basalt` on purpose: `--expert-profile` defaults to `data/profiles`
-relative to it, and the engine log shows it reading
-`basalt/data/profiles/qwen4exp-48x512.prof` and pre-filling 998 of 998 expert
-slots from it (1,363 MB), with a chat answered in 1.47 s (`relocated lane ready`,
-59 prompt / 33 completion tokens).
+this card, and 2.58 GiB of build objects.
+
+The pinned release reads `data/profiles` from the folder **above its own
+executable**, and `--with-basalt` flattens `bin\`, so that folder is the checkout:
+the first start of the pinned build died with `error: expert profile
+...\AryaInfer/data/profiles/qwen4exp-48x512.prof is missing: data/ must sit next
+to bin/`. The run config therefore names the file —
+`--expert-profile ...\engine-basalt\data\profiles\qwen4exp-48x512.prof` — which
+neither depends on where the binary sits nor on the working directory;
+`tools/basalt_import.py` now writes it for any imported model, picking the file
+by the container's own shape (`<arch>-<layers>x<experts>.prof`). With that flag
+the pinned build loads and answers: engine 0.5.7, `/health` loaded at 131,072
+context, one chat in 3.28 s (`pinned lane ready`, 59 prompt / 33 completion
+tokens). The earlier "relocated lane ready in 1.47 s" was the self-built binary
+in the `bin/`+`data/` layout, whose default lookup already worked.
 
 `engines.json` pins Basalt because its releases carry no `BUILD.json`: the entry
 holds the version (0.5.7), the two assets with their sizes and digests, and a
