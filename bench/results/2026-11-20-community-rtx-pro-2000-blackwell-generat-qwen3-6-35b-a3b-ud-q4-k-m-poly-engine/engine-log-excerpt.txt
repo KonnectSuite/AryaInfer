@@ -1,0 +1,30 @@
+load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+
+strata-vision: model files loaded in 1.1 s
+strata-vision: on the CPU, 8 threads, no warm-up
+[strata] 2026-11-20 23:40:10 engine started: C:\Users\kphung\AryaCode\KonnectSuite\AryaInfer\engine-poly\strata-poly.exe --serve --model C:\Users\kphung\AryaCode\KonnectSuite\PolyStrata-data\models\qwen36-UD-Q4_K_M\Qwen3.6-35B-A3B-UD-Q4_K_M.gguf --max-context 204800 --expert-profile C:\Users\kphung\AryaCode\KonnectSuite\PolyStrata-data\packs\qwen36-ud-q4_k_m\expert-profile.txt --conversation-cache-mib auto --tail-skip 0 --threads 10 --kv q8_0 --prompt-batch 2048 --vram-reserve-mib 512
+strata-poly: q8_0 KV cache: 544 bytes a row
+strata-poly: STRATA_FATTN: prompt attention through llama.cpp's flash-attention kernel (STRATA_FATTN=0 turns it off)
+strata-poly: STRATA_FDEC: decode attention through the tensor-core decode kernel from 4,096 tokens of context (STRATA_FDEC=0 turns it off)
+strata-poly: loaded in 3.1 s; 1788 of 10496 routed experts in VRAM (3.2 GiB), 10 CPU threads
+strata-poly: conversation cache sized from the free RAM: 8192 MiB for up to 4 parked conversations (--conversation-cache-mib N sets it, 0 turns it off)
+strata serve: prompt 15 tokens = 0 reused + 15 read in 468 ms (32.0 tok/s), 8 generated in 168 ms (47.8 tok/s), drafts accepted 6 of 6
+strata serve: prompt 83 tokens = 0 reused + 83 read in 727 ms (114.2 tok/s), 2 generated in 29 ms (68.3 tok/s)
+
+--- the 2026-11-13 engine (arm old-1) ---
+load_hparams: Qwen-VL models require at minimum 1024 image tokens to function correctly on grounding tasks
+load_hparams: if you encounter problems with accuracy, try adding --image-min-tokens 1024
+load_hparams: more info: https://github.com/ggml-org/llama.cpp/issues/16842
+
+strata-vision: model files loaded in 1.1 s
+strata-vision: on the CPU, 8 threads, no warm-up
+[strata] 2026-11-20 23:40:24 engine started: C:\Users\kphung\AryaCode\KonnectSuite\AryaInfer\engine-backup-0.1.59.1\poly\strata-poly.exe --serve --model C:\Users\kphung\AryaCode\KonnectSuite\PolyStrata-data\models\qwen36-UD-Q4_K_M\Qwen3.6-35B-A3B-UD-Q4_K_M.gguf --max-context 204800 --expert-profile C:\Users\kphung\AryaCode\KonnectSuite\PolyStrata-data\packs\qwen36-ud-q4_k_m\expert-profile.txt --conversation-cache-mib auto --tail-skip 0 --threads 10 --kv q8_0 --prompt-batch 2048 --vram-reserve-mib 512
+strata-poly: q8_0 KV cache: 544 bytes a row
+strata-poly: STRATA_FATTN: prompt attention through llama.cpp's flash-attention kernel (STRATA_FATTN=0 turns it off)
+strata-poly: STRATA_FDEC: decode attention through the tensor-core decode kernel from 4,096 tokens of context (STRATA_FDEC=0 turns it off)
+strata-poly: loaded in 3.1 s; 1684 of 10496 routed experts in VRAM (3.0 GiB), 10 CPU threads
+strata-poly: conversation cache sized from the free RAM: 8192 MiB for up to 4 parked conversations (--conversation-cache-mib N sets it, 0 turns it off)
+strata serve: prompt 15 tokens = 0 reused + 15 read in 379 ms (39.5 tok/s), 8 generated in 151 ms (53.0 tok/s), drafts accepted 6 of 6
+strata serve: prompt 83 tokens = 0 reused + 83 read in 525 ms (158.0 tok/s), 2 generated in 24 ms (84.7 tok/s)

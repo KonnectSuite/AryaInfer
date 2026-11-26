@@ -1,0 +1,21 @@
+[strata] 2026-11-25 17:37:35 engine started: C:\Users\kphung\AryaCode\KonnectSuite\AryaInfer\engine-inkling\strata-inkling.exe --serve --native C:\Users\kphung\AryaCode\KonnectSuite\PolyStrata-data\models\inkling-2-strata\Inkling-2-Mini-SQ-10.strata --vision C:\Users\kphung\AryaCode\KonnectSuite\PolyStrata-data\models\inkling-2-strata\Inkling-2-Mini-Vision.strata --max-context 262144 --kv k8v4 --kv-offload auto --draft auto --vram-experts-gb 5.5 --parallel 1
+[InkCUDA] expert codecs (gate_up/down code: count, mean MB): 2/2: 585, 2.18; 3/2: 1814, 2.85; 3/3: 658, 3.18; 15/15: 15, 4.48;
+[InkTier] adaptive expert tier on: 4 classes, pool 3.13 GiB, slots 112 x 2.18 MB (of 585 experts) 268 x 3.18 MB (of 658 experts) 781 x 2.85 MB (of 1814 experts) 8 x 4.48 MB (of 15 experts); a round every 4 tokens, 16 swaps
+[InkHybrid] host expert arena 8.60 GB pinned (within min(16 GiB, 35% of the available RAM); available RAM 49.3 GB): the card reads the cold experts itself
+[InkCUDA] Loaded C:\Users\kphung\AryaCode\KonnectSuite\PolyStrata-data\models\inkling-2-strata\Inkling-2-Mini-SQ-10.strata (SQ-10): trunk=1.87 GB (0.46s), experts=1169 VRAM / 1903 host (3.15s, hyb=1, promo=0, pf_buf=64MB), sm120_tc=1, screen=0
+[InkCUDA] prefill chunk 512 (auto: 1881 MiB free after the experts, 3175 MiB of K/V still to grow, 1 slot(s); --chunk N sets it)
+[InkCUDA] Auto Host KV Offload (kv_fmt=3, 1.54 GiB free VRAM): global KV = 10496 VRAM + 251648 mapped host tokens (3071.9 MiB host RAM, max_ctx=262144)
+[InkCUDA] memory: 1881 MiB free after load, runner+KV took 1272 MiB (max_batch=512), DSpark took 76 MiB, 533 MiB free now
+[InkHybrid] cold experts: launch probe (18 decode steps each): CPU lane 23.2 ms/token, copy into the card 30.3 ms/token -> computed on the CPU where they are (the answer can differ from an all-resident run in rounding) (STRATA_INK_EXACT=1 or 0 forces a lane)
+
+--- the shipped --draft off config, started 19:11:38 ---
+[strata] 2026-11-25 19:11:38 engine started: C:\Users\kphung\AryaCode\KonnectSuite\AryaInfer\engine-inkling\strata-inkling.exe --serve --native C:\Users\kphung\AryaCode\KonnectSuite\PolyStrata-data\models\inkling-2-strata\Inkling-2-Mini-SQ-10.strata --vision C:\Users\kphung\AryaCode\KonnectSuite\PolyStrata-data\models\inkling-2-strata\Inkling-2-Mini-Vision.strata --max-context 262144 --kv k8v4 --kv-offload auto --draft off --vram-experts-gb 5.5 --parallel 1
+[InkCUDA] expert codecs (gate_up/down code: count, mean MB): 2/2: 585, 2.18; 3/2: 1814, 2.85; 3/3: 658, 3.18; 15/15: 15, 4.48;
+[InkTier] adaptive expert tier on: 4 classes, pool 3.13 GiB, slots 112 x 2.18 MB (of 585 experts) 268 x 3.18 MB (of 658 experts) 781 x 2.85 MB (of 1814 experts) 8 x 4.48 MB (of 15 experts); a round every 4 tokens, 16 swaps
+[InkHybrid] host expert arena 8.60 GB pinned (within min(16 GiB, 35% of the available RAM); available RAM 51.4 GB): the card reads the cold experts itself
+[InkCUDA] Loaded C:\Users\kphung\AryaCode\KonnectSuite\PolyStrata-data\models\inkling-2-strata\Inkling-2-Mini-SQ-10.strata (SQ-10): trunk=1.87 GB (0.74s), experts=1169 VRAM / 1903 host (3.99s, hyb=1, promo=0, pf_buf=64MB), sm120_tc=1, screen=0
+[InkCUDA] prefill chunk 512 (auto: 1881 MiB free after the experts, 3175 MiB of K/V still to grow, 1 slot(s); --chunk N sets it)
+[InkCUDA] Auto Host KV Offload (kv_fmt=3, 1.54 GiB free VRAM): global KV = 10496 VRAM + 251648 mapped host tokens (3071.9 MiB host RAM, max_ctx=262144)
+[InkCUDA] memory: 1881 MiB free after load, runner+KV took 1272 MiB (max_batch=512), DSpark took 0 MiB, 609 MiB free now
+[InkHybrid] cold experts: launch probe (18 decode steps each): CPU lane 23.5 ms/token, copy into the card 31.0 ms/token -> computed on the CPU where they are (the answer can differ from an all-resident run in rounding) (STRATA_INK_EXACT=1 or 0 forces a lane)
+[InkTier] 2024 rounds, 25949 swaps

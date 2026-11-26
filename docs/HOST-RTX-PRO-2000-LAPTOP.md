@@ -602,11 +602,26 @@ the upstream package, since a plugin update overwrites this edit.
 - Anything about 0.1.59.1 on the hardware in `docs/ARYAINFER.md`, where the
   inherited numbers were measured.
 
-The harness used for the tables above is `tune_ab2.py` next to this checkout's
-parent folder (`C:\Users\kphung\AryaCode\KonnectSuite\tune_ab2.py`): one server per
-arm, a warm-up, prefill and two decodes per context size, `nvidia-smi` sampled
-four times a second, and the engine's own cache-hit and VRAM lines parsed out of
-its log. Its rows are in `tune_ab2.jsonl`. The 2026-11-20 engine comparison used
-`ab_poly_2026_11_20.py` in the same folder (modes `serve`, `ab` and `cool`, the
-last one resting the card 120 s before each arm); its rows and logs are in
-`poly-update-2026-11-20\`.
+## Bench records this host keeps in the repo
+
+Five folders under `bench/results/` carry this machine's measurements, each with its
+raw rows and its harness so the run can be repeated:
+
+| Folder | What it holds |
+| --- | --- |
+| `2026-11-13-community-rtx-pro-2000-blackwell-generat-qwen3-6-35b-a3b-ud-q4-k-m` | the `tools/strata_bench.py` suite on engine 0.1.45: 63.6 tok/s short chat, 575.6 tok/s prefill at 4K, 1,295.7 at 16K, 16.9 tok/s decode on agent follow-ups with a 68.8% cache hit, at 204,800 context |
+| `2026-11-13-community-rtx-pro-2000-blackwell-generat-qwen3-8-flash-next-coder-iq1-m-cache-reserve` | the Coder tuning arms (0.1.45 against 0.1.59.1, reserve and `--mtp-q4` variants) with the engine's own VRAM-free and cache-hit lines, plus `tune_kv_ab.jsonl`, the 30 rows that record the bigger-window arms exiting rather than slowing |
+| `2026-11-20-community-rtx-pro-2000-blackwell-generat-qwen3-6-35b-a3b-ud-q4-k-m-poly-engine` | the two `strata-poly` builds, warm and after 120 s idle, with every arm's engine log: no decode difference, 1,788 experts resident against 1,684 |
+| `2026-11-25-community-rtx-pro-2000-blackwell-generat-qwen3-8-flash-next-coder-iq1-m` and `-2` | the same-day Coder comparison of `strata.exe` 0.1.63 against 0.1.67 |
+| `2026-11-25-community-rtx-pro-2000-blackwell-generat-inkling-2-mini-sq-10` | the native Inkling lane: prefill and decode at 2,048 / 8,192 / 32,768 with drafting on and off, the load telemetry, and the chat, picture and tool-call checks |
+
+The harnesses are inside those folders as `harness.py`. `tune_kv_ab.jsonl` and the
+2026-11-20 logs came from `C:\Users\kphung\AryaCode\KonnectSuite\tune_ab2.py`,
+`tune_kv_ab.py` and `ab_poly_2026_11_20.py` (modes `serve`, `ab` and `cool`, the last
+one resting the card 120 s before each arm).
+
+Rows from 2026-11-13 that no longer have a script that names them — `rr_power.jsonl`,
+`rr_spec.jsonl`, `rr_threads.jsonl`, `sustain_a.jsonl`, `sustain_smoke.jsonl`,
+`ab_poly_batch1.jsonl` — are deliberately not in the repo: their arms cannot be
+described honestly without the harness that produced them.
+

@@ -1,0 +1,35 @@
+{
+  "host": "NVIDIA RTX PRO 2000 Blackwell Generation Laptop GPU, 8151 MiB, sm_120; Intel Core Ultra 7 265H; 63.43 GiB RAM; Windows 11 10.0.26300; driver 597.01; CUDA 13.5",
+  "date": "2026-11-25",
+  "engine": "engine-inkling/strata-inkling.exe, built on this host for arch 120; --version prints strata-inkling 0.1.67, BUILD.json records 0.1.68",
+  "model": "Inkling-2-Mini-SQ-10.strata 10471526400 B sha256 ac4d452ad03e4930abd9d46f9c5eec22b2f75a1da45a1e49bd24ccd58b065934 + Inkling-2-Mini-Vision.strata 636526592 B sha256 6589eff47f9c20bc3a032faa3d449f10bf4f04a84cc6b2ee8a44d51d2b6fc677",
+  "info": "arch=inkling2_loop format=strata build=SQ-10 layers=24 visits=48 hidden=2304 vocab=200058 experts=128 eos=200006 drafter=dspark images=1 image_pad=200054 parallel=64 spec_opts=1",
+  "bench": [
+    {"prompt_tokens": 2048, "new_tokens": 64, "draft": "off", "prefill_tps": 980.8, "prefill_s": 2.09, "decode_tps": 29.1},
+    {"prompt_tokens": 2048, "new_tokens": 64, "draft": "auto", "prefill_tps": 1030.8, "prefill_s": 1.99, "decode_tps": 20.3, "decode_runs": [19.4, 20.3, 20.3]},
+    {"prompt_tokens": 8192, "new_tokens": 128, "draft": "off", "prefill_tps": 922.1, "prefill_s": 8.88, "decode_tps": 28.5},
+    {"prompt_tokens": 8192, "new_tokens": 128, "draft": "auto", "prefill_tps": 907.5, "prefill_s": 9.03, "decode_tps": 36.3},
+    {"prompt_tokens": 32768, "new_tokens": 128, "draft": "off", "max_context": 34816, "prefill_tps": 736.8, "prefill_s": 44.47, "decode_tps": 19.2},
+    {"prompt_tokens": 32768, "new_tokens": 128, "draft": "auto", "max_context": 34816, "prefill_tps": 737.3, "prefill_s": 44.44, "decode_tps": 13.8},
+    {"prompt_tokens": 2048, "new_tokens": 64, "draft": "auto", "parallel": 4, "prefill_tps": 967.2, "prefill_s": 8.47, "decode_tps_aggregate": 54.9, "decode_tps_per_slot": 13.7}
+  ],
+  "bench_args": "--native Inkling-2-Mini-SQ-10.strata --bench --kv k8v4 --vram-experts-gb 5.5",
+  "load": {
+    "trunk_gib": 1.87, "trunk_s": "0.44-0.74",
+    "experts_vram": 1169, "experts_host": 1903, "experts_s": "3.15-3.99",
+    "pinned_arena_gb": 8.60, "available_ram_gb": "49.1-51.4",
+    "ink_tier_classes": 4, "ink_tier_pool_gib": 3.13,
+    "free_after_load_mib": 1881, "free_after_runner_kv_mib_dspark": 533, "free_after_runner_kv_mib_draft_off": 609,
+    "cold_expert_probe": {"cpu_lane_ms_per_token": [23.2, 23.5], "copy_into_card_ms_per_token": [30.3, 31.0, 34.6], "chosen": "cpu lane"},
+    "kv_at_262144": "global KV = 10496 VRAM + 251648 mapped host tokens (3071.9 MiB host RAM), about 12 KB a token"
+  },
+  "server_checks": {
+    "config": "strata-inkling-2-mini-sq-10.json (--native, --vision, --max-context 262144, --kv k8v4, --kv-offload auto, --draft off, --vram-experts-gb 5.5, --parallel 1)",
+    "api_models_s": 1.36,
+    "health": {"status": "ok", "max_context": 262144, "images": true, "loaded": true},
+    "chat_s": 2.66, "chat_prompt_tokens": 25, "chat_completion_tokens": 57,
+    "vision_s": 10.07, "vision_image": "448x320 PNG rendered locally with the text HELLO 42, sent as a base64 image_url; answered correctly",
+    "tools": "tool_choice=required returned finish_reason=tool_calls with {\"a\": 2, \"b\": 2}",
+    "switch_s": {"to_sq10": 9, "back_to_poly": 10}
+  }
+}
