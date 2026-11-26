@@ -255,7 +255,7 @@ ENGINE_FLAGS: dict[str, tuple] = {
     # memory, KV placement and the CPU pool: the knobs that move decode speed on a 16 GiB card
     "--kv-resident": ("int", "Context tokens whose KV stays on the card"),
     "--memory-limit-mib": ("int", "Memory the engine may use"),
-    "--ram-experts-mib": ("int", "Experts kept in system RAM (Inkling/PolyStrata)"),
+    "--ram-experts-mib": ("int", "Experts kept in system RAM (Inkling/AryaInfer)"),
     "--vram-pool": ("int", "VRAM the expert pool may fill"),
     "--pool-cores": ("text", "Cores the expert pool may use"),
     "--pool-tasks": ("int", "Pool tasks per phase"),
