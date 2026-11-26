@@ -1,0 +1,754 @@
+{
+ "model": "qwen3.8-flash-next-gyro-m",
+ "base_url": "http://127.0.0.1:8080",
+ "rows": [
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "web_page",
+   "effort": "off",
+   "ok": true,
+   "why": "",
+   "secs": 132.0,
+   "chars": 22942,
+   "rep4": 0.152,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 82,
+    "completion_tokens": 7785,
+    "total_tokens": 7867,
+    "prompt_tokens_details": {
+     "cached_tokens": 75
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "game_memory",
+   "effort": "off",
+   "ok": true,
+   "why": "",
+   "secs": 67.3,
+   "chars": 12814,
+   "rep4": 0.073,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 63,
+    "completion_tokens": 4450,
+    "total_tokens": 4513,
+    "prompt_tokens_details": {
+     "cached_tokens": 56
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "gui_converter",
+   "effort": "off",
+   "ok": true,
+   "why": "",
+   "secs": 8.4,
+   "chars": 1802,
+   "rep4": 0.145,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 57,
+    "completion_tokens": 481,
+    "total_tokens": 538,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "email_rate",
+   "effort": "off",
+   "ok": true,
+   "why": "",
+   "secs": 5.0,
+   "chars": 996,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 88,
+    "completion_tokens": 207,
+    "total_tokens": 295,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "quote_cafe",
+   "effort": "off",
+   "ok": true,
+   "why": "",
+   "secs": 3.9,
+   "chars": 351,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 109,
+    "completion_tokens": 162,
+    "total_tokens": 271,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "minutes_notes",
+   "effort": "off",
+   "ok": true,
+   "why": "",
+   "secs": 1.8,
+   "chars": 178,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 93,
+    "completion_tokens": 47,
+    "total_tokens": 140,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "changelog_140",
+   "effort": "off",
+   "ok": true,
+   "why": "",
+   "secs": 2.0,
+   "chars": 202,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 119,
+    "completion_tokens": 67,
+    "total_tokens": 186,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "merge_sorted",
+   "effort": "off",
+   "ok": true,
+   "secs": 7.8,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "chunked",
+   "effort": "off",
+   "ok": true,
+   "secs": 5.9,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "parse_pairs",
+   "effort": "off",
+   "ok": true,
+   "secs": 7.5,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "web_page",
+   "effort": "low",
+   "ok": true,
+   "why": "",
+   "secs": 49.5,
+   "chars": 9825,
+   "rep4": 0.078,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 110,
+    "completion_tokens": 3088,
+    "total_tokens": 3198,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "game_memory",
+   "effort": "low",
+   "ok": true,
+   "why": "",
+   "secs": 29.5,
+   "chars": 4557,
+   "rep4": 0.049,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 91,
+    "completion_tokens": 1716,
+    "total_tokens": 1807,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "gui_converter",
+   "effort": "low",
+   "ok": true,
+   "why": "",
+   "secs": 7.3,
+   "chars": 777,
+   "rep4": 0.08,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 85,
+    "completion_tokens": 304,
+    "total_tokens": 389,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "email_rate",
+   "effort": "low",
+   "ok": true,
+   "why": "",
+   "secs": 12.3,
+   "chars": 695,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 116,
+    "completion_tokens": 672,
+    "total_tokens": 788,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "quote_cafe",
+   "effort": "low",
+   "ok": true,
+   "why": "",
+   "secs": 10.3,
+   "chars": 348,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 137,
+    "completion_tokens": 546,
+    "total_tokens": 683,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "minutes_notes",
+   "effort": "low",
+   "ok": true,
+   "why": "",
+   "secs": 5.1,
+   "chars": 239,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 121,
+    "completion_tokens": 210,
+    "total_tokens": 331,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "changelog_140",
+   "effort": "low",
+   "ok": true,
+   "why": "",
+   "secs": 4.8,
+   "chars": 189,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 147,
+    "completion_tokens": 227,
+    "total_tokens": 374,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "merge_sorted",
+   "effort": "low",
+   "ok": true,
+   "secs": 9.7,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "chunked",
+   "effort": "low",
+   "ok": true,
+   "secs": 8.7,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "parse_pairs",
+   "effort": "low",
+   "ok": true,
+   "secs": 10.8,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "web_page",
+   "effort": "medium",
+   "ok": true,
+   "why": "",
+   "secs": 42.8,
+   "chars": 6827,
+   "rep4": 0.05,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 80,
+    "completion_tokens": 2609,
+    "total_tokens": 2689,
+    "prompt_tokens_details": {
+     "cached_tokens": 75
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "game_memory",
+   "effort": "medium",
+   "ok": true,
+   "why": "",
+   "secs": 22.2,
+   "chars": 4251,
+   "rep4": 0.037,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 61,
+    "completion_tokens": 1467,
+    "total_tokens": 1528,
+    "prompt_tokens_details": {
+     "cached_tokens": 56
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "gui_converter",
+   "effort": "medium",
+   "ok": true,
+   "why": "",
+   "secs": 8.2,
+   "chars": 1122,
+   "rep4": 0.101,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 55,
+    "completion_tokens": 432,
+    "total_tokens": 487,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "email_rate",
+   "effort": "medium",
+   "ok": false,
+   "why": "truncated at max_tokens",
+   "secs": 14.2,
+   "chars": 0,
+   "rep4": 0.0,
+   "finish": "length",
+   "usage": {
+    "prompt_tokens": 86,
+    "completion_tokens": 900,
+    "total_tokens": 986,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": ""
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "quote_cafe",
+   "effort": "medium",
+   "ok": true,
+   "why": "",
+   "secs": 11.6,
+   "chars": 563,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 107,
+    "completion_tokens": 645,
+    "total_tokens": 752,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "minutes_notes",
+   "effort": "medium",
+   "ok": true,
+   "why": "",
+   "secs": 6.9,
+   "chars": 242,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 91,
+    "completion_tokens": 329,
+    "total_tokens": 420,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "changelog_140",
+   "effort": "medium",
+   "ok": true,
+   "why": "",
+   "secs": 6.4,
+   "chars": 204,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 117,
+    "completion_tokens": 359,
+    "total_tokens": 476,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "merge_sorted",
+   "effort": "medium",
+   "ok": true,
+   "secs": 9.7,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "chunked",
+   "effort": "medium",
+   "ok": true,
+   "secs": 7.3,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "parse_pairs",
+   "effort": "medium",
+   "ok": true,
+   "secs": 8.7,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "web_page",
+   "effort": "high",
+   "ok": false,
+   "why": "truncated at max_tokens",
+   "secs": 151.3,
+   "chars": 5397,
+   "rep4": 0.088,
+   "finish": "length",
+   "usage": {
+    "prompt_tokens": 122,
+    "completion_tokens": 8192,
+    "total_tokens": 8314,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": "```html\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Northline Bikes \u2014 Service Bench &amp; Repair Bay</title>\n<meta name=\"description\" content=\"Northline Bikes: a four-bay bicycle workshop. Tune-ups, drivetrain overhauls and hand-built wheels, booked within 48 hours and road-tested before handover.\">\n<style>\n@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@500;700;800;900&family=IBM+Plex+Mono:wght@400;500;600&family=Spline+Sans:wght@300;400;500;600&display=swap');\n\n/* ============ TOKENS ============ */\n:root{\n  --ink:#0b1a21;\n  --ink-2:#122b36;\n  --ink-3:#1b3d4b;\n  --paper:#eef1ed;\n  --paper-2:#e2e8e4;\n  --steel:#96a9b1;\n  --glacier:#4c92ad;\n  --signal:#ff5b2e;\n  --tape:#f3c53a;\n  --line:rgba(11,26,33,.16);\n  --line-strong:rgba(11,26,33,.34);\n  --line-dark:rgba(238,241,237,.18);\n  --display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;\n  --body:'Spline Sans',system-ui,-apple-system,sans-serif;\n  --mono:'IBM Plex Mono',ui-monospace,'Courier New',monospace;\n  --maxw:1300px;\n  --pad:clamp(1.1rem,4vw,3.4rem);\n}\n*{box-sizing:border-box}\nhtml{scroll-behavior:smooth}\nbody{\n  margin:0;background:var(--paper);color:var(--ink);\n  font-family:var(--body);font-weight:400;font-size:clamp(1rem,.96rem + .2vw,1.075rem);\n  line-height:1.66;-webkit-font-smoothing:antialiased;overflow-x:hidden;\n}\nimg{display:block;max-width:100%}\na{color:inherit}\n::selection{background:var(--signal);color:#fff}\n\n/* grain */\n.grain{\n  position:fixed;inset:-10%;z-index:200;pointer-events:none;opacity:.05;mix-blend-mode:multiply;\n  background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)'/%3E%3C/svg%3E\");\n}\n\n/* ============ TYPE HELPERS ============ */\n.wrap{max-width:var(--maxw);margin:0 auto;padding:0 var(--pad)}\n.eyebrow{\n  font-family:var(--mono);font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;\n  color:var(--glacier);display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;\n}\n.eyebrow .dot{width:7px;height:7px;background:var(--signal);flex:0 0 7px}\n.eyebrow.on-dark{color:#a9c6cf}\n.h-sec{\n  font-family:var(--display);font-weight:900;text-transform:uppercase;\n  font-size:clamp(2.2rem,1.4rem + 3.4vw,4.4rem);line-height:.92;letter-spacing:-.012em;margin:0;\n}\n.lede{max-width:56ch;color:rgba(11,26,33,.74);font-weight:300;font-size:1.06rem}\n.mono{font-family:var(--mono);font-size:.74rem;letter-spacing:.12em;text-transform:uppercase}\n.on-dark .lede,.dark .lede{color:rgba(238,241,237,.72)}\n\n/* line-mask reveal */\n.rv{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1);transition-delay:var(--d,0s)}\n.rv.in{opacity:1;transform:none}\n.mask{display:block;overflow:hidden}\n.mask > span{display:block;transform:translateY(104%);transition:transform 1s cubic-bezier(.16,.9,.2,1);transition-delay:var(--d,0s)}\n.in .mask > span,.mask.in > span{transform:none}\n\n/* ============ HEADER ============ */\n.site-head{\n  position:sticky;top:0;z-index:120;background:var(--ink);color:var(--paper);\n  border-bottom:1px solid var(--line-dark);\n}\n.head-in{\n  max-width:var(--maxw);margin:0 auto;padding:.7rem var(--pad);\n  display:flex;align-items:center;gap:clamp(1rem,3vw,2.6rem);\n}\n.brand{display:flex;align-items:center;gap:.7rem;text-decoration:none;flex:0 0 auto}\n.brand svg{width:30px;height:30px;transition:transform 1.4s cubic-bezier(.2,.7,.2,1)}\n.brand:hover svg{transform:rotate(140deg)}\n.brand-txt{font-family:var(--display);font-weight:900;font-size:1.5rem;letter-spacing:.06em;text-transform:uppercase;line-height:1}\n.brand-txt i{font-style:normal;color:var(--signal)}\n.brand-sub{font-family:var(--mono);font-size:.6rem;letter-spacing:.24em;color:#7"
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "game_memory",
+   "effort": "high",
+   "ok": false,
+   "why": "truncated at max_tokens",
+   "secs": 145.7,
+   "chars": 4990,
+   "rep4": 0.068,
+   "finish": "length",
+   "usage": {
+    "prompt_tokens": 103,
+    "completion_tokens": 8192,
+    "total_tokens": 8295,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": "```html\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>Memory \u2014 Parlour No. 6</title>\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n<link href=\"https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,700;0,6..96,900;1,6..96,700&family=Karla:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap\" rel=\"stylesheet\">\n<style>\n  :root{\n    --felt-1:#124a3d; --felt-2:#0a2f28; --felt-3:#051d1a;\n    --gold:#e2b866; --gold-2:#f7dda6; --gold-dim:rgba(226,184,102,.30);\n    --cream:#f7ecd8; --ink:#17261f;\n    --crimson:#a82a3b; --crimson-2:#c9394c;\n    --mint:#87dcb4;\n  }\n  *{box-sizing:border-box}\n  html,body{margin:0;min-height:100%}\n  body{\n    font-family:'Karla',system-ui,-apple-system,sans-serif;\n    color:var(--cream);\n    background:radial-gradient(130% 100% at 50% -10%, #17564a 0%, #0a2f28 46%, #041714 100%) fixed;\n    display:flex;align-items:center;justify-content:center;\n    padding:clamp(16px,3vw,48px);\n    overflow-x:hidden;\n  }\n  /* ---------- ambient layers ---------- */\n  .bg{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}\n  .bg .weave{position:absolute;inset:0;\n    background-image:\n      repeating-linear-gradient(45deg, rgba(255,255,255,.030) 0 1px, transparent 1px 5px),\n      repeating-linear-gradient(-45deg, rgba(0,0,0,.055) 0 1px, transparent 1px 5px);\n  }\n  .bg .glow{position:absolute;width:76vmax;height:76vmax;border-radius:50%;left:-16vmax;top:-24vmax;\n    background:radial-gradient(circle, rgba(226,184,102,.20), transparent 62%);\n    animation:drift 24s ease-in-out infinite alternate;filter:blur(6px)}\n  .bg .glow.b{left:auto;right:-22vmax;top:auto;bottom:-28vmax;\n    background:radial-gradient(circle, rgba(135,220,180,.14), transparent 60%);animation-duration:31s}\n  .bg .grain{position:absolute;inset:0;opacity:.055;mix-blend-mode:overlay;\n    background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E\")}\n  @keyframes drift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(14vw,10vh,0) scale(1.25)}}\n\n  /* ---------- layout ---------- */\n  .wrap{position:relative;z-index:1;width:min(1120px,100%);\n    display:grid;grid-template-columns:minmax(250px,300px) minmax(0,1fr);\n    gap:clamp(22px,4vw,54px);align-items:start}\n  @media (max-width:880px){ .wrap{grid-template-columns:1fr;gap:26px} }\n\n  /* ---------- masthead ---------- */\n  .deck-art{position:relative;height:64px;margin-bottom:18px}\n  .deck-art i{position:absolute;left:0;top:0;width:44px;height:60px;border-radius:5px;\n    background:linear-gradient(150deg,#c2384b,#7a1c2b);\n    border:1px solid rgba(247,236,216,.35);\n    box-shadow:0 8px 18px rgba(0,0,0,.45);\n    background-image:repeating-linear-gradient(45deg, rgba(247,236,216,.20) 0 2px, transparent 2px 7px),\n                     repeating-linear-gradient(-45deg, rgba(247,236,216,.14) 0 2px, transparent 2px 7px);\n    animation:swoop .8s cubic-bezier(.2,.8,.3,1) both}\n  .deck-art i:nth-child(1){transform:rotate(-16deg);animation-delay:.05s}\n  .deck-art i:nth-child(2){left:26px;top:6px;transform:rotate(-7deg);animation-delay:.14s}\n  .deck-art i:nth-child(3){left:52px;top:10px;transform:rotate(3deg);animation-delay:.23s}\n  @keyframes swoop{from{opacity:0;transform:translate(-70px,-46px) rotate(-30deg)}to{opacity:1}}\n\n  .kicker{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.26em;text-transform:uppercase;\n    color:rgba(247,236,216,.5);margin:0 0 6px}\n  h1{font-family:'Bodoni Moda','Didot',Georgia,serif;font-weight:900;\n    font-size:clamp(52px,8.4vw,88px);line-height:.86;letter-spacing:-.02em;margin:0;color:var(--cream);\n    text-"
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "gui_converter",
+   "effort": "high",
+   "ok": true,
+   "why": "",
+   "secs": 15.2,
+   "chars": 1397,
+   "rep4": 0.11,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 97,
+    "completion_tokens": 902,
+    "total_tokens": 999,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "email_rate",
+   "effort": "high",
+   "ok": true,
+   "why": "",
+   "secs": 9.2,
+   "chars": 694,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 128,
+    "completion_tokens": 482,
+    "total_tokens": 610,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "quote_cafe",
+   "effort": "high",
+   "ok": false,
+   "why": "truncated at max_tokens",
+   "secs": 17.2,
+   "chars": 0,
+   "rep4": 0.0,
+   "finish": "length",
+   "usage": {
+    "prompt_tokens": 149,
+    "completion_tokens": 900,
+    "total_tokens": 1049,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": ""
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "minutes_notes",
+   "effort": "high",
+   "ok": true,
+   "why": "",
+   "secs": 6.8,
+   "chars": 223,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 133,
+    "completion_tokens": 322,
+    "total_tokens": 455,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "changelog_140",
+   "effort": "high",
+   "ok": true,
+   "why": "",
+   "secs": 5.9,
+   "chars": 188,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 159,
+    "completion_tokens": 295,
+    "total_tokens": 454,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "merge_sorted",
+   "effort": "high",
+   "ok": true,
+   "secs": 14.4,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "chunked",
+   "effort": "high",
+   "ok": true,
+   "secs": 14.0,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "parse_pairs",
+   "effort": "high",
+   "ok": true,
+   "secs": 9.9,
+   "turns": 4,
+   "calls": 3
+  }
+ ]
+}

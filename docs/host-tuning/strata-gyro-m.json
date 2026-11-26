@@ -1,0 +1,76 @@
+{
+  "exe": "$DATA\\engines\\strata-0.1.67\\strata.exe",
+  "args": [
+    "--pack",
+    "$DATA\\packs\\gyro-gyro-m",
+    "--native",
+    "$DATA\\models\\gyro-Gyro-M\\Qwen3.8-Flash-Next-Gyro-M-TQ2_0.gguf",
+    "--ple-gguf",
+    "$DATA\\models\\gyro-Gyro-M\\Qwen3.8-Flash-Next-Gyro-M-TQ2_0.gguf",
+    "--expert-profile",
+    "$DATA\\terminal\\0.1.66\\data\\expert-profile.bin",
+    "--expert-cache",
+    "auto",
+    "--prefill",
+    "auto",
+    "--spec",
+    "4",
+    "--spec-min-p",
+    "0.5",
+    "--mtp",
+    "$DATA\\mtp\\rt",
+    "--max-context",
+    "262144",
+    "--kv",
+    "int8",
+    "--kv-resident",
+    "32768",
+    "--pool-workers",
+    "15",
+    "--vision"
+  ],
+  "cwd": "$DATA\\terminal\\0.1.66",
+  "tokenizer": "$DATA\\packs\\gyro-gyro-m\\tokenizer",
+  "model_name": "qwen3.8-flash-next-gyro-m",
+  "display_name": "Gyro-M TQ2_0  -  256K vision (Strata 0.1.67)",
+  "aliases": [
+    "gyro-m",
+    "gyro"
+  ],
+  "arch": "qwen3.8-flash-next",
+  "log": "$INSTALL\\local-data\\gyro-m-engine.log",
+  "lib_dirs": [
+    "$DATA\\engines\\strata-0.1.67"
+  ],
+  "port": 8080,
+  "host": "127.0.0.1",
+  "gpu": 0,
+  "switch_on_request": true,
+  "reasoning_effort": "low",
+  "fit_max_tokens": true,
+  "vision": {
+    "exe": "$DATA\\engines\\strata-0.1.67\\strata-vision.exe",
+    "mmproj": "$DATA\\models\\mmproj-Qwen3.8-Flash-Next-BF16.gguf",
+    "model": "$DATA\\models\\gyro-Gyro-M\\Qwen3.8-Flash-Next-Gyro-M-TQ2_0.gguf",
+    "gpu": false,
+    "max_tokens": 1024,
+    "min_tokens": 1024
+  },
+  "sampling": {
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "top_k": 20,
+    "presence_penalty": 0
+  },
+  "reasoning_budget_tokens": 9600,
+  "reasoning_loop_recovery": "recover",
+  "reasoning_close_retry": true,
+  "tool_call_recovery": true,
+  "preserve_thinking": true,
+  "reasoning_budget_by_effort": {
+    "off": 0,
+    "low": 4800,
+    "medium": 9600,
+    "high": 12000
+  }
+}

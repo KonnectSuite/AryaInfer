@@ -1,0 +1,1422 @@
+{
+ "model": "qwen3.8-flash-next-gyro-m",
+ "base_url": "http://127.0.0.1:8080",
+ "rows": [
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "web_page",
+   "ok": true,
+   "why": "",
+   "secs": 126.4,
+   "chars": 22705,
+   "rep4": 0.142,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 82,
+    "completion_tokens": 8005,
+    "total_tokens": 8087,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "game_memory",
+   "ok": true,
+   "why": "",
+   "secs": 119.7,
+   "chars": 22593,
+   "rep4": 0.158,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 63,
+    "completion_tokens": 8054,
+    "total_tokens": 8117,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 0,
+   "fixture": "gui_converter",
+   "ok": true,
+   "why": "",
+   "secs": 9.6,
+   "chars": 930,
+   "rep4": 0.076,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 57,
+    "completion_tokens": 291,
+    "total_tokens": 348,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "email_rate",
+   "ok": true,
+   "why": "",
+   "secs": 8.5,
+   "chars": 958,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 88,
+    "completion_tokens": 199,
+    "total_tokens": 287,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "quote_cafe",
+   "ok": true,
+   "why": "",
+   "secs": 8.2,
+   "chars": 348,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 109,
+    "completion_tokens": 162,
+    "total_tokens": 271,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "minutes_notes",
+   "ok": true,
+   "why": "",
+   "secs": 2.1,
+   "chars": 206,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 93,
+    "completion_tokens": 56,
+    "total_tokens": 149,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 0,
+   "fixture": "changelog_140",
+   "ok": true,
+   "why": "",
+   "secs": 1.9,
+   "chars": 202,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 119,
+    "completion_tokens": 67,
+    "total_tokens": 186,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "merge_sorted",
+   "ok": true,
+   "secs": 7.4,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "chunked",
+   "ok": true,
+   "secs": 6.1,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 0,
+   "fixture": "parse_pairs",
+   "ok": true,
+   "secs": 7.3,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "artifact",
+   "set": "precise",
+   "pass": 0,
+   "fixture": "web_page",
+   "ok": true,
+   "why": "",
+   "secs": 109.3,
+   "chars": 19099,
+   "rep4": 0.137,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 82,
+    "completion_tokens": 6676,
+    "total_tokens": 6758,
+    "prompt_tokens_details": {
+     "cached_tokens": 75
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "precise",
+   "pass": 0,
+   "fixture": "game_memory",
+   "ok": true,
+   "why": "",
+   "secs": 73.8,
+   "chars": 13397,
+   "rep4": 0.091,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 63,
+    "completion_tokens": 4748,
+    "total_tokens": 4811,
+    "prompt_tokens_details": {
+     "cached_tokens": 56
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "precise",
+   "pass": 0,
+   "fixture": "gui_converter",
+   "ok": true,
+   "why": "",
+   "secs": 5.5,
+   "chars": 1046,
+   "rep4": 0.081,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 57,
+    "completion_tokens": 311,
+    "total_tokens": 368,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "precise",
+   "pass": 0,
+   "fixture": "email_rate",
+   "ok": true,
+   "why": "",
+   "secs": 4.3,
+   "chars": 898,
+   "rep4": 0.007,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 88,
+    "completion_tokens": 185,
+    "total_tokens": 273,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "precise",
+   "pass": 0,
+   "fixture": "quote_cafe",
+   "ok": true,
+   "why": "",
+   "secs": 3.5,
+   "chars": 351,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 109,
+    "completion_tokens": 164,
+    "total_tokens": 273,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "precise",
+   "pass": 0,
+   "fixture": "minutes_notes",
+   "ok": true,
+   "why": "",
+   "secs": 1.9,
+   "chars": 178,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 93,
+    "completion_tokens": 47,
+    "total_tokens": 140,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "precise",
+   "pass": 0,
+   "fixture": "changelog_140",
+   "ok": true,
+   "why": "",
+   "secs": 2.0,
+   "chars": 202,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 119,
+    "completion_tokens": 67,
+    "total_tokens": 186,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "agent",
+   "set": "precise",
+   "pass": 0,
+   "fixture": "merge_sorted",
+   "ok": true,
+   "secs": 7.6,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "precise",
+   "pass": 0,
+   "fixture": "chunked",
+   "ok": true,
+   "secs": 5.7,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "precise",
+   "pass": 0,
+   "fixture": "parse_pairs",
+   "ok": true,
+   "secs": 7.7,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "artifact",
+   "set": "coding",
+   "pass": 0,
+   "fixture": "web_page",
+   "ok": false,
+   "why": "truncated at max_tokens",
+   "secs": 136.5,
+   "chars": 24171,
+   "rep4": 0.179,
+   "finish": "length",
+   "usage": {
+    "prompt_tokens": 82,
+    "completion_tokens": 8192,
+    "total_tokens": 8274,
+    "prompt_tokens_details": {
+     "cached_tokens": 75
+    }
+   },
+   "answer": "Here's the complete single-file landing page for Northline Bikes.\n\n```html\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>Northline Bikes \u2014 Bicycle Repair, Built for Cold Roads</title>\n<meta name=\"description\" content=\"Northline Bikes is a bicycle repair shop. Tune-ups, drivetrain overhauls, wheel builds and diagnostics \u2014 booked in, dialed to spec.\">\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n<link href=\"https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap\" rel=\"stylesheet\">\n<style>\n  :root{\n    --bg:#0d1b1a;\n    --bg-2:#0f2120;\n    --surface:#152927;\n    --surface-2:#1b3531;\n    --line:#2b4743;\n    --line-soft:#223937;\n    --ink:#f2ede0;\n    --muted:#93a89f;\n    --faint:#6c827b;\n    --brass:#e6b64b;\n    --brass-deep:#c99334;\n    --rust:#d76442;\n    --teal:#46b3a1;\n    --paper:#efe7d6;\n    --paper-ink:#22302b;\n    --shadow:0 26px 50px -28px rgba(0,0,0,.75);\n    --f-display:\"Oswald\", ui-sans-serif, system-ui, sans-serif;\n    --f-body:\"IBM Plex Sans\", system-ui, -apple-system, sans-serif;\n    --f-mono:\"IBM Plex Mono\", ui-monospace, \"SFMono-Regular\", monospace;\n  }\n\n  *{box-sizing:border-box;margin:0;padding:0}\n  html{scroll-behavior:smooth}\n  body{\n    background:var(--bg);\n    color:var(--ink);\n    font-family:var(--f-body);\n    font-size:clamp(1rem,1rem + .1vw,1.05rem);\n    line-height:1.6;\n    -webkit-font-smoothing:antialiased;\n    overflow-x:hidden;\n  }\n\n  ::selection{background:var(--brass);color:#12211f}\n  a{color:inherit;text-decoration:none}\n  img{display:block;max-width:100%}\n  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}\n\n  .wrap{width:min(1180px,92vw);margin-inline:auto}\n\n  /* ---------- film grain ---------- */\n  .grain{\n    position:fixed;inset:0;z-index:9999;pointer-events:none;\n    opacity:.05;mix-blend-mode:overlay;\n    background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\");\n  }\n\n  /* ---------- shared bits ---------- */\n  .eyebrow{\n    font-family:var(--f-mono);font-size:.72rem;letter-spacing:.28em;\n    text-transform:uppercase;color:var(--brass);display:inline-flex;align-items:center;gap:.7em;\n  }\n  .eyebrow::before{content:\"\";width:26px;height:1px;background:var(--brass);opacity:.7}\n  .section-title{\n    font-family:var(--f-display);font-weight:600;line-height:.95;\n    font-size:clamp(2rem,1.4rem + 3vw,3.4rem);letter-spacing:.01em;\n    text-transform:uppercase;\n  }\n  .lede{color:var(--muted);max-width:52ch}\n\n  /* ---------- reveal ---------- */\n  .reveal{opacity:0;transform:translateY(26px);transition:opacity .8s ease,transform .8s cubic-bezier(.2,.7,.2,1)}\n  .reveal.in{opacity:1;transform:none}\n\n  /* ---------- header ---------- */\n  .site-header{\n    position:sticky;top:0;z-index:100;\n    background:rgba(13,27,26,.82);\n    backdrop-filter:blur(10px);\n    border-bottom:1px solid var(--line-soft);\n    transition:background .3s ease,border-color .3s ease,box-shadow .3s ease;\n  }\n  .site-header.scrolled{background:rgba(10,21,20,.94);box-shadow:0 12px 30px -20px rgba(0,0,0,.8)}\n  .header-inner{display:flex;align-items:center;justify-content:space-between;gap:1.5rem;padding:.9rem 0}\n  .brand{display:flex;align-items:center;gap:.75rem;font-family:var(--f-display);font-weight:700;letter-spacing:.06em;font-size:1.15rem;text-transform:uppercase}\n  .brand .mark{color:var(--brass);display:grid;place-items:center;width:34px;height:34px;border:1px solid var(--line);border-radius:8px}\n  .brand .mark svg{width:20px;height:20px}\n  .brand small{display:block"
+  },
+  {
+   "suite": "artifact",
+   "set": "coding",
+   "pass": 0,
+   "fixture": "game_memory",
+   "ok": true,
+   "why": "",
+   "secs": 103.2,
+   "chars": 16995,
+   "rep4": 0.142,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 63,
+    "completion_tokens": 6683,
+    "total_tokens": 6746,
+    "prompt_tokens_details": {
+     "cached_tokens": 56
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "coding",
+   "pass": 0,
+   "fixture": "gui_converter",
+   "ok": true,
+   "why": "",
+   "secs": 8.2,
+   "chars": 1728,
+   "rep4": 0.129,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 57,
+    "completion_tokens": 470,
+    "total_tokens": 527,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "coding",
+   "pass": 0,
+   "fixture": "email_rate",
+   "ok": true,
+   "why": "",
+   "secs": 4.8,
+   "chars": 931,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 88,
+    "completion_tokens": 191,
+    "total_tokens": 279,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "coding",
+   "pass": 0,
+   "fixture": "quote_cafe",
+   "ok": true,
+   "why": "",
+   "secs": 3.7,
+   "chars": 338,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 109,
+    "completion_tokens": 158,
+    "total_tokens": 267,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "coding",
+   "pass": 0,
+   "fixture": "minutes_notes",
+   "ok": true,
+   "why": "",
+   "secs": 2.4,
+   "chars": 267,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 93,
+    "completion_tokens": 71,
+    "total_tokens": 164,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "coding",
+   "pass": 0,
+   "fixture": "changelog_140",
+   "ok": true,
+   "why": "",
+   "secs": 2.2,
+   "chars": 202,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 119,
+    "completion_tokens": 67,
+    "total_tokens": 186,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "agent",
+   "set": "coding",
+   "pass": 0,
+   "fixture": "merge_sorted",
+   "ok": true,
+   "secs": 8.2,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "coding",
+   "pass": 0,
+   "fixture": "chunked",
+   "ok": true,
+   "secs": 5.8,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "coding",
+   "pass": 0,
+   "fixture": "parse_pairs",
+   "ok": true,
+   "secs": 7.7,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "artifact",
+   "set": "balanced",
+   "pass": 0,
+   "fixture": "web_page",
+   "ok": false,
+   "why": "truncated at max_tokens",
+   "secs": 131.9,
+   "chars": 21634,
+   "rep4": 0.146,
+   "finish": "length",
+   "usage": {
+    "prompt_tokens": 82,
+    "completion_tokens": 8192,
+    "total_tokens": 8274,
+    "prompt_tokens_details": {
+     "cached_tokens": 75
+    }
+   },
+   "answer": "Here's the complete single-file landing page for **Northline Bikes**:\n\n```html\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>Northline Bikes \u2014 Bicycle Repair &amp; Service</title>\n<meta name=\"description\" content=\"Northline Bikes \u2014 a workshop for cyclists who care. Diagnostics, wheel truing, tune-ups and full overhauls.\">\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n<link href=\"https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap\" rel=\"stylesheet\">\n<style>\n  :root{\n    --ink:#161c19;\n    --ink-2:#2a342f;\n    --paper:#f4f0e6;\n    --paper-2:#ebe5d8;\n    --bone:#efe9db;\n    --coral:#e8502f;\n    --coral-d:#c23c1d;\n    --amber:#f2a51a;\n    --steel:#7c8a86;\n    --line:rgba(22,28,25,.16);\n    --maxw:1180px;\n    --ease:cubic-bezier(.2,.7,.2,1);\n  }\n  *{margin:0;padding:0;box-sizing:border-box}\n  html{scroll-behavior:smooth}\n  body{\n    font-family:'Space Grotesk',system-ui,sans-serif;\n    background:var(--paper);\n    color:var(--ink);\n    line-height:1.6;\n    overflow-x:hidden;\n    -webkit-font-smoothing:antialiased;\n  }\n  h1,h2,h3,.display{font-family:'Oswald',sans-serif;line-height:1;text-transform:uppercase;letter-spacing:.01em}\n\n  /* ---------- grain + progress ---------- */\n  .grain{position:fixed;inset:0;z-index:90;pointer-events:none;opacity:.45;mix-blend-mode:multiply;\n    background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\");}\n  .progress{position:fixed;top:0;left:0;height:3px;width:0;background:var(--coral);z-index:100;transition:width .1s linear}\n\n  /* ---------- header ---------- */\n  header{position:sticky;top:0;z-index:80;transition:background .4s var(--ease),box-shadow .4s var(--ease),border-color .4s}\n  header.scrolled{background:rgba(244,240,230,.86);backdrop-filter:blur(12px);box-shadow:0 1px 0 var(--line)}\n  .nav-wrap{max-width:var(--maxw);margin:0 auto;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;gap:24px}\n  .brand{display:flex;align-items:center;gap:11px;text-decoration:none;color:var(--ink)}\n  .brand .mark{width:34px;height:34px;color:var(--coral);transition:transform .5s var(--ease)}\n  .brand:hover .mark{transform:rotate(90deg)}\n  .brand .wm{font-family:'Oswald';font-weight:700;font-size:1.15rem;letter-spacing:.06em;text-transform:uppercase}\n  .brand .wm span{color:var(--coral)}\n  nav{display:flex;align-items:center;gap:28px}\n  nav a{position:relative;color:var(--ink);text-decoration:none;font-size:.82rem;font-weight:500;letter-spacing:.12em;text-transform:uppercase;padding:6px 0}\n  nav a::after{content:\"\";position:absolute;left:0;bottom:0;height:2px;width:0;background:var(--coral);transition:width .35s var(--ease)}\n  nav a:hover::after{width:100%}\n  .nav-cta{border:1px solid var(--ink);padding:8px 16px !important;font-weight:600 !important}\n  .nav-cta:hover{background:var(--ink);color:var(--paper)}\n  .nav-cta::after{display:none}\n\n  /* ---------- hero ---------- */\n  .hero{position:relative;background:var(--ink);color:var(--bone);overflow:hidden;padding:clamp(48px,7vw,92px) 24px clamp(60px,8vw,110px)}\n  .hero-inner{max-width:var(--maxw);margin:0 auto;display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(30px,5vw,64px);align-items:center}\n  .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Oswald';font-size:.78rem;letter-spacing:.24em;text-transform:uppercase;color:var(--amber)}\n  .eyebrow .dot{width:8px;height:8px;border-radius:50%;background:var(--coral);box-shadow:0 0 0 0 rgba(232,80,47,.6);animation:pulse 2.2s infinite}\n  @keyframes pulse{0%{box-shadow"
+  },
+  {
+   "suite": "artifact",
+   "set": "balanced",
+   "pass": 0,
+   "fixture": "game_memory",
+   "ok": true,
+   "why": "",
+   "secs": 69.0,
+   "chars": 12536,
+   "rep4": 0.082,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 63,
+    "completion_tokens": 4429,
+    "total_tokens": 4492,
+    "prompt_tokens_details": {
+     "cached_tokens": 56
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "balanced",
+   "pass": 0,
+   "fixture": "gui_converter",
+   "ok": true,
+   "why": "",
+   "secs": 8.3,
+   "chars": 1797,
+   "rep4": 0.124,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 57,
+    "completion_tokens": 473,
+    "total_tokens": 530,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "balanced",
+   "pass": 0,
+   "fixture": "email_rate",
+   "ok": true,
+   "why": "",
+   "secs": 5.4,
+   "chars": 1020,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 88,
+    "completion_tokens": 211,
+    "total_tokens": 299,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "balanced",
+   "pass": 0,
+   "fixture": "quote_cafe",
+   "ok": true,
+   "why": "",
+   "secs": 3.8,
+   "chars": 339,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 109,
+    "completion_tokens": 161,
+    "total_tokens": 270,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "balanced",
+   "pass": 0,
+   "fixture": "minutes_notes",
+   "ok": true,
+   "why": "",
+   "secs": 2.0,
+   "chars": 203,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 93,
+    "completion_tokens": 52,
+    "total_tokens": 145,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "balanced",
+   "pass": 0,
+   "fixture": "changelog_140",
+   "ok": true,
+   "why": "",
+   "secs": 2.1,
+   "chars": 188,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 119,
+    "completion_tokens": 65,
+    "total_tokens": 184,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "agent",
+   "set": "balanced",
+   "pass": 0,
+   "fixture": "merge_sorted",
+   "ok": true,
+   "secs": 8.1,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "balanced",
+   "pass": 0,
+   "fixture": "chunked",
+   "ok": true,
+   "secs": 6.2,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "balanced",
+   "pass": 0,
+   "fixture": "parse_pairs",
+   "ok": true,
+   "secs": 13.0,
+   "turns": 7,
+   "calls": 6
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 1,
+   "fixture": "web_page",
+   "ok": true,
+   "why": "",
+   "secs": 125.6,
+   "chars": 22168,
+   "rep4": 0.169,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 82,
+    "completion_tokens": 7782,
+    "total_tokens": 7864,
+    "prompt_tokens_details": {
+     "cached_tokens": 75
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 1,
+   "fixture": "game_memory",
+   "ok": true,
+   "why": "",
+   "secs": 93.5,
+   "chars": 17499,
+   "rep4": 0.132,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 63,
+    "completion_tokens": 6178,
+    "total_tokens": 6241,
+    "prompt_tokens_details": {
+     "cached_tokens": 56
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "config",
+   "pass": 1,
+   "fixture": "gui_converter",
+   "ok": true,
+   "why": "",
+   "secs": 5.8,
+   "chars": 1013,
+   "rep4": 0.11,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 57,
+    "completion_tokens": 309,
+    "total_tokens": 366,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 1,
+   "fixture": "email_rate",
+   "ok": true,
+   "why": "",
+   "secs": 4.4,
+   "chars": 919,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 88,
+    "completion_tokens": 189,
+    "total_tokens": 277,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 1,
+   "fixture": "quote_cafe",
+   "ok": true,
+   "why": "",
+   "secs": 3.8,
+   "chars": 376,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 109,
+    "completion_tokens": 184,
+    "total_tokens": 293,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 1,
+   "fixture": "minutes_notes",
+   "ok": true,
+   "why": "",
+   "secs": 2.2,
+   "chars": 243,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 93,
+    "completion_tokens": 69,
+    "total_tokens": 162,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "config",
+   "pass": 1,
+   "fixture": "changelog_140",
+   "ok": true,
+   "why": "",
+   "secs": 1.9,
+   "chars": 189,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 119,
+    "completion_tokens": 65,
+    "total_tokens": 184,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 1,
+   "fixture": "merge_sorted",
+   "ok": true,
+   "secs": 7.8,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 1,
+   "fixture": "chunked",
+   "ok": true,
+   "secs": 6.7,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "config",
+   "pass": 1,
+   "fixture": "parse_pairs",
+   "ok": true,
+   "secs": 8.1,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "artifact",
+   "set": "precise",
+   "pass": 1,
+   "fixture": "web_page",
+   "ok": false,
+   "why": "truncated at max_tokens",
+   "secs": 127.4,
+   "chars": 22971,
+   "rep4": 0.157,
+   "finish": "length",
+   "usage": {
+    "prompt_tokens": 82,
+    "completion_tokens": 8192,
+    "total_tokens": 8274,
+    "prompt_tokens_details": {
+     "cached_tokens": 75
+    }
+   },
+   "answer": "Here's a complete, self-contained landing page for Northline Bikes:\n\n```html\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>Northline Bikes \u2014 Bicycle Repair &amp; Service</title>\n<meta name=\"description\" content=\"Northline Bikes \u2014 a neighbourhood bicycle workshop. Tune-ups, wheel truing, drivetrain overhauls and custom builds.\">\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n<link href=\"https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap\" rel=\"stylesheet\">\n<style>\n  :root{\n    --paper:#e7e1d3;\n    --paper-2:#f2ecdd;\n    --ink:#171b16;\n    --ink-2:#252b24;\n    --rust:#c2451f;\n    --rust-deep:#8f3116;\n    --sage:#3f6b57;\n    --amber:#e0a92b;\n    --line:rgba(23,27,22,.16);\n    --line-2:rgba(23,27,22,.32);\n    --shadow:0 22px 46px -26px rgba(23,27,22,.55);\n    --maxw:1220px;\n    --ease:cubic-bezier(.22,.61,.36,1);\n  }\n\n  *{box-sizing:border-box;margin:0;padding:0}\n  html{scroll-behavior:smooth}\n  body{\n    font-family:'Space Grotesk',system-ui,sans-serif;\n    background:var(--paper);\n    color:var(--ink);\n    line-height:1.6;\n    -webkit-font-smoothing:antialiased;\n    overflow-x:hidden;\n  }\n  ::selection{background:var(--rust);color:#fff}\n\n  /* ---------- grain overlay ---------- */\n  .grain{\n    position:fixed;inset:0;z-index:9999;pointer-events:none;\n    opacity:.05;mix-blend-mode:multiply;\n    background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\");\n  }\n\n  /* ---------- type helpers ---------- */\n  .display{font-family:'Anton',sans-serif;font-weight:400;text-transform:uppercase;line-height:.92;letter-spacing:.01em}\n  .mono{font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:.16em;font-size:.72rem}\n  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 clamp(20px,4vw,48px)}\n\n  /* ---------- header ---------- */\n  .header{\n    position:sticky;top:0;z-index:100;\n    background:rgba(231,225,211,.82);\n    backdrop-filter:blur(10px);\n    border-bottom:1px solid var(--line);\n    transition:box-shadow .3s var(--ease),background .3s var(--ease);\n  }\n  .header.scrolled{box-shadow:0 10px 30px -20px rgba(23,27,22,.5);background:rgba(231,225,211,.94)}\n  .header .wrap{display:flex;align-items:center;justify-content:space-between;gap:20px;height:74px}\n  .brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink)}\n  .brand .mark{width:34px;height:34px;flex:none;color:var(--rust)}\n  .brand .mark svg{width:100%;height:100%;display:block}\n  .brand .name{font-family:'Anton',sans-serif;font-size:1.35rem;text-transform:uppercase;letter-spacing:.04em;line-height:1}\n  .brand .name em{font-style:normal;color:var(--rust)}\n  .nav{display:flex;align-items:center;gap:clamp(14px,2.4vw,34px)}\n  .nav a{\n    position:relative;text-decoration:none;color:var(--ink);\n    font-family:'Space Mono',monospace;font-size:.74rem;text-transform:uppercase;letter-spacing:.14em;\n    padding:6px 0;transition:color .25s var(--ease);\n  }\n  .nav a::after{content:\"\";position:absolute;left:0;bottom:0;height:2px;width:0;background:var(--rust);transition:width .3s var(--ease)}\n  .nav a:hover{color:var(--rust-deep)}\n  .nav a:hover::after{width:100%}\n\n  /* ---------- hero ---------- */\n  .hero{position:relative;padding:clamp(40px,7vw,86px) 0 clamp(56px,8vw,110px)}\n  .hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(30px,5vw,64px);align-items:center}\n  .eyebrow{display:inline-flex;align-items:center;gap:12px;color:var(--rust-deep);margin-bottom:26px}\n  .eyebrow .dot{width:9px;height:9px;background:var(--rust);bord"
+  },
+  {
+   "suite": "artifact",
+   "set": "precise",
+   "pass": 1,
+   "fixture": "game_memory",
+   "ok": true,
+   "why": "",
+   "secs": 73.9,
+   "chars": 13275,
+   "rep4": 0.074,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 63,
+    "completion_tokens": 5051,
+    "total_tokens": 5114,
+    "prompt_tokens_details": {
+     "cached_tokens": 56
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "precise",
+   "pass": 1,
+   "fixture": "gui_converter",
+   "ok": true,
+   "why": "",
+   "secs": 6.1,
+   "chars": 1084,
+   "rep4": 0.109,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 57,
+    "completion_tokens": 331,
+    "total_tokens": 388,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "precise",
+   "pass": 1,
+   "fixture": "email_rate",
+   "ok": true,
+   "why": "",
+   "secs": 4.4,
+   "chars": 895,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 88,
+    "completion_tokens": 186,
+    "total_tokens": 274,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "precise",
+   "pass": 1,
+   "fixture": "quote_cafe",
+   "ok": true,
+   "why": "",
+   "secs": 3.4,
+   "chars": 292,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 109,
+    "completion_tokens": 150,
+    "total_tokens": 259,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "precise",
+   "pass": 1,
+   "fixture": "minutes_notes",
+   "ok": true,
+   "why": "",
+   "secs": 1.8,
+   "chars": 181,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 93,
+    "completion_tokens": 48,
+    "total_tokens": 141,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "precise",
+   "pass": 1,
+   "fixture": "changelog_140",
+   "ok": true,
+   "why": "",
+   "secs": 1.8,
+   "chars": 189,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 119,
+    "completion_tokens": 65,
+    "total_tokens": 184,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "agent",
+   "set": "precise",
+   "pass": 1,
+   "fixture": "merge_sorted",
+   "ok": true,
+   "secs": 7.2,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "precise",
+   "pass": 1,
+   "fixture": "chunked",
+   "ok": true,
+   "secs": 5.9,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "precise",
+   "pass": 1,
+   "fixture": "parse_pairs",
+   "ok": true,
+   "secs": 7.4,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "artifact",
+   "set": "coding",
+   "pass": 1,
+   "fixture": "web_page",
+   "ok": false,
+   "why": "truncated at max_tokens",
+   "secs": 131.9,
+   "chars": 23207,
+   "rep4": 0.175,
+   "finish": "length",
+   "usage": {
+    "prompt_tokens": 82,
+    "completion_tokens": 8192,
+    "total_tokens": 8274,
+    "prompt_tokens_details": {
+     "cached_tokens": 75
+    }
+   },
+   "answer": "Here's a complete, self-contained landing page \u2014 a blueprint-inspired identity with live workshop diagnostics, a scroll-reactive hero, and a fully interactive service/booking flow.\n\n```html\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>Northline Bikes \u2014 Bicycle Repair &amp; Service Workshop</title>\n<meta name=\"description\" content=\"Northline Bikes \u2014 a full workshop for bicycles. Tune-ups, drivetrain overhauls, wheel building, suspension, diagnostics and custom frame builds.\">\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n<link href=\"https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap\" rel=\"stylesheet\">\n<style>\n  :root{\n    --paper:#e7e3d8;\n    --paper-2:#f4f1e8;\n    --ink:#181c20;\n    --ink-2:#262b30;\n    --line:#c4bdab;\n    --muted:#726f64;\n    --accent:#e6552b;\n    --accent-deep:#c23f1a;\n    --steel:#2f3a40;\n    --nav-h:72px;\n    --maxw:1180px;\n    --ease:cubic-bezier(.22,.68,.24,1);\n  }\n\n  *{box-sizing:border-box;margin:0;padding:0}\n  html{scroll-behavior:smooth}\n  body{\n    font-family:'IBM Plex Sans',system-ui,sans-serif;\n    color:var(--ink);\n    background:var(--paper);\n    line-height:1.6;\n    -webkit-font-smoothing:antialiased;\n    overflow-x:hidden;\n  }\n\n  /* ---------- global texture ---------- */\n  .grain{\n    position:fixed;inset:0;pointer-events:none;z-index:100;opacity:.045;\n    background-image:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\");\n    mix-blend-mode:multiply;\n  }\n\n  /* ---------- reveal ---------- */\n  .reveal{opacity:0;transform:translateY(28px);transition:opacity .7s var(--ease),transform .7s var(--ease);transition-delay:var(--d,0s)}\n  .reveal.in{opacity:1;transform:none}\n  .mask{overflow:hidden}\n  .mask>span{display:block;transform:translateY(115%);transition:transform .85s var(--ease);transition-delay:var(--d,0s)}\n  .mask.in>span{transform:none}\n\n  /* ---------- type ---------- */\n  .display{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;line-height:.95;letter-spacing:-.02em}\n  .kicker{font-family:'IBM Plex Mono',monospace;font-size:.72rem;letter-spacing:.24em;text-transform:uppercase;color:var(--muted)}\n  .mono{font-family:'IBM Plex Mono',monospace}\n  .section-head{max-width:640px;margin-bottom:52px}\n  .section-head .kicker{display:block;margin-bottom:14px}\n  .section-head h2{font-size:clamp(2rem,4.4vw,3.4rem)}\n  .section-head p{color:var(--muted);font-size:1.05rem;margin-top:16px;max-width:52ch}\n\n  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}\n\n  /* ---------- header ---------- */\n  header{\n    position:sticky;top:0;z-index:90;height:var(--nav-h);\n    display:flex;align-items:center;justify-content:space-between;\n    padding:0 28px;\n    background:rgba(231,227,216,.86);\n    backdrop-filter:blur(9px);\n    border-bottom:1px solid var(--line);\n    transition:box-shadow .3s var(--ease),background .3s var(--ease);\n  }\n  header.scrolled{box-shadow:0 10px 30px -18px rgba(24,28,32,.45)}\n  .brand{display:flex;align-items:center;gap:12px;text-decoration:none;color:var(--ink)}\n  .brand .mark{width:30px;height:30px;flex:none}\n  .brand .name{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:1.15rem;letter-spacing:-.01em}\n  .brand .name span{color:var(--accent)}\n  .nav{display:flex;align-items:center;gap:34px}\n  .nav a{\n    font-family:'IBM Plex Mono',monospace;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;\n    color:var(--ink);text-decoration:none;position:relative;padding:6px 0;\n  }\n  .n"
+  },
+  {
+   "suite": "artifact",
+   "set": "coding",
+   "pass": 1,
+   "fixture": "game_memory",
+   "ok": true,
+   "why": "",
+   "secs": 81.2,
+   "chars": 15485,
+   "rep4": 0.111,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 63,
+    "completion_tokens": 5791,
+    "total_tokens": 5854,
+    "prompt_tokens_details": {
+     "cached_tokens": 56
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "coding",
+   "pass": 1,
+   "fixture": "gui_converter",
+   "ok": true,
+   "why": "",
+   "secs": 6.9,
+   "chars": 1301,
+   "rep4": 0.132,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 57,
+    "completion_tokens": 384,
+    "total_tokens": 441,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "coding",
+   "pass": 1,
+   "fixture": "email_rate",
+   "ok": true,
+   "why": "",
+   "secs": 4.6,
+   "chars": 999,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 88,
+    "completion_tokens": 200,
+    "total_tokens": 288,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "coding",
+   "pass": 1,
+   "fixture": "quote_cafe",
+   "ok": true,
+   "why": "",
+   "secs": 3.3,
+   "chars": 308,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 109,
+    "completion_tokens": 148,
+    "total_tokens": 257,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "coding",
+   "pass": 1,
+   "fixture": "minutes_notes",
+   "ok": true,
+   "why": "",
+   "secs": 1.8,
+   "chars": 178,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 93,
+    "completion_tokens": 47,
+    "total_tokens": 140,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "coding",
+   "pass": 1,
+   "fixture": "changelog_140",
+   "ok": true,
+   "why": "",
+   "secs": 1.8,
+   "chars": 202,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 119,
+    "completion_tokens": 67,
+    "total_tokens": 186,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "agent",
+   "set": "coding",
+   "pass": 1,
+   "fixture": "merge_sorted",
+   "ok": true,
+   "secs": 7.1,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "coding",
+   "pass": 1,
+   "fixture": "chunked",
+   "ok": true,
+   "secs": 5.7,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "coding",
+   "pass": 1,
+   "fixture": "parse_pairs",
+   "ok": true,
+   "secs": 7.2,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "artifact",
+   "set": "balanced",
+   "pass": 1,
+   "fixture": "web_page",
+   "ok": false,
+   "why": "truncated at max_tokens",
+   "secs": 135.5,
+   "chars": 23494,
+   "rep4": 0.172,
+   "finish": "length",
+   "usage": {
+    "prompt_tokens": 82,
+    "completion_tokens": 8192,
+    "total_tokens": 8274,
+    "prompt_tokens_details": {
+     "cached_tokens": 75
+    }
+   },
+   "answer": "Here's a complete single-file landing page for **Northline Bikes** \u2014 built around a workshop blueprint identity (engineering grid, sprocket motif, drafting ticks) with a steel-and-ember palette, a live odometer hero stat, a working quote form, and reduced-motion support.\n\n```html\n<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>Northline Bikes \u2014 Bicycle Repair Workshop</title>\n<meta name=\"description\" content=\"Northline Bikes is a bicycle repair workshop in Portland. Tune-ups, wheel building, drivetrain overhauls \u2014 booked fast, done right.\">\n\n<!-- Fonts (with robust fallbacks) -->\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n<link href=\"https://fonts.googleapis.com/css2?family=Anton&family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap\" rel=\"stylesheet\">\n\n<style>\n/* ============ TOKENS ============ */\n:root{\n  --bg:#0d1117;\n  --bg-2:#121821;\n  --surface:#161d27;\n  --surface-2:#1c2532;\n  --line:#24303e;\n  --line-2:#334356;\n  --ink:#eef3f8;\n  --muted:#96a4b6;\n  --faint:#65788c;\n  --ember:#ff5a3c;\n  --ember-soft:#ff7f5a;\n  --signal:#ffd23f;\n  --steel:#5c93b0;\n  --font-display:'Anton', Impact, 'Arial Narrow', sans-serif;\n  --font-body:'Space Grotesk', system-ui, -apple-system, sans-serif;\n  --font-mono:'Space Mono', ui-monospace, 'SFMono-Regular', monospace;\n  --wrap:1200px;\n  --ease:cubic-bezier(.2,.7,.2,1);\n}\n\n/* ============ RESET ============ */\n*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}\nhtml{scroll-behavior:smooth}\nbody{\n  background:var(--bg);\n  color:var(--ink);\n  font-family:var(--font-body);\n  line-height:1.6;\n  -webkit-font-smoothing:antialiased;\n  overflow-x:hidden;\n}\nimg{display:block;max-width:100%}\na{color:inherit;text-decoration:none}\nul{list-style:none}\nbutton,input,textarea{font:inherit;color:inherit}\n::selection{background:var(--ember);color:#0d1117}\n\n.wrap{max-width:var(--wrap);margin:0 auto;padding:0 clamp(20px,5vw,48px)}\nsection{scroll-margin-top:96px;position:relative}\n\n/* ============ AMBIENT BACKGROUND ============ */\n.bg{position:fixed;inset:0;z-index:-2;pointer-events:none;\n  background:\n    radial-gradient(1100px 700px at 80% -10%, rgba(255,90,60,.10), transparent 60%),\n    radial-gradient(900px 600px at -10% 30%, rgba(92,147,176,.10), transparent 55%),\n    var(--bg);\n}\n.grid-bg{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.5;\n  background-image:\n    linear-gradient(var(--line) 1px, transparent 1px),\n    linear-gradient(90deg, var(--line) 1px, transparent 1px);\n  background-size:64px 64px;\n  -webkit-mask-image:radial-gradient(circle at 50% 30%, #000, transparent 78%);\n  mask-image:radial-gradient(circle at 50% 30%, #000, transparent 78%);\n}\n\n/* ============ REVEAL ============ */\n.reveal{opacity:0;transform:translateY(26px);transition:opacity .7s var(--ease),transform .7s var(--ease)}\n.reveal.in{opacity:1;transform:none}\n\n/* ============ TICKER ============ */\n.ticker{background:var(--surface);border-bottom:1px solid var(--line);overflow:hidden;\n  font-family:var(--font-mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}\n.ticker-track{display:flex;white-space:nowrap;width:max-content;animation:marquee 30s linear infinite}\n.ticker:hover .ticker-track{animation-play-state:paused}\n.ticker span{padding:9px 18px;display:inline-flex;align-items:center;gap:14px}\n.ticker span::before{content:\"\u25c6\";color:var(--ember);font-size:.6rem}\n@keyframes marquee{to{transform:translateX(-50%)}}\n\n/* ============ HEADER ============ */\nheader{position:sticky;top:0;z-index:100;background:rgba(13,17,23,.72);\n  backdrop-filter:blur(10px);border-bottom:1px solid transparent;transition:border-color .3s,background .3s}\nheader.scrolled{border-bottom-color:var(--line);background:rgba(13,17,23,.9)}\n.head-in{display:flex;align-items:center;justify-content:space"
+  },
+  {
+   "suite": "artifact",
+   "set": "balanced",
+   "pass": 1,
+   "fixture": "game_memory",
+   "ok": true,
+   "why": "",
+   "secs": 97.2,
+   "chars": 16167,
+   "rep4": 0.114,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 63,
+    "completion_tokens": 6392,
+    "total_tokens": 6455,
+    "prompt_tokens_details": {
+     "cached_tokens": 56
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "artifact",
+   "set": "balanced",
+   "pass": 1,
+   "fixture": "gui_converter",
+   "ok": true,
+   "why": "",
+   "secs": 9.1,
+   "chars": 1770,
+   "rep4": 0.147,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 57,
+    "completion_tokens": 477,
+    "total_tokens": 534,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "balanced",
+   "pass": 1,
+   "fixture": "email_rate",
+   "ok": true,
+   "why": "",
+   "secs": 4.9,
+   "chars": 853,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 88,
+    "completion_tokens": 179,
+    "total_tokens": 267,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "balanced",
+   "pass": 1,
+   "fixture": "quote_cafe",
+   "ok": true,
+   "why": "",
+   "secs": 4.2,
+   "chars": 411,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 109,
+    "completion_tokens": 181,
+    "total_tokens": 290,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "balanced",
+   "pass": 1,
+   "fixture": "minutes_notes",
+   "ok": true,
+   "why": "",
+   "secs": 2.0,
+   "chars": 215,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 93,
+    "completion_tokens": 54,
+    "total_tokens": 147,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "writing",
+   "set": "balanced",
+   "pass": 1,
+   "fixture": "changelog_140",
+   "ok": true,
+   "why": "",
+   "secs": 2.0,
+   "chars": 202,
+   "rep4": 0.0,
+   "finish": "stop",
+   "usage": {
+    "prompt_tokens": 119,
+    "completion_tokens": 67,
+    "total_tokens": 186,
+    "prompt_tokens_details": {
+     "cached_tokens": 0
+    }
+   },
+   "answer": null
+  },
+  {
+   "suite": "agent",
+   "set": "balanced",
+   "pass": 1,
+   "fixture": "merge_sorted",
+   "ok": true,
+   "secs": 7.1,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "balanced",
+   "pass": 1,
+   "fixture": "chunked",
+   "ok": true,
+   "secs": 5.5,
+   "turns": 4,
+   "calls": 3
+  },
+  {
+   "suite": "agent",
+   "set": "balanced",
+   "pass": 1,
+   "fixture": "parse_pairs",
+   "ok": true,
+   "secs": 6.8,
+   "turns": 4,
+   "calls": 3
+  }
+ ]
+}

@@ -78,7 +78,8 @@ The roster is the `strata-*.json` files next to the config you start with
 
 | Model | Engine | Context | Why it is here |
 | --- | --- | ---: | --- |
-| `qwen3.8-flash-next-gyro-m` | Strata 0.1.67 | 262,144 | Gyro-M TQ2_0 (~92 GB); 61.6 tok/s decode, 270 tok/s prompt, 262K vision |
+| `qwen3.8-flash-next-gyro-m` | Strata 0.1.67 | 262,144 | Gyro-M TQ2_0 (~92 GB); 61.6 tok/s decode, 270 tok/s prompt, 262K vision; tuned for coding harnesses in [this record](../bench/results/2026-11-25-host-rtx-4070-ti-super-harness-tuning/README.md) |
+| `iq3_s` | Strata 0.1.67 | 262,144 | Qwen3.8-Flash-Next IQ3_S (~78 GB) with the DFlash2 drafter and `--kv-grow`; same thinking ladder as Gyro-M |
 | `inkling-2-mini-sq-15` | Strata Inkling 0.1.68 (built here) | 65,536 | Native Inkling 2 Mini SQ-15 (~14.3 GB); 52.9 tok/s decode at 8K, 48.9 at 32K, 2,122 / 1,843 tok/s prefill; native encoder |
 | `qwen3.8-27b-aq3` | AryaInfer | 131,072 | Dense 27B quality at 3-bit codes, 1.2K tok/s prompt reads |
 | `qwen3.8-27b-ninfer` | AryaNInfer | 114,688 | Highest measured prefill on this card (2,039 tok/s at 8K); 131,072 overruns a 16 GiB card with vision |
