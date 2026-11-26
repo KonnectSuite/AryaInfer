@@ -356,17 +356,66 @@ class EngineInventory(unittest.TestCase):
 
     def test_inventory_reports_the_pinned_engines(self):
         rows = {e["key"]: e for e in engines.inventory()}
-        self.assertEqual(set(rows), {"strata", "inkling", "poly", "arya", "ninfer"})
-        self.assertTrue(all(r["required"] or r["manual"] or r["key"] == "inkling" for r in rows.values()))
+        pinned = {"strata", "inkling", "poly", "arya", "ninfer"}
+        self.assertTrue(pinned <= set(rows), sorted(rows))   # a run config may add a build of its own (tested below)
+        for key in pinned:
+            self.assertIn(rows[key]["status"], ("current", "outdated", "missing", "manual", "unknown"))
         self.assertEqual(rows["ninfer"]["manual"], True)                 # no download: built from source
         self.assertIn("upstream", rows["strata"])                        # where each engine really comes from
-        for r in rows.values():
-            self.assertIn(r["status"], ("current", "outdated", "missing", "manual", "unknown"))
         view = engines.as_view()
         self.assertEqual(view["release"], "engines-2026.11")
-        # a stable order the page can rely on: required engines first, then alphabetical
-        self.assertEqual([e["key"] for e in view["engines"]],
-                         ["arya", "poly", "strata", "inkling", "ninfer"])
+        # a stable order the page can rely on: required engines first, then alphabetical, then a person's own builds
+        keys = [e["key"] for e in view["engines"]]
+        self.assertEqual([k for k in keys if not rows[k].get("custom")][:5], ["arya", "poly", "strata", "inkling", "ninfer"])
+        self.assertTrue(all(rows[k].get("custom") for k in keys[5:]))
+
+    def test_an_engine_outside_the_manifest_gets_a_card(self):
+        # A .basalt model points at basalt.exe, which engines.json does not pin: the page must show it, or it would
+        # describe a checkout that is not the one running.
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "engines.json").write_text(json.dumps({"schema": 1, "release": "test", "engines": {
+                "strata": {"binary": "strata.exe", "dir": "engine", "version": "0.1.67", "required": True}}}),
+                encoding="utf-8")
+            bin_dir = root / "basalt" / "bin"
+            bin_dir.mkdir(parents=True)
+            (bin_dir / "basalt.exe").write_bytes(b"")
+            (root / "strata-basalt-ud.json").write_text(json.dumps({
+                "exe": str(bin_dir / "basalt.exe"), "args": ["--model", "m.basalt"]}), encoding="utf-8")
+            rows = {e["key"]: e for e in engines.inventory(root)}
+            self.assertEqual(set(rows), {"strata", "basalt"})
+            got = rows["basalt"]
+            self.assertTrue(got["custom"])
+            self.assertEqual((got["status"], got["binary"], got["title"]), ("custom", "basalt.exe", "Basalt"))
+            self.assertEqual(got["path"], str((bin_dir / "basalt.exe").resolve()))
+            self.assertEqual(got["version"], "")                 # nothing pinned
+            self.assertEqual(got["dir"], str(bin_dir.resolve()))
+            self.assertEqual(len(engines.inventory(root)), 2)     # one card per binary: the manifest one is not doubled
+            # a binary that is gone is not silently reported as present
+            (bin_dir / "basalt.exe").unlink()
+            self.assertEqual({e["key"]: e["status"] for e in engines.inventory(root)}["basalt"], "missing")
+
+    def test_a_manifest_binary_used_by_a_run_config_is_not_duplicated(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "engines.json").write_text(json.dumps({"schema": 1, "engines": {
+                "strata": {"binary": "strata.exe", "dir": "engine", "version": "0.1.67", "required": True}}}),
+                encoding="utf-8")
+            (root / "engine").mkdir()
+            (root / "engine" / "strata.exe").write_bytes(b"")
+            (root / "strata-gyro.json").write_text(json.dumps({
+                "exe": "engine\\strata.exe", "args": ["--model", "x.strata"]}), encoding="utf-8")
+            self.assertEqual([e["key"] for e in engines.inventory(root)], ["strata"])
+
+    def test_a_backup_run_config_is_not_an_engine(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "engines.json").write_text(json.dumps({"schema": 1, "engines": {}}), encoding="utf-8")
+            (root / "bin").mkdir()
+            (root / "bin" / "other.exe").write_bytes(b"")
+            name = "strata-x.json.control-center-backup-1234.json"
+            (root / name).write_text(json.dumps({"exe": str(root / "bin" / "other.exe")}), encoding="utf-8")
+            self.assertEqual(engines.inventory(root), [])
 
 
 class Endpoints(unittest.TestCase):
@@ -410,8 +459,14 @@ class Endpoints(unittest.TestCase):
         code, body = self.call("/api/engines")
         self.assertEqual(code, 200)
         self.assertEqual(body["release"], "engines-2026.11")
-        self.assertEqual(len(body["engines"]), 5)
-        self.assertTrue(all("status" in e for e in body["engines"]))
+        # the five of engines.json, plus a card for any engine a run config points at outside it (this checkout has
+        # one: the .basalt lane); every extra card must say it is a person's own build
+        keys = [e["key"] for e in body["engines"]]
+        self.assertTrue({"strata", "inkling", "poly", "arya", "ninfer"} <= set(keys), keys)
+        for e in body["engines"]:
+            self.assertTrue("status" in e)
+            if e["key"] not in {"strata", "inkling", "poly", "arya", "ninfer"}:
+                self.assertTrue(e.get("custom"), e["key"])
         # which run configs use which engine: the sample config names strata-poly.exe
         self.assertIn("used_by", body)
         self.assertIn("mini", body["used_by"].get("poly", []))

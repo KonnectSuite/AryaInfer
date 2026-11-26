@@ -427,7 +427,9 @@
             <span class="muted small" id="engines-note"></span>
           </div>
           <p class="muted small">Each model runs on one engine. Strata, Inkling and the poly engine are built and
-            released by their upstream projects; <code>aryainfer</code> and AryaNInfer are this fork's own builds.</p>
+            released by their upstream projects; <code>aryainfer</code> and AryaNInfer are this fork's own builds.
+            An engine a run config points at that <code>engines.json</code> does not pin — a <code>.basalt</code>
+            container's <code>basalt.exe</code>, say — gets a card of its own, marked <i>your build</i>.</p>
           <div class="engine-cards" id="engines-cards"></div>
           <div class="st-card engines-repair-card">
             <div class="cfg-actions">

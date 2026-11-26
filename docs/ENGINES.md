@@ -107,6 +107,10 @@ The roster is the `strata-*.json` files next to the config you start with
 | `inkling-2-mini-sq-10` | Strata Inkling 0.1.68 (built here) | 262,144 | Strata's `.strata` SQ-10 pack (10.5 GB) with its own vision shard and its DSpark drafter inside it; 1,169 of 3,072 experts in VRAM and an 8.60 GB pinned host arena; 980.8 tok/s prefill and 29.1 tok/s decode at a 2,048-token prompt, 19.2 tok/s at 32,768 with `--draft off` (drafting costs 5.4 tok/s there, so it is off). Uninstalled from that host 2026-11-26, though `engine-inkling\strata-inkling.exe` and its source stay |
 | `basalt-qwen38-ud-iq1_s` | Basalt 0.5.7 (the user's build) | 131,072 | Qwen3.8-Flash-Next UD-IQ1_S from Basalt's own 70.4 GB `.basalt` container, `q4_0` KV, on the second host only: 55.9 tok/s decode in the app, 1,218 / 1,211 tok/s prompt at 4K / 16K, 24.8 s to load with 365 MiB VRAM free on an 8 GB card. The [BASALT.md](BASALT.md) lane; its Coder container crashes the engine on this card |
 
+The Engines page lists the five engines of `engines.json` and then any engine a run config points at that the manifest
+does not pin — a row for the row above, marked *your build*, with the binary's real path and `not pinned` where a pinned
+version would go. That is how an opt-in lane stays visible without pretending `setup.py` installs it.
+
 ## Measured on this host
 
 Every number below was measured on the machine in [ARYAINFER.md](ARYAINFER.md)

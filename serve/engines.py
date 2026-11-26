@@ -23,9 +23,11 @@ def version_tuple(v) -> tuple:
     return tuple(int(x) for x in _parts(v) if x.isdigit())
 
 
-def manifest() -> dict:
+def manifest(root: Path | None = None) -> dict:
+    """engines.json as the installer reads it.  `root` defaults to this checkout, so a test can point it elsewhere."""
+    path = (Path(root) if root is not None else ROOT) / "engines.json"
     try:
-        data = json.loads(MANIFEST.read_text(encoding="utf-8-sig"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
         return {"schema": 1, "release": None, "engines": {}}
     return data if isinstance(data, dict) else {"schema": 1, "release": None, "engines": {}}
@@ -59,11 +61,76 @@ def _installed(install_dir: Path, binary: str) -> dict:
             "source": build.get("source"), "core": build.get("core"), "core_commit": build.get("core_commit")}
 
 
+TRACKED = r"^strata-.+\.json$"
+BACKUP = ".control-center-backup-"
+
+
+def _custom(root: Path, claimed: list[tuple]) -> list[dict]:
+    """Engines a run config points at that engines.json does not pin.
+
+    A `.basalt` model (or any other binary a person points a run config at) is not in the manifest: nothing installs
+    it, no release is pinned, and repair leaves it alone.  Leaving it off this page would describe a checkout that is
+    not the one running, so it gets a card of its own - its own build, with what a BUILD.json beside it says, if
+    anything.  `claimed` holds the (resolved parent, binary name) of the manifest engines so one binary is not
+    reported twice.
+    """
+    import re
+    out = []
+    for cfg_path in sorted(root.glob("strata-*.json")):
+        if BACKUP in cfg_path.name or not re.match(TRACKED, cfg_path.name):
+            continue
+        try:
+            cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        exe = str(cfg.get("exe") or "") if isinstance(cfg, dict) else ""
+        if not exe:
+            continue
+        p = Path(exe)
+        if not p.is_absolute():
+            p = Path(cfg.get("cwd") or root) / p
+        try:
+            resolved = p.resolve()
+            parent = resolved.parent
+        except OSError:
+            resolved, parent = p, p.parent
+        if any(parent == owner and p.name.lower() == name for owner, name in claimed):
+            continue
+        if any(entry["binary"].lower() == p.name.lower() for entry in out):
+            continue
+        build = _build_json(parent) or _build_json(parent.parent)
+        exists = p.is_file()
+        out.append({
+            "key": resolved.stem.lower(),
+            "title": resolved.stem.replace("-", " ").replace("_", " ").title(),
+            "binary": p.name,
+            "dir": str(parent),
+            "path": str(resolved),
+            "required": False,
+            "manual": True,
+            "custom": True,
+            "version": "",
+            "min_version": "",
+            "upstream": "",
+            "release": "",
+            "assets": {},
+            "status": "custom" if exists else "missing",
+            "installed_version": str(build["version"]) if build and build.get("version") else "",
+            "archs": build.get("archs") if build else None,
+            "cuda": build.get("cuda") if build else None,
+            "source": build.get("source") if build else None,
+            "core": None,
+            "core_commit": None,
+        })
+    return out
+
+
 def inventory(root: Path = ROOT) -> list[dict]:
     """The Engines view's list: every engine of engines.json with its manifest facts and installed state."""
-    data = manifest()
+    data = manifest(root)
     engines = data.get("engines") or {}
     out = []
+    claimed = []                    # (resolved install dir, binary name) of the manifest engines, for _custom()
     for key, rec in engines.items():
         if not isinstance(rec, dict):
             continue
@@ -100,13 +167,15 @@ def inventory(root: Path = ROOT) -> list[dict]:
             installed = version_tuple(state["installed_version"])
             minimum = version_tuple(min_v)
             entry["status"] = "outdated" if (minimum and installed < minimum) else "current"
+        claimed.append((install_dir.resolve(), binary.lower()))
         out.append(entry)
-    # a stable order the page can rely on: required first, then by key
-    return sorted(out, key=lambda e: (not e["required"], e["key"]))
+    out.extend(_custom(Path(root), claimed))
+    # a stable order the page can rely on: required first, then the pinned engines by key, then a person's own builds
+    return sorted(out, key=lambda e: (not e["required"], bool(e.get("custom")), e["key"]))
 
 
 def as_view(root: Path = ROOT) -> dict:
-    data = manifest()
+    data = manifest(root)
     return {"release": data.get("release"), "updated": data.get("updated"),
             "engines": inventory(root)}
 

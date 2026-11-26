@@ -1784,7 +1784,7 @@ $("models-cards").addEventListener("click", (e) => {
 // One card per engine of engines.json: pinned and installed version, CUDA archs, provenance links, and the run
 // configs that use it. Repair runs setup.py --repair-engines in the background, only when the server was started
 // with --allow-engine-repair.
-function engStatusLabel(s) { return {current: "current", outdated: "outdated", missing: "missing", manual: "manual", unknown: "unknown"}[s] || s; }
+function engStatusLabel(s) { return {current: "current", outdated: "outdated", missing: "missing", manual: "manual", unknown: "unknown", custom: "your build"}[s] || s; }
 function engBadge(s) {
   return s === "current" ? "st-badge st-badge--generating" : s === "outdated" ? "st-badge st-badge--queued"
     : s === "missing" ? "st-badge st-badge--error" : "st-badge";
@@ -1811,10 +1811,16 @@ async function loadEngines() {
     if (e.upstream) links.push(`<a href="${esc(e.upstream)}" target="_blank" rel="noopener noreferrer">source ${icon("external", "st-icon st-icon--sm")}</a>`);
     if (e.release) links.push(`<a href="${esc(e.release)}" target="_blank" rel="noopener noreferrer">releases ${icon("external", "st-icon st-icon--sm")}</a>`);
     const rows = [
-      `<div class="kv-line"><b>binary</b> <code>${esc(e.dir)}/${esc(e.binary)}</code></div>`,
-      `<div class="kv-line"><b>pinned</b> <span>${esc(e.version || "—")}${e.required ? " · required" : ""}${e.manual ? " · manual build" : ""}</span></div>`,
-      `<div class="kv-line"><b>installed</b> <span>${esc(e.installed_version || "—")}</span></div>`,
+      `<div class="kv-line"><b>binary</b> <code>${esc(e.path || `${e.dir}/${e.binary}`)}</code></div>`,
+      e.custom
+        ? `<div class="kv-line"><b>pinned</b> <span>not pinned · your build</span></div>`
+        : `<div class="kv-line"><b>pinned</b> <span>${esc(e.version || "—")}${e.required ? " · required" : ""}${e.manual ? " · manual build" : ""}</span></div>`,
     ];
+    // a pinned engine always shows what is installed (missing is a fact worth reading); a person's own build is only
+    // worth a line when a BUILD.json beside it says something
+    if (!e.custom || e.installed_version) {
+      rows.push(`<div class="kv-line"><b>installed</b> <span>${esc(e.installed_version || "—")}</span></div>`);
+    }
     if (Array.isArray(e.archs) && e.archs.length) rows.push(`<div class="kv-line"><b>cuda archs</b> <span>${esc(e.archs.join(", "))}</span></div>`);
     if (e.cuda) rows.push(`<div class="kv-line"><b>cuda</b> <span>${esc(String(e.cuda))}</span></div>`);
     if (e.core) rows.push(`<div class="kv-line"><b>core</b> <span>${esc(e.core)}${e.core_commit ? ` @ ${esc(String(e.core_commit).slice(0, 7))}` : ""}</span></div>`);
@@ -1825,6 +1831,7 @@ async function loadEngines() {
         <span class="${engBadge(e.status)} eng-status">${esc(engStatusLabel(e.status))}</span></div>
       ${rows.join("")}
       ${links.length ? `<div class="engine-links">${links.join("")}</div>` : ""}
+      ${e.custom ? `<p class="muted eng-note">Not in engines.json: a build you installed yourself. Repair leaves it alone, and its version comes from the run config and its own build.</p>` : ""}
       <div class="kv-line"><b>used by</b> <span class="used-by">${users.length ? users.map((u) => `<span class="chip-info">${esc(u)}</span>`).join("") : "—"}</span></div>
     </article>`;
   }).join("");

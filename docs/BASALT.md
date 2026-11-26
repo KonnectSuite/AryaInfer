@@ -17,10 +17,17 @@ for it, and classifies its process; the binary and the models stay where the use
 | Roster | `serve/models.py` (`_basalt`) | the backend, display name, size label, quantisation, context, draft-head and layered/vision flags, RAM and VRAM estimates |
 | Engine class | `serve/server.py` (`basalt_engine`) | marks the process as a Basalt lane: same line protocol, no `SAVE`/`RESTORE`, no `BUILD.json` - the version comes from the engine's own `INFO engine=` |
 | Settings page | `serve/configschema.py` | the `basalt` engine family and the 107 long options its own `--help` lists |
+| Engines page | `serve/engines.py` (`_custom`) | a card of its own, marked *your build*, because `engines.json` does not pin it and nothing installs it |
 | Tests | `tools/test_basalt_model.py`, `serve/test_models_basalt.py` | 22 tests over a synthetic container, the importer, the roster and the family |
 
 Nothing else changes: chat, thinking, tools, the Anthropic and OpenAI APIs, the picker, the web app and the run-config
 editor all go through the same code as the other lanes.
+
+The Engines page is a census of `engines.json`, so an engine it does not pin had no card at all: the page described a
+checkout that was not the one running. It now reads the run configs as well and adds a card for any binary the manifest
+does not own — the binary's real path, `not pinned · your build` where a pinned version would go, and the models that
+use it. Repair leaves those alone, and a binary that has gone missing is marked missing rather than dropped. A run
+config pointing at a manifest engine still gets one card, not two.
 
 ## Installing a model
 
