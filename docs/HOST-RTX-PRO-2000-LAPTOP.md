@@ -617,14 +617,16 @@ only: the engine binaries, this checkout and every bench record stayed.
 186.06 GiB freed: `C:` went from 744.9 to 930.9 GiB free (`Win32_LogicalDisk`).
 
 Nothing else was using them. No AryaInfer engine process was running. The engine
-that replaced it here — basalt, serving `127.0.0.1:8080` out of
+that replaced it here — basalt, then serving `127.0.0.1:8080` out of
 `C:\Users\kphung\Documents\deepseek-harness\default-workspace\basalt-src\basalt-main`
-— keeps its own copies (`models\Qwen3.8-FN-Coder-IQ1_M.basalt` 57.29 GiB,
-`Qwen3.8-FN-UD-IQ1_S.basalt` 65.57 GiB) and its checkout contains no reference to
+— kept its own copies (`models\Qwen3.8-FN-Coder-IQ1_M.basalt` 57.29 GiB,
+`Qwen3.8-FN-UD-IQ1_S.basalt` 65.57 GiB) and its checkout contained no reference to
 `PolyStrata-data`, so the `mtp\` tree was not its draft source either: it drafts
 with `--suffix-draft 3`. Each large file was opened read/write before deletion to
 prove it was unlocked, and `models\inkling2\Inkling-2-Mini-UD-IQ3_XXS.gguf` went
-with its family even though no run config named it.
+with its family even though no run config named it. That checkout was deleted
+later the same day, once the lane ran out of `KonnectSuite\basalt` — see
+[The Basalt lane](#the-basalt-lane-one-server-for-both-engines).
 
 Five profiles remain installed: the four PolyStrata ones on
 `engine-poly\strata-poly.exe` —
@@ -699,6 +701,22 @@ The model is Basalt's own 70.4 GB container, `--max-context 131072`, `--kv q4_0`
 user's Basalt config. Its run config is `strata-basalt-qwen38-ud-iq1_s.json` beside
 the server, its tokenizer is `PolyStrata-data\packs\basalt-qwen38-ud-iq1_s\tokenizer`,
 and the lane listens on port 8081 because basalt's own server keeps 8080.
+
+Where its three moving parts live now: the binaries in
+`KonnectSuite\basalt\bin` (`basalt.exe` 149,016,576 B and the vision, bench and
+probe tools), the six expert profiles it reads out of its own working directory in
+`KonnectSuite\basalt\data\profiles`, and the container in
+`PolyStrata-data\models\Qwen3.8-FN-UD-IQ1_S.basalt`. They were moved out of the
+`...\deepseek-harness\...\basalt-src` checkout on 2026-11-26 for two reasons: the
+lane should not depend on a scratch directory, and the checkout still held
+`Qwen3.8-FN-Coder-IQ1_M.basalt` (57.29 GiB) — a container that does not run on this
+card — plus 2.58 GiB of build objects. After the move the checkout was deleted:
+60.04 GiB, `C:` 931.3 → 991.3 GiB free. The run config's `cwd` is
+`KonnectSuite\basalt` on purpose: `--expert-profile` defaults to `data/profiles`
+relative to it, and the engine log shows it reading
+`basalt/data/profiles/qwen4exp-48x512.prof` and pre-filling 998 of 998 expert slots
+from it (1,363 MB) after the move, with a chat answered in 1.47 s (`relocated lane
+ready`, 59 prompt / 33 completion tokens).
 
 Measured through `serve/server.py` with `tools/strata_bench.py`, 3 runs, medians:
 

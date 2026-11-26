@@ -53,7 +53,7 @@ Cache hit over the follow-up turns: 69.3 % (69.3-69.3); earlier-turn tokens read
 | 4 | 13250 | 10297 | 2953 | 839.9 | 3.603 | 47.6 |
 | 5 | 16515 | 13295 | 3220 | 866.8 | 3.802 | 42.6 |
 
-Per-request data: `results.json`. Engine log lines from the load and two requests: `engine-log-excerpt.txt` (copied by hand from the server's own log, `strata-basalt-qwen38-ud-iq1_s.log`).
+Per-request data: `results.json`. Engine log lines from the load and two requests: `engine-log-excerpt.txt` (copied by hand from the server's own log, `strata-basalt-qwen38-ud-iq1_s.log`). The paths in that excerpt are the checkout these numbers were measured from; the lane moved to `KonnectSuite\basalt` afterwards, and the numbers did not change (see [the host page](../../../docs/HOST-RTX-PRO-2000-LAPTOP.md#the-basalt-lane-one-server-for-both-engines)).
 
 ## The same prompts against Basalt's own server
 
