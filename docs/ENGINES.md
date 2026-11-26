@@ -89,11 +89,11 @@ The roster is the `strata-*.json` files next to the config you start with
 | `qwen3.8-27b-turbo-iq3xxs` | AryaInfer | 131,072 | Daily-driver 27B with MTP |
 | `inkling-2-mini-ud-q4_k_xl` | PolyStrata 0.1.66 | 262,144 | Unsloth UD-Q4_K_XL text fallback; 262K, vision via `mmproj-F16.gguf` |
 | `qwen3.5-4b` | AryaInfer | 65,536 | Small, fast, vision-capable |
-| `qwen3.8-flash-next-coder-iq1_m` | Strata 0.1.63 | 172,032 | The GSQ-RCO Coder at IQ1_M (58 GB on disk), KV k8v4; 22.4 tok/s end to end at 131K, 9.8 at 262K fp16-KV because the KV cache takes VRAM from the expert tier |
-| `qwen3.8-flash-next-gyro-s` | Strata 0.1.63 | 172,032 | Gyro-S, trellis TQK6/TQK7 experts with the PLE table on SSD, KV k8v4; its pack must carry the v5 Hadamard table; 26.3 tok/s at 262K in the app |
-| `inkling-2-mini-poly` | PolyStrata 0.2.20 | 172,032 | The Inkling-2-Mini IQ1_S GGUF through `strata-poly`, which now runs `inkling2_loop`; KV q8_0 and vision on (the 448×320 test image's `HELLO 42` read correctly); 54.7 tok/s decode in the app at 262K with a warm expert cache (97.8% hit), 14.75 tok/s steady from cold |
-| `inkling-2-mini-poly-q4` | PolyStrata 0.2.20 | 172,032 | The same model at Q4_K_XL (16.4 GB), KV q8_0 and vision on; 851 of 3,072 experts stay in VRAM and it decodes at about 20 tok/s in the app, so Q4 costs roughly 2.5x the speed of IQ1_S on an 8 GB card |
-| `inkling-2-mini-sq-10` | Strata Inkling 0.1.68 (built here) | 262,144 | Strata's `.strata` SQ-10 pack (10.5 GB) with its own vision shard and its DSpark drafter inside it; 1,169 of 3,072 experts in VRAM and an 8.60 GB pinned host arena; 980.8 tok/s prefill and 29.1 tok/s decode at a 2,048-token prompt, 19.2 tok/s at 32,768 with `--draft off` (drafting costs 5.4 tok/s there, so it is off) |
+| `qwen3.8-flash-next-coder-iq1_m` | Strata 0.1.63 | 172,032 | The GSQ-RCO Coder at IQ1_M (58 GB on disk), KV k8v4; 22.4 tok/s end to end at 131K, 9.8 at 262K fp16-KV because the KV cache takes VRAM from the expert tier. Uninstalled from that host 2026-11-26 |
+| `qwen3.8-flash-next-gyro-s` | Strata 0.1.63 | 172,032 | Gyro-S, trellis TQK6/TQK7 experts with the PLE table on SSD, KV k8v4; its pack must carry the v5 Hadamard table; 26.3 tok/s at 262K in the app. Uninstalled from that host 2026-11-26 |
+| `inkling-2-mini-poly` | PolyStrata 0.2.20 | 172,032 | The Inkling-2-Mini IQ1_S GGUF through `strata-poly`, which now runs `inkling2_loop`; KV q8_0 and vision on (the 448×320 test image's `HELLO 42` read correctly); 54.7 tok/s decode in the app at 262K with a warm expert cache (97.8% hit), 14.75 tok/s steady from cold. Uninstalled from that host 2026-11-26 |
+| `inkling-2-mini-poly-q4` | PolyStrata 0.2.20 | 172,032 | The same model at Q4_K_XL (16.4 GB), KV q8_0 and vision on; 851 of 3,072 experts stay in VRAM and it decodes at about 20 tok/s in the app, so Q4 costs roughly 2.5x the speed of IQ1_S on an 8 GB card. Uninstalled from that host 2026-11-26 |
+| `inkling-2-mini-sq-10` | Strata Inkling 0.1.68 (built here) | 262,144 | Strata's `.strata` SQ-10 pack (10.5 GB) with its own vision shard and its DSpark drafter inside it; 1,169 of 3,072 experts in VRAM and an 8.60 GB pinned host arena; 980.8 tok/s prefill and 29.1 tok/s decode at a 2,048-token prompt, 19.2 tok/s at 32,768 with `--draft off` (drafting costs 5.4 tok/s there, so it is off). Uninstalled from that host 2026-11-26, though `engine-inkling\strata-inkling.exe` and its source stay |
 
 ## Measured on this host
 
@@ -104,13 +104,19 @@ fixed token corpus, and the 35B rows read long synthetic prompts. Compare
 within a row, not across engines.
 
 Five profiles in the table above — the four at 172,032 and `inkling-2-mini-sq-10`
-at 262,144 — are not on that machine: they run on the second host in
+at 262,144 — were never on that machine: they ran on the second host in
 [HOST-RTX-PRO-2000-LAPTOP.md](HOST-RTX-PRO-2000-LAPTOP.md) (RTX PRO 2000
 Blackwell Generation Laptop, 8 GB VRAM), where the KV format and the expert budget
-are the whole design. The Coder and Gyro-S rows were measured on Strata 0.1.63;
-since 2026-11-25 their configs point at `engine\strata.exe`, which is the pinned
-0.1.67 release, and that same-day comparison (prompt +71% at 4K, decode −22%) is
-in the host page.
+are the whole design. All five were uninstalled from that host on 2026-11-26 when it
+moved to another inference engine — 186.06 GiB of model files, packs, the MTP tree
+and the run configs, with the what-and-why in the host page — so those rows are
+measurements that keep their numbers and no longer describe an installed profile.
+What that host runs now is four PolyStrata profiles: Qwen3.6-35B-A3B UD-Q4_K_M,
+Nail UD-Q4_K_XL, and Ornith 1.5 APEX in its Balanced and APEX-I-Quality quants.
+The Coder and Gyro-S rows were measured on Strata 0.1.63; from 2026-11-25 until
+their removal their configs pointed at `engine\strata.exe`, the pinned 0.1.67
+release, and that same-day comparison (prompt +71% at 4K, decode −22%) is in the
+host page.
 
 Two installed profiles have **no speed row here**: Qwen3.8-27B Turbo IQ3_XXS,
 Qwen3.5-4B Q4_K_M. They run daily on this host; their speeds were not re-measured

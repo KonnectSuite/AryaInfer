@@ -1,5 +1,13 @@
 # This laptop: what it runs, and what it measured
 
+> **As of 2026-11-26 this host runs four profiles, all through
+> `engine-poly\strata-poly.exe`**: Qwen3.6-35B-A3B UD-Q4_K_M, the Nail and Ornith
+> 1.5 quants and Ornith APEX-I-Quality (90.9 GiB). The Coder, Gyro-S, both Inkling
+> lanes and MiniCPM-V were uninstalled on 2026-11-26 — 186.06 GiB of model files,
+> packs, the MTP tree and their run configs — because this machine moved to another
+> inference engine; see "Models uninstalled 2026-11-26". The measurements made on
+> the removed models stay below, and their bench records stay in `bench/results/`.
+>
 > **The Coder was removed from this machine on 2026-11-13**: the model shards, its
 > pack, the MTP runtime, the vision encoder and `strata-coder-iq1_m.json` were
 > deleted (63.08 GB freed), because at 8 GB of VRAM it ran at 5-33 tok/s with a
@@ -28,7 +36,7 @@ this machine appear here.
 | RAM | 63.4 GiB |
 | Disk | 1 NVMe volume, 2 TB |
 | OS | Windows 11, balanced power plan (the only scheme installed) |
-| Model | Qwen3.8-Flash-Next Coder IQ1_M, 54.4 GB over two shards (27.58 GB native + 26.82 GB PLE) |
+| Model | four profiles remain: Qwen3.6-35B-A3B UD-Q4_K_M (21.94 GiB), Nail Qwen3.6-35B-A3B UD-Q4_K_XL (20.82 GiB), Ornith 1.5 APEX-MTP-I Balanced (25.21 GiB) and APEX-I-Quality (22.93 GiB). Removed 2026-11-26: Coder IQ1_M (54.4 GiB over two shards, 27.58 native + 26.82 PLE), Gyro-S TQ1_0, Inkling 2 Mini at three GGUF quants and the SQ-10 pack, MiniCPM-V 4.7 |
 
 ## The engines on this machine
 
@@ -588,6 +596,84 @@ Two things this host did not change and did not test: the plugin still reads an
 Inkling run config as engine kind `other` (`lib/index.js:337-343`), so the
 tuning panel offers only the flags already in the file; and the name belongs in
 the upstream package, since a plugin update overwrites this edit.
+
+## Models uninstalled 2026-11-26
+
+This machine moved to another inference engine, so the Qwen3.8-Flash-Next, Inkling
+and MiniCPM-V model files were uninstalled here at the user's request. Model data
+only: the engine binaries, this checkout and every bench record stayed.
+
+| Removed | Size |
+| --- | ---: |
+| `PolyStrata-data\models\coder-IQ1_M` — GSQ-RCO IQ1_M 27.58 + 26.82 GiB, `mmproj-Qwen3.8-Flash-Next-BF16.gguf` 0.85 GiB, two `.done` markers | 55.24 GiB |
+| `PolyStrata-data\models\gyro-s` — `Qwen3.8-Flash-Next-Gyro-S-TQ1_0.gguf` 54.47 GiB, `mmproj-F16.gguf` 0.84 GiB | 55.31 GiB |
+| `PolyStrata-data\models\inkling2` — Unsloth UD IQ1_S 7.23, IQ3_XXS 10.86, Q4_K_XL 16.42 GiB, `mmproj-F16.gguf` 0.60 GiB | 35.11 GiB |
+| `PolyStrata-data\models\minicpmv-Q4_K_M` — `MiniCPM-V-4_7-35B-A3B-Q4_K_M.gguf` 19.71 GiB, `mmproj-model-f16.gguf` 1.04 GiB | 20.76 GiB |
+| `PolyStrata-data\models\inkling-2-strata` — `Inkling-2-Mini-SQ-10.strata` 9.75 GiB, `Inkling-2-Mini-Vision.strata` 0.59 GiB | 10.35 GiB |
+| `PolyStrata-data\packs\` — `coder-iq1_m`, `gyro-s` (the two 1.4 GiB `dense.bin` expert tables), `inkling2-mini`, `inkling-2-mini-sq-10`, `minicpmv-q4_k_m` and their tokenizer folders | 2.84 GiB |
+| `PolyStrata-data\mtp\` — `rt\` 0.77 GiB, named only by the Coder configs, plus the `tensors\` extraction (4.86 GiB) and `mtp-q2_0.gguf` (0.83 GiB) | 6.45 GiB |
+| 22 `strata-coder-*`, `strata-gyro-s*`, `strata-inkling*`, `strata-minicpmv-*` configs, `.bak`s, control-center backups and engine logs beside the server, and three more in `configs-unused\` | 0.75 MiB |
+
+186.06 GiB freed: `C:` went from 744.9 to 930.9 GiB free (`Win32_LogicalDisk`).
+
+Nothing else was using them. No AryaInfer engine process was running. The engine
+that replaced it here — basalt, serving `127.0.0.1:8080` out of
+`C:\Users\kphung\Documents\deepseek-harness\default-workspace\basalt-src\basalt-main`
+— keeps its own copies (`models\Qwen3.8-FN-Coder-IQ1_M.basalt` 57.29 GiB,
+`Qwen3.8-FN-UD-IQ1_S.basalt` 65.57 GiB) and its checkout contains no reference to
+`PolyStrata-data`, so the `mtp\` tree was not its draft source either: it drafts
+with `--suffix-draft 3`. Each large file was opened read/write before deletion to
+prove it was unlocked, and `models\inkling2\Inkling-2-Mini-UD-IQ3_XXS.gguf` went
+with its family even though no run config named it.
+
+Four profiles remain installed, all on `engine-poly\strata-poly.exe`:
+`strata-qwen36-200k.json`, `strata-qwen36-nail-qwen3.6-35b-a3b-ud-q4_k_xl.json`,
+`strata-ornith-apex-i-quality.json` and
+`strata-qwen36-ornith-1.5-35b-a3b-apex-mtp-i-balanced.json`, over 90.9 GiB in
+`models\{nail-qwen3.6-35b-a3b, ornith-APEX-I-QUALITY, ornith-balanced,
+qwen36-UD-Q4_K_M}` and their four pack folders. No file was shared between the
+removed families and these four, so nothing kept lost a weight, an mmproj or a
+tokenizer. `serve/models.py:208` lists the picker by globbing `strata-*.json`
+beside the server, so removing the configs is what takes the models out of the
+WebUI and out of `/api/models`.
+
+Still here and now unused: `engine\strata.exe` 0.1.67 and
+`engine-inkling\strata-inkling.exe` with its vendored source (0.83 GiB, 11,475
+files) have no model to run on this host, and `strata-inkling.exe` stays in the
+AryaCode plugin's `ENGINE_IMAGES` set (see the section above) because the edit is
+inert without an Inkling pack and rebuilding the sm_120 engine costs a CUDA
+compile. `data\expert-profile.bin` and `data\expert-profile-coder.bin` stayed
+because they are tracked in this repo, not installed data.
+
+The AryaCode local-LLM row in `C:\Users\kphung\.aryacode\profiles\desktop\cordis.patch.yml`
+pointed at `strata-gyro-s.json` on port 8080, so it was repointed the same day:
+`configPath` and `logPath` now name `strata-qwen36-200k.json` and the lane listens on
+`127.0.0.1:8081`, because basalt owns 8080 and a second server there reads as
+`phase=foreign`, which is the failure recorded above. The previous file is at
+`cordis.patch.yml.bak-2026-11-26`. The session default model in that profile is
+`basalt-qwen / Qwen3.8-Flash-Next UD-IQ1_S`, set by the user, so nothing starts the
+AryaInfer server unless a session selects one of its four models.
+
+The Strata-lane stall is recorded here because `strata-gyro-s.log` was deleted with
+the model. Twice on `engine\strata.exe` 0.1.67 with that config a ~45K-token prompt
+stopped inside the verify window and the server killed the engine: at 21:48:44 on
+2026-11-25 (pid 16660, layer 32, position 41861, GPU waits released after 13 ms)
+and at 10:56:26 on 2026-11-26 (pid 23468, layer 45, position 45137, released after
+18 ms). The second one, verbatim:
+
+```text
+strata serve: no progress for 60 s during a request (verify window: the CPU experts of layer 45) - stopping the engine so the server starts it again (issue #29)
+strata serve: stall report (engine 0.1.67): stage "verify window: the CPU experts of layer 45" for 61 s; 0 layers served since the last finished step (0 = stopped, more = slow)
+VRAM free when this request began: 1063 MiB
+expert pool: epoch 2447213, batch epoch 2447213: 0 of 10 jobs claimed, 9 done; 9 of 10 workers parked, 9 sleeping; mode 5
+verify window: 2 tokens at position 45137, host at layer step 46; the GPU rang 46; flags: served 45, plan (A) 46, copies (B) 46
+strata: released the verify window's GPU waits (#267): the GPU finished in 18 ms
+```
+
+The request had reused 44,557 of 44,850 prompt tokens and was 137 tokens into a
+20.1 tok/s generation with 11 of 33 drafts accepted when it hung. The two stall
+dumps (`strata-stall-16660.dmp` 1,796,449 B, `strata-stall-23468.dmp` 1,821,082 B)
+are still beside the server, untracked, if that ever wants filing upstream.
 
 ## What was not measured here
 
