@@ -4391,6 +4391,38 @@ def _find_engine_root(tmp: Path) -> Path:
     return found[0].parent
 
 
+def _stage_unrecorded(tmp: Path, rec: dict, record: dict) -> Path:
+    """An upstream engine archive that carries no BUILD.json (Basalt's releases do not): take the folder the
+    manifest names in `flat`, keep the licence files that travel beside it, and write the BUILD.json the installer
+    and the Engines page read.  `record` is the manifest's own word on version and architectures - nothing about the
+    GPU is guessed from an archive that does not say."""
+    top = [p for p in tmp.iterdir() if p.is_dir()]
+    base = top[0] if len(top) == 1 else tmp
+    flat = str(rec.get("flat") or "bin")
+    src = base / flat
+    if not src.is_dir():
+        raise UnverifiedEngine(f"the {rec.get('title', '')} archive has no {flat} folder: "
+                               f"{', '.join(sorted(p.name for p in base.iterdir())) or 'nothing'}")
+    staged = tmp / "_staged"
+    shutil.rmtree(staged, ignore_errors=True)
+    staged.mkdir()
+    for p in src.iterdir():
+        shutil.move(str(p), str(staged / p.name))
+    for name in ("LICENSE", "LICENSE.txt", "LICENSE.md", "THIRD_PARTY_LICENSES"):
+        if (base / name).is_file():
+            shutil.copy2(base / name, staged / name)
+    meta = {"version": str(record.get("version") or rec.get("version") or ""),
+            "archs": list(record.get("archs") or []),
+            "cuda": record.get("cuda"),
+            "source": record.get("source") or "release",
+            "upstream": rec.get("upstream"),
+            "recorded_by": "setup.py from engines.json: this release ships no BUILD.json",
+            "note": record.get("note")}
+    (staged / "BUILD.json").write_text(json.dumps({k: v for k, v in meta.items() if v is not None}, indent=1),
+                                       encoding="utf-8")
+    return staged
+
+
 def install_manifest_engine(name: str, gpu, toolkit=13, updating=False, check_only=False) -> Path | None:
     """Install one engines.json engine into its folder.  The pinned size and SHA-256 are checked before the
     archive is opened; the BUILD.json's version and GPU architectures are checked before anything is replaced.
@@ -4422,7 +4454,13 @@ def install_manifest_engine(name: str, gpu, toolkit=13, updating=False, check_on
         tmp = eng / "_unpack"
         shutil.rmtree(tmp, ignore_errors=True)
         _safe_extract(z, tmp)
-        root = _find_engine_root(tmp)
+        record = rec.get("record") or {}
+        try:
+            root = _find_engine_root(tmp)
+        except UnverifiedEngine:
+            if not record:      # an archive with no BUILD.json and no manifest record: nothing to verify it against
+                raise
+            root = _stage_unrecorded(tmp, rec, record)
         meta = json.loads((root / "BUILD.json").read_text(encoding="utf-8"))
         need = manifest_version(name)
         if need and version_tuple(meta.get("version")) < need:
@@ -7767,6 +7805,8 @@ def engine_manifest_cli(a, gpu, hip, cuda_tk) -> int:
     names = ["strata", "poly", "arya"]
     if a.with_inkling:
         names.insert(1, "inkling")
+    if getattr(a, "with_basalt", False):
+        names.append("basalt")
     bad = 0
     for name in names:
         rec = manifest_engine(name) or {}
@@ -8379,6 +8419,8 @@ def main() -> int:
                     help="install or update the engines pinned in engines.json and exit")
     ap.add_argument("--with-inkling", action="store_true",
                     help="with --repair-engines: also install the pinned Strata Inkling engine")
+    ap.add_argument("--with-basalt", action="store_true",
+                    help="with --repair-engines: also install the pinned Basalt engine (docs/BASALT.md)")
     ap.add_argument("--with-ninfer", action="store_true",
                     help="with --repair-engines: report the manual AryaNInfer build (it is not downloaded)")
     ap.add_argument("--calibrate", action="store_true",

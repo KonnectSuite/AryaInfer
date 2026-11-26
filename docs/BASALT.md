@@ -2,23 +2,43 @@
 
 Basalt is a separate inference engine built from [jesdga95/basalt](https://github.com/jesdga95/basalt): a Strata fork
 targeting Blackwell (`sm_120`) with its own model container, `.basalt`. On the RTX PRO 2000 Laptop host it runs
-Qwen3.8-Flash-Next UD-IQ1_S faster than the GGUF lanes do, so AryaInfer can manage it like any other lane: one server,
+Qwen3.8-Flash-Next UD-IQ1_S faster than the GGUF lanes do, so AryaInfer manages it like any other lane: one server,
 one web app, one API, the model picked from the roster.
 
-The engine is not shipped, vendored or pinned by this repository. AryaInfer reads its model files, writes a run config
-for it, and classifies its process; the binary and the models stay where the user built them.
+The engine is pinned in `engines.json` and installed by `setup.py` on request, so a fresh clone gets it the same way it
+gets Strata. The *models* are not: a `.basalt` container is 26-70 GB, so it stays a per-machine file that
+`tools/basalt_import.py` registers.
+
+## Installing the engine
+
+```text
+python setup.py --repair-engines --with-basalt
+```
+
+That downloads the pinned release (`basalt-v0.5.7-windows-x64.zip`, 70,553,484 B, sha256 `dfb71d0a…122881`, or the
+Linux tarball), checks the digest, and installs it into `engine-basalt\`. Basalt's releases ship no `BUILD.json`, so
+`engines.json` carries a `record` for it: the version to install and check against, and `"flat": "bin"` — the archive
+nests its four binaries one folder down, and they are moved up beside the `LICENSE` and `THIRD_PARTY_LICENSES` the
+install keeps. `setup.py` writes the `BUILD.json` the rest of the program reads, with `archs: []` because the archive
+does not name the architectures it was built for, so no card is refused on architecture alone. Without `--with-basalt`
+nothing is downloaded and the default install is unchanged; the Engines page shows Basalt as *opt-in* either way.
+
+The engine itself is the same 0.5.7 either way, so a checkout that already has a `basalt.exe` can skip the download:
+copy it into `engine-basalt\` with a `BUILD.json` saying `{"version": "0.5.7"}` and `manifest_installed()` accepts it.
 
 ## What AryaInfer does with it
 
 | Part | File | What it does |
 | --- | --- | --- |
+| Manifest pin | `engines.json` (`basalt`) | version, release asset, size and digest, and the `record` that stands in for the missing `BUILD.json` |
+| Installer | `setup.py` (`_stage_unrecorded`, `--with-basalt`) | unpacks the release, flattens `bin\`, keeps the licence files, writes the `BUILD.json` |
 | Container reader | `tools/basalt_model.py` | reads the `.basalt` header, the section table and the JSON metadata; exports the five tokenizer files |
 | Importer | `tools/basalt_import.py` | writes a `strata-*.json` run config from a `.basalt` file, optionally taking the engine settings from Basalt's own `official_config.json` |
 | Roster | `serve/models.py` (`_basalt`) | the backend, display name, size label, quantisation, context, draft-head and layered/vision flags, RAM and VRAM estimates |
-| Engine class | `serve/server.py` (`basalt_engine`) | marks the process as a Basalt lane: same line protocol, no `SAVE`/`RESTORE`, no `BUILD.json` - the version comes from the engine's own `INFO engine=` |
+| Engine class | `serve/server.py` (`basalt_engine`) | marks the process as a Basalt lane: same line protocol, no `SAVE`/`RESTORE` - the version comes from the engine's own `INFO engine=` |
 | Settings page | `serve/configschema.py` | the `basalt` engine family and the 107 long options its own `--help` lists |
-| Engines page | `serve/engines.py` (`_custom`) | a card of its own, marked *your build*, because `engines.json` does not pin it and nothing installs it |
-| Tests | `tools/test_basalt_model.py`, `serve/test_models_basalt.py` | 22 tests over a synthetic container, the importer, the roster and the family |
+| Engines page | `serve/engines.py` | a pinned card like the others, plus *your build* cards for any binary `engines.json` does not own |
+| Tests | `tools/test_basalt_model.py`, `serve/test_models_basalt.py`, `tools/test_setup_engines.py` | 24 tests over a synthetic container, the importer, the roster, the family, and installing a release that carries no `BUILD.json` |
 
 Nothing else changes: chat, thinking, tools, the Anthropic and OpenAI APIs, the picker, the web app and the run-config
 editor all go through the same code as the other lanes.
@@ -27,7 +47,24 @@ The Engines page is a census of `engines.json`, so an engine it does not pin had
 checkout that was not the one running. It now reads the run configs as well and adds a card for any binary the manifest
 does not own — the binary's real path, `not pinned · your build` where a pinned version would go, and the models that
 use it. Repair leaves those alone, and a binary that has gone missing is marked missing rather than dropped. A run
-config pointing at a manifest engine still gets one card, not two.
+config pointing at a manifest engine still gets one card, not two. With the pin above, Basalt is the first kind of
+card; the second kind covers a build the owner compiled themselves, which takes precedence.
+
+## Getting a model onto another PC
+
+The engine travels with the checkout; the model does not. Two ways to get one:
+
+- **Copy the container.** `models\Qwen3.8-FN-UD-IQ1_S.basalt` is a single file (70,405,386,113 B here). Put it
+  anywhere on the other PC — an external drive, or `PolyStrata-data\models\` if that tree exists there — and run the
+  importer against it with `--exe engine-basalt\basalt.exe`.
+- **Build it from a GGUF.** Basalt's own checkout has the converter (`tools/`, `python -m tools.convert …`) and the
+  same 70 GB `.basalt` comes out of a Qwen3.8-Flash-Next quant plus its tokenizer; the container is dense+experts+gguf
+  sections, so it needs the GGUF and about twice its size in free disk. Its `README.md` is the current word on that;
+  nothing here re-derives it.
+
+Either way the last step is `tools/basalt_import.py`, which writes the run config and exports the tokenizer; the picker
+then shows the model and the server starts `engine-basalt\basalt.exe` for it. On a card under 8 GiB the flags that
+matter are `--kv q4_0` and `--vram-reserve-mib`, both of which the importer sets from what it finds.
 
 ## Installing a model
 

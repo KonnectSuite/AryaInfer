@@ -702,21 +702,36 @@ user's Basalt config. Its run config is `strata-basalt-qwen38-ud-iq1_s.json` bes
 the server, its tokenizer is `PolyStrata-data\packs\basalt-qwen38-ud-iq1_s\tokenizer`,
 and the lane listens on port 8081 because basalt's own server keeps 8080.
 
-Where its three moving parts live now: the binaries in
-`KonnectSuite\basalt\bin` (`basalt.exe` 149,016,576 B and the vision, bench and
-probe tools), the six expert profiles it reads out of its own working directory in
-`KonnectSuite\basalt\data\profiles`, and the container in
-`PolyStrata-data\models\Qwen3.8-FN-UD-IQ1_S.basalt`. They were moved out of the
-`...\deepseek-harness\...\basalt-src` checkout on 2026-11-26 for two reasons: the
-lane should not depend on a scratch directory, and the checkout still held
-`Qwen3.8-FN-Coder-IQ1_M.basalt` (57.29 GiB) — a container that does not run on this
-card — plus 2.58 GiB of build objects. After the move the checkout was deleted:
-60.04 GiB, `C:` 931.3 → 991.3 GiB free. The run config's `cwd` is
-`KonnectSuite\basalt` on purpose: `--expert-profile` defaults to `data/profiles`
+Where its moving parts live now: the engine is `engine-basalt\basalt.exe`
+(167,554,560 B, the pinned 0.5.7 release, installed by
+`setup.py --repair-engines --with-basalt` from
+`basalt-v0.5.7-windows-x64.zip`, 70,553,484 B, sha256 `dfb71d0a…122881`), the six
+expert profiles it reads out of its own working directory in
+`engine-basalt\data\profiles`, and the container in
+`PolyStrata-data\models\Qwen3.8-FN-UD-IQ1_S.basalt`. The checkout the engine used
+to sit in (`...\deepseek-harness\...\basalt-src`) was deleted on 2026-11-26 after
+those three things were moved: 60.04 GiB, `C:` 931.3 → 991.3 GiB free. It also
+held `Qwen3.8-FN-Coder-IQ1_M.basalt` (57.29 GiB), a container that does not run on
+this card, and 2.58 GiB of build objects. The run config's `cwd` is
+`engine-basalt` on purpose: `--expert-profile` defaults to `data/profiles`
 relative to it, and the engine log shows it reading
-`basalt/data/profiles/qwen4exp-48x512.prof` and pre-filling 998 of 998 expert slots
-from it (1,363 MB) after the move, with a chat answered in 1.47 s (`relocated lane
-ready`, 59 prompt / 33 completion tokens).
+`basalt/data/profiles/qwen4exp-48x512.prof` and pre-filling 998 of 998 expert
+slots from it (1,363 MB), with a chat answered in 1.47 s (`relocated lane ready`,
+59 prompt / 33 completion tokens).
+
+`engines.json` pins Basalt because its releases carry no `BUILD.json`: the entry
+holds the version (0.5.7), the two assets with their sizes and digests, and a
+`record` with `"flat": "bin"`, so `setup.py` moves the four binaries up out of
+`bin\`, keeps `LICENSE` and `THIRD_PARTY_LICENSES` beside them, and writes the
+`BUILD.json` the rest of the program reads (`archs: []` — the archive does not say
+which architectures it was built for, so nothing is refused on architecture
+alone). `--with-basalt` is the only way it installs; without it the default
+install is byte-for-byte what it was. The numbers below were measured on the
+self-built 149,016,576 B binary of the same 0.5.7, before the pinned release
+replaced it in the run config; the pinned build's `--help` runs on this host, but
+its own first request had not happened yet when this was written — the lane was
+mid-session on the old binary — so any difference between the two builds is not
+measured here.
 
 Measured through `serve/server.py` with `tools/strata_bench.py`, 3 runs, medians:
 

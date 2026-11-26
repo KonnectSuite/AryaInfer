@@ -356,18 +356,22 @@ class EngineInventory(unittest.TestCase):
 
     def test_inventory_reports_the_pinned_engines(self):
         rows = {e["key"]: e for e in engines.inventory()}
-        pinned = {"strata", "inkling", "poly", "arya", "ninfer"}
+        pinned = {"strata", "inkling", "poly", "arya", "ninfer", "basalt"}
         self.assertTrue(pinned <= set(rows), sorted(rows))   # a run config may add a build of its own (tested below)
         for key in pinned:
             self.assertIn(rows[key]["status"], ("current", "outdated", "missing", "manual", "unknown"))
         self.assertEqual(rows["ninfer"]["manual"], True)                 # no download: built from source
+        self.assertEqual(rows["basalt"]["required"], False)              # pinned, downloaded, opt-in
+        self.assertEqual(rows["basalt"]["binary"], "basalt.exe")
+        self.assertEqual(rows["basalt"]["dir"], "engine-basalt")
         self.assertIn("upstream", rows["strata"])                        # where each engine really comes from
         view = engines.as_view()
         self.assertEqual(view["release"], "engines-2026.11")
         # a stable order the page can rely on: required engines first, then alphabetical, then a person's own builds
         keys = [e["key"] for e in view["engines"]]
-        self.assertEqual([k for k in keys if not rows[k].get("custom")][:5], ["arya", "poly", "strata", "inkling", "ninfer"])
-        self.assertTrue(all(rows[k].get("custom") for k in keys[5:]))
+        self.assertEqual([k for k in keys if not rows[k].get("custom")][:6],
+                         ["arya", "poly", "strata", "basalt", "inkling", "ninfer"])
+        self.assertTrue(all(rows[k].get("custom") for k in keys[6:]))
 
     def test_an_engine_outside_the_manifest_gets_a_card(self):
         # A .basalt model points at basalt.exe, which engines.json does not pin: the page must show it, or it would
@@ -459,13 +463,14 @@ class Endpoints(unittest.TestCase):
         code, body = self.call("/api/engines")
         self.assertEqual(code, 200)
         self.assertEqual(body["release"], "engines-2026.11")
-        # the five of engines.json, plus a card for any engine a run config points at outside it (this checkout has
-        # one: the .basalt lane); every extra card must say it is a person's own build
+        # the six of engines.json, plus a card for any engine a run config points at outside it; every extra card
+        # must say it is a person's own build
         keys = [e["key"] for e in body["engines"]]
-        self.assertTrue({"strata", "inkling", "poly", "arya", "ninfer"} <= set(keys), keys)
+        pinned = {"strata", "inkling", "poly", "arya", "ninfer", "basalt"}
+        self.assertTrue(pinned <= set(keys), keys)
         for e in body["engines"]:
             self.assertTrue("status" in e)
-            if e["key"] not in {"strata", "inkling", "poly", "arya", "ninfer"}:
+            if e["key"] not in pinned:
                 self.assertTrue(e.get("custom"), e["key"])
         # which run configs use which engine: the sample config names strata-poly.exe
         self.assertIn("used_by", body)

@@ -61,6 +61,16 @@ build-vision-cuda12.bat
 /build-vision-poly.bat
 /engine-glm/
 /build-strata-glm.bat
+# Basalt (engines.json pins it; setup.py --with-basalt installs the release into this folder).  Its expert
+# profiles are generated per model by basalt-bench, so they stay here too.
+/engine-basalt/*.exe
+/engine-basalt/*.pdb
+/engine-basalt/*.dll
+/engine-basalt/*.log
+/engine-basalt/BUILD.json
+/engine-basalt/data/
+/engine-basalt/LICENSE
+/engine-basalt/THIRD_PARTY_LICENSES
 /build-release*/
 /dist/
 *.done

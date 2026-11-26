@@ -84,6 +84,38 @@
       "required": false,
       "manual": true,
       "assets": {}
+    },
+    "basalt": {
+      "title": "Basalt",
+      "binary": "basalt.exe",
+      "dir": "engine-basalt",
+      "flat": "bin",
+      "min_version": "0.5.7",
+      "version": "0.5.7",
+      "upstream": "https://github.com/jesdga95/basalt",
+      "release": "https://github.com/jesdga95/basalt/releases/tag/v0.5.7",
+      "required": false,
+      "record": {
+        "version": "0.5.7",
+        "archs": [],
+        "cuda": "13.0",
+        "source": "release",
+        "note": "Basalt's releases carry no BUILD.json, so setup writes this one from engines.json. The archive does not say which GPU architectures it was built for, so archs is empty and no card is refused on architecture alone."
+      },
+      "assets": {
+        "windows-cuda13": {
+          "url": "https://github.com/jesdga95/basalt/releases/download/v0.5.7/basalt-v0.5.7-windows-x64.zip",
+          "asset": "basalt-v0.5.7-windows-x64.zip",
+          "size": 70553484,
+          "sha256": "dfb71d0a91b114a2969d44524dcd85fcb0547e2ffadb2f5b3499885218122881"
+        },
+        "linux-cuda13": {
+          "url": "https://github.com/jesdga95/basalt/releases/download/v0.5.7/basalt-v0.5.7-linux-x64.tar.gz",
+          "asset": "basalt-v0.5.7-linux-x64.tar.gz",
+          "size": 72149113,
+          "sha256": "a390c775c41d54454ca21c1e547855bf6c251732533ca387e8b890e538090525"
+        }
+      }
     }
   }
 }

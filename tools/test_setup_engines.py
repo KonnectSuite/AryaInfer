@@ -57,23 +57,35 @@ class Manifest(unittest.TestCase):
         self.assertEqual(MANIFEST["release"], "engines-2026.11")
         engines = MANIFEST["engines"]
         self.assertEqual(engines["strata"]["version"], "0.1.67")
-        self.assertEqual(engines["inkling"]["version"], "0.1.67")
+        self.assertEqual(engines["inkling"]["version"], "0.1.68")
         self.assertEqual(engines["poly"]["version"], "0.1.66")
         self.assertEqual(engines["arya"]["version"], "0.1.45")
         self.assertEqual(engines["ninfer"]["version"], "0.1.0")
-        for name in ("strata", "inkling", "poly", "arya"):
+        self.assertEqual(engines["basalt"]["version"], "0.5.7")
+        # the two this repository builds itself are pinned without an asset: setup reports them, it never fetches them
+        for name in ("inkling", "ninfer"):
+            self.assertTrue(engines[name]["manual"])
+            self.assertEqual(engines[name]["assets"], {})
+        # the ones setup downloads name a release asset with a pinned size and digest
+        for name in ("strata", "poly", "arya", "basalt"):
             asset = engines[name]["assets"]["windows-cuda13"]
             self.assertTrue(asset["url"].startswith("https://github.com/"))
             self.assertGreater(asset["size"], 1_000_000)
             self.assertRegex(asset["sha256"], r"^[0-9a-f]{64}$")
+        # basalt's release carries no BUILD.json, so the manifest states the version and the archive's layout
+        self.assertEqual(engines["basalt"]["flat"], "bin")
+        self.assertFalse(engines["basalt"]["required"])
+        self.assertEqual(engines["basalt"]["record"]["version"], engines["basalt"]["version"])
 
     def test_asset_selection(self):
         with mock.patch.object(setup, "WIN", True):
             self.assertIn("cuda13", setup.manifest_asset("strata", 13)["asset"])
             self.assertIn("cuda12", setup.manifest_asset("strata", 12)["asset"])
-            self.assertEqual(setup.manifest_asset("inkling", 12)["size"], 588_490_782)
+            self.assertIsNone(setup.manifest_asset("inkling", 12))      # built here: nothing to download
             self.assertEqual(setup.manifest_asset("arya", 13)["size"], 563_955_903)
             self.assertIsNone(setup.manifest_asset("arya", 12))        # one CUDA 13 build, no fallback
+            self.assertEqual(setup.manifest_asset("basalt", 13)["size"], 70_553_484)
+            self.assertIsNone(setup.manifest_asset("basalt", 12))      # CUDA 13 only, like its release
 
 
 class Install(unittest.TestCase):
@@ -131,6 +143,46 @@ class Install(unittest.TestCase):
         self.add_asset("strata", archive)
         self.manifest["engines"]["strata"]["assets"]["windows-cuda13"]["sha256"] = "0" * 64
         self.write_manifest()
+        with mock.patch.object(setup, "WIN", True):
+            with self.assertRaises(setup.UnverifiedEngine):
+                setup.install_manifest_engine("strata", self.gpu)
+        self.assertFalse((self.root / "engine" / "strata.exe").exists())
+
+    def test_a_release_without_a_build_json_installs_from_the_manifest_record(self):
+        # Basalt's releases carry no BUILD.json.  engines.json's `record` says the version, `flat` says where the
+        # binary sits inside the archive, and setup writes the BUILD.json the installer and the Engines page read.
+        archive = self.root / "basalt.zip"
+        with zipfile.ZipFile(archive, "w") as z:
+            z.writestr("basalt-v9.9.9-win/bin/basalt.exe", b"exe")
+            z.writestr("basalt-v9.9.9-win/bin/basalt-bench.exe", b"bench")
+            z.writestr("basalt-v9.9.9-win/LICENSE", b"MIT")
+            z.writestr("basalt-v9.9.9-win/serve/server.py", b"# its own server, not the engine")
+        self.manifest["engines"]["basalt"] = {
+            "title": "Basalt", "binary": "basalt.exe", "dir": "engine-basalt", "flat": "bin",
+            "version": "9.9.9", "min_version": "9.9.9", "required": False,
+            "record": {"version": "9.9.9", "archs": [], "cuda": "13.0", "source": "release"},
+            "assets": {},
+        }
+        self.add_asset("basalt", archive)
+        with mock.patch.object(setup, "WIN", True):
+            got = setup.install_manifest_engine("basalt", self.gpu)
+        self.assertEqual(got, self.root / "engine-basalt")
+        self.assertTrue((got / "basalt.exe").exists())          # flattened out of bin\
+        self.assertTrue((got / "basalt-bench.exe").exists())
+        self.assertFalse((got / "bin").exists())
+        self.assertTrue((got / "LICENSE").exists())             # the licence travels with the binary
+        self.assertFalse((got / "serve").exists())              # the archive's own Python server is not the engine
+        meta = json.loads((got / "BUILD.json").read_text())
+        self.assertEqual((meta["version"], meta["archs"]), ("9.9.9", []))
+        self.assertIn("engines.json", meta["recorded_by"])
+        # and it reads as installed from then on, at the version the manifest pinned
+        self.assertEqual(setup.manifest_installed("basalt", self.gpu)[1], "9.9.9")
+
+    def test_an_archive_without_a_build_json_and_no_record_is_refused(self):
+        archive = self.root / "norecord.zip"
+        with zipfile.ZipFile(archive, "w") as z:
+            z.writestr("bin/thing.exe", b"exe")
+        self.add_asset("strata", archive)
         with mock.patch.object(setup, "WIN", True):
             with self.assertRaises(setup.UnverifiedEngine):
                 setup.install_manifest_engine("strata", self.gpu)

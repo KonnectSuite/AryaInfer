@@ -5,11 +5,12 @@ one server, open one web app, and use one OpenAI- or Anthropic-compatible API;
 the model you pick decides which backend runs. Switching models is a config
 change (`switch_on_request`), not a different program to learn.
 
-A sixth lane can be pointed at by a run config without being shipped: any
-`basalt.exe` from [jesdga95/basalt](https://github.com/jesdga95/basalt), which
-reads its own `.basalt` containers over the same line protocol. It is opt-in -
-nothing in `engines.json` installs it - and [BASALT.md](BASALT.md) covers the
-reader, the importer and what was measured there.
+A sixth lane is Basalt, [jesdga95/basalt](https://github.com/jesdga95/basalt),
+which reads its own `.basalt` containers over the same line protocol. It is
+pinned in `engines.json` like the others but installed only when you ask for it
+(`python setup.py --repair-engines --with-basalt`), because it is a third
+party's build for Blackwell cards and nothing else uses it. [BASALT.md](BASALT.md)
+covers the installer, the reader, the importer and what was measured there.
 
 The Python server (`serve/server.py`) owns everything around the model:
 the chat template, the thinking effort and its budget, tools, images, prompt
@@ -27,7 +28,7 @@ in the same roster.
 | **PolyStrata** (`strata-poly`) | `engine-poly\strata-poly.exe` 0.1.66 | `src/poly`, from [VecSzn/PolyStrata](https://github.com/simplexai-labs/PolyStrata) (the 2026-11-24 build is tag `v0.2.20-poly.4-hotfix`, commit `36e654b1b`; `src/poly/inkling2.cpp` gives it Inkling 2) | Qwen3.6-35B-A3B UD-Q4_K_XL and abliterated, Ornith 1.5 APEX, and the GGUF families in [BACKENDS.md](BACKENDS.md) | 262,144, q8_0 KV | `strata-vision.exe` + mmproj, GPU |
 | **AryaInfer** (fork build) | `engine-arya\aryainfer.exe` 0.1.45 | `src/poly` fork target, from [KonnectSuite/AryaInfer](https://github.com/KonnectSuite/AryaInfer); CUDA `sm_89`; AQ3 kernels in `src/poly/prefill_f16.cu` | Qwen3.8-27B AQ3 (GSQ 3-bit), Qwen3.8-27B Turbo IQ3_XXS, Qwen3.5-4B Q4_K_M | 131,072 (27B), 65,536 (4B), q4_0 KV | `strata-vision.exe` + mmproj, CPU |
 | **AryaNInfer** (ported core) | `engine-ninfer\arya-ninfer.exe` 0.1.0 | [roofkid/ninfer-4080](https://github.com/roofkid/ninfer-4080) at `rtx4080-port` commit `2469b57`, plus `engine-ninfer/shim/main.cpp` | Qwen3.8-27B GSQ3 `.ninfer` | 131,072, rk4v4-e8 KV | external `.sve` embeddings from `strata-vision.exe`, CPU |
-| **Basalt** (opt-in, not shipped) | `basalt.exe`, the user's build | [jesdga95/basalt](https://github.com/jesdga95/basalt), a Strata fork for Blackwell | Qwen3.8-Flash-Next UD-IQ1_S from `.basalt` containers | 131,072 here (262,144 trained), `q4_0` KV | in-engine encoder, no server path yet |
+| **Basalt** (opt-in) | `engine-basalt\basalt.exe` 0.5.7 | [jesdga95/basalt](https://github.com/jesdga95/basalt), a Strata fork for Blackwell | Qwen3.8-Flash-Next UD-IQ1_S from `.basalt` containers | 131,072 here (262,144 trained), `q4_0` KV | in-engine encoder, no server path yet |
 
 All of them are configured per model in a `strata-*.json` run config: `exe`,
 `args`, `tokenizer`, `sampling`, `reasoning_effort`, `reasoning_budget_by_effort`,
@@ -49,7 +50,7 @@ each control does and how the catalog stays honest as the engines change.
 | PolyStrata (`strata-poly`) | [VecSzn/PolyStrata](https://github.com/simplexai-labs/PolyStrata) — [releases](https://github.com/simplexai-labs/PolyStrata/releases) | installs the pinned binary; `strata-poly` stays upstream-identical |
 | AryaInfer (`aryainfer`) | this fork — [AryaInfer releases](https://github.com/KonnectSuite/AryaInfer/releases) | our build of the pinned PolyStrata source, with the AQ3/q4_0 changes behind `ARYAINFER_ENGINE` |
 | AryaNInfer (`arya-ninfer`) | core by [roofkid](https://github.com/roofkid/ninfer-4080), shim/patches by this fork | manual build; the core stays pinned at `2469b57` |
-| Basalt | [jesdga95/basalt](https://github.com/jesdga95/basalt) — MIT, a Strata fork | nothing in `engines.json` installs it and no binary or source is vendored here: `tools/basalt_model.py` reads its `.basalt` containers, `tools/basalt_import.py` writes the run config, and `basalt_engine()` classifies the process. [BASALT.md](BASALT.md) |
+| Basalt | [jesdga95/basalt](https://github.com/jesdga95/basalt) — MIT, a Strata fork | installs the pinned release into `engine-basalt/` when the owner asks for it (`--with-basalt`); no binary or source is vendored here. `tools/basalt_model.py` reads its `.basalt` containers, `tools/basalt_import.py` writes the run config, and `basalt_engine()` classifies the process. [BASALT.md](BASALT.md) |
 
 The source snapshot in this checkout is still Strata `v0.1.45` / PolyStrata
 `0.1.45-poly.9` (`upstream.json`). `--build` compiles that pin, so it produces
@@ -105,11 +106,12 @@ The roster is the `strata-*.json` files next to the config you start with
 | `inkling-2-mini-poly` | PolyStrata 0.2.20 | 172,032 | The Inkling-2-Mini IQ1_S GGUF through `strata-poly`, which now runs `inkling2_loop`; KV q8_0 and vision on (the 448×320 test image's `HELLO 42` read correctly); 54.7 tok/s decode in the app at 262K with a warm expert cache (97.8% hit), 14.75 tok/s steady from cold. Uninstalled from that host 2026-11-26 |
 | `inkling-2-mini-poly-q4` | PolyStrata 0.2.20 | 172,032 | The same model at Q4_K_XL (16.4 GB), KV q8_0 and vision on; 851 of 3,072 experts stay in VRAM and it decodes at about 20 tok/s in the app, so Q4 costs roughly 2.5x the speed of IQ1_S on an 8 GB card. Uninstalled from that host 2026-11-26 |
 | `inkling-2-mini-sq-10` | Strata Inkling 0.1.68 (built here) | 262,144 | Strata's `.strata` SQ-10 pack (10.5 GB) with its own vision shard and its DSpark drafter inside it; 1,169 of 3,072 experts in VRAM and an 8.60 GB pinned host arena; 980.8 tok/s prefill and 29.1 tok/s decode at a 2,048-token prompt, 19.2 tok/s at 32,768 with `--draft off` (drafting costs 5.4 tok/s there, so it is off). Uninstalled from that host 2026-11-26, though `engine-inkling\strata-inkling.exe` and its source stay |
-| `basalt-qwen38-ud-iq1_s` | Basalt 0.5.7 (the user's build) | 131,072 | Qwen3.8-Flash-Next UD-IQ1_S from Basalt's own 70.4 GB `.basalt` container, `q4_0` KV, on the second host only: 55.9 tok/s decode in the app, 1,218 / 1,211 tok/s prompt at 4K / 16K, 24.8 s to load with 365 MiB VRAM free on an 8 GB card. The [BASALT.md](BASALT.md) lane; its Coder container crashes the engine on this card |
+| `basalt-qwen38-ud-iq1_s` | Basalt 0.5.7 (`engine-basalt\`, pinned) | 131,072 | Qwen3.8-Flash-Next UD-IQ1_S from Basalt's own 70.4 GB `.basalt` container, `q4_0` KV, on the second host only: 55.9 tok/s decode in the app, 1,218 / 1,211 tok/s prompt at 4K / 16K, 24.8 s to load with 365 MiB VRAM free on an 8 GB card. The [BASALT.md](BASALT.md) lane; its Coder container crashes the engine on this card |
 
-The Engines page lists the five engines of `engines.json` and then any engine a run config points at that the manifest
+The Engines page lists the six engines of `engines.json` and then any engine a run config points at that the manifest
 does not pin — a row for the row above, marked *your build*, with the binary's real path and `not pinned` where a pinned
-version would go. That is how an opt-in lane stays visible without pretending `setup.py` installs it.
+version would go. That is how a lane keeps its own binary visible, and how an opt-in install stays honest about what
+`setup.py` did or did not fetch.
 
 ## Measured on this host
 
