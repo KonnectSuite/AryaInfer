@@ -93,10 +93,10 @@ class ConfigSchema(unittest.TestCase):
         self.assertEqual(flags["--draft-tokens"]["range"], [0, 8, 1])
         groups = {g["key"]: [f["flag"] for f in g["flags"]] for g in args["flag_groups"]}
         self.assertIn("--max-context", groups["context"])
-        self.assertIn("--spec", groups["drafting"])
-        self.assertIn("--pack", groups["experts"])
-        self.assertIn("--prefill", groups["prefill"])
-        self.assertIn("--vision", groups["misc"])
+        self.assertIn("--draft-model", groups["drafting"])      # SAMPLE runs the poly engine
+        self.assertIn("--expert-profile", groups["experts"])
+        self.assertIn("--slots", groups["prefill"])
+        self.assertIn("--no-graphs", groups["misc"])
         self.assertTrue(all(flags_g for flags_g in groups.values()))   # no empty group is sent
 
     def test_apply_checks_every_value_before_writing_any(self):
@@ -135,6 +135,161 @@ class ConfigSchema(unittest.TestCase):
             self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["sampling"]["temperature"], 0.3)
             bak = path.with_name(path.name + ".bak")
             self.assertEqual(json.loads(bak.read_text(encoding="utf-8"))["sampling"]["temperature"], 0.7)
+
+
+class EngineCatalog(unittest.TestCase):
+    """The engine side of the settings page: families, the flags and env knobs each engine takes,
+    the presets, and the defaults the page shows before anything is typed."""
+
+    def cfg(self, exe="strata.exe", args=(), env=None):
+        cfg = {"exe": exe, "args": list(args)}
+        if env:
+            cfg["env"] = dict(env)
+        return cfg
+
+    def groups(self, view):
+        return {g["key"]: [f["flag"] for f in g["flags"]] for g in key_entry(view, "args")["flag_groups"]}
+
+    def flags(self, view):
+        return {f["flag"]: f for f in key_entry(view, "args")["flags"]}
+
+    def test_engine_family_reads_the_executable_name(self):
+        cases = {
+            "C:\\AI\\engines\\strata.exe": "strata",
+            "strata-inkling.exe": "inkling",
+            "/opt/engines/strata-polysomething": "poly",
+            "strata-poly.exe": "poly",
+            "aryainfer.exe": "poly",
+            "engine-ninfer/arya-ninfer.exe": "ninfer",
+            "ninfer-engine.exe": "ninfer",
+            "arya-ada.exe": "strata",
+            "something-else.exe": "other",
+            "": "other",
+            None: "other",
+        }
+        for exe, family in cases.items():
+            self.assertEqual(configschema.engine_family(exe), family, exe)
+
+    def test_every_flag_carries_a_label_a_hint_and_a_kind(self):
+        view = configschema.view(self.cfg(), "strata-mini.json")
+        flags = self.flags(view)
+        self.assertEqual(len(flags), len(configschema.ENGINE_FLAGS))
+        for flag, f in flags.items():
+            self.assertTrue(f["kind"], flag)
+            self.assertTrue(f["label"], flag)
+            self.assertTrue(f["help"], flag)
+        # the flags the page used to drop into "other" are settings now
+        for flag in ("--vram-experts-gb", "--ram-experts-gb", "--kv-offload", "--parallel",
+                     "--chunk", "--draft-cap", "--mtp-max-t", "--lookup-chain", "--tail-skip"):
+            self.assertIn(flag, flags)
+
+    def test_a_group_is_never_sent_empty(self):
+        for exe in ("strata.exe", "strata-inkling.exe", "strata-poly.exe", "arya-ninfer.exe", "x.exe"):
+            for key, members in self.groups(configschema.view(self.cfg(exe), "a.json")).items():
+                self.assertTrue(members, f"{exe}: {key}")
+
+    def test_a_flag_the_engine_lacks_is_listed_not_dropped(self):
+        view = configschema.view(self.cfg("strata-inkling.exe"), "a.json")
+        groups = self.groups(view)
+        self.assertIn("--chunk", groups["prefill"])        # Inkling reads prompts in chunks
+        self.assertIn("--pcie-frac", groups["absent"])     # and has no expert cache to page
+        # set in the file, the same flag stays where a reader looks for it
+        again = configschema.view(self.cfg("strata-inkling.exe", ["--pcie-frac", "0.2"]), "a.json")
+        self.assertIn("--pcie-frac", self.groups(again)["experts"])
+
+    def test_each_family_keeps_the_flags_it_actually_takes(self):
+        strata = self.groups(configschema.view(self.cfg("strata.exe"), "a.json"))
+        self.assertIn("--spec", strata["drafting"])
+        self.assertIn("--pack", strata["experts"])
+        inkling = self.groups(configschema.view(self.cfg("strata-inkling.exe"), "a.json"))
+        self.assertIn("--chunk", inkling["prefill"])          # new in 0.1.68, absent from its --help
+        self.assertIn("--kv-offload", inkling["misc"])
+        self.assertIn("--vram-experts-gb", inkling["experts"])
+        poly = self.groups(configschema.view(self.cfg("strata-poly.exe"), "a.json"))
+        self.assertEqual(sorted(poly["quality"]), ["--cache-bias", "--skip-weight", "--tail-skip"])
+
+    def test_a_flag_is_listed_in_one_group_only(self):
+        view = configschema.view(self.cfg("strata.exe"), "a.json")
+        listed = [f["flag"] for g in key_entry(view, "args")["flag_groups"] for f in g["flags"]]
+        self.assertEqual(len(listed), len(set(listed)))       # --vram-elastic is in two catalog groups
+
+    def test_kv_is_an_enum_per_engine(self):
+        inkling = self.flags(configschema.view(self.cfg("strata-inkling.exe"), "a.json"))
+        self.assertIn("k8v4", inkling["--kv"]["choices"])
+        with self.assertRaises(ValueError):
+            configschema.apply(self.cfg("strata-inkling.exe"), {"arg:--kv": "f16"})
+        new, _ = configschema.apply(self.cfg("strata-inkling.exe"), {"arg:--kv": "k8v4"})
+        self.assertIn("k8v4", new["args"])
+
+    def test_the_env_catalog_carries_the_tail_skip_knob(self):
+        view = configschema.view(self.cfg(env={"STRATA_ROUTE_TAIL_SKIP": "7"}), "a.json")
+        env = {e["name"]: e for e in view["engine"]["env"]}
+        skip = env["STRATA_ROUTE_TAIL_SKIP"]
+        self.assertEqual(skip["kind"], "int")
+        self.assertEqual(skip["risk"], "quality")
+        self.assertEqual(skip["range"], [0, 9, 1])
+        self.assertEqual(skip["value"], "7")
+        self.assertIn("faster", skip["help"])
+        self.assertEqual(view["engine"]["unknown_env"], [])
+        for name, e in env.items():
+            self.assertTrue(e["kind"] and e["label"] and e["help"], name)
+
+    def test_an_unknown_env_name_is_reported_not_dropped(self):
+        view = configschema.view(self.cfg(env={"MY_OWN_FLAG": "1"}), "a.json")
+        self.assertEqual(view["engine"]["unknown_env"], ["MY_OWN_FLAG"])
+        new, _ = configschema.apply(self.cfg(env={"MY_OWN_FLAG": "1"}),
+                                    {"env": {"MY_OWN_FLAG": "2", "STRATA_ROUTE_TAIL_SKIP": "6"}})
+        self.assertEqual(new["env"]["MY_OWN_FLAG"], "2")
+        self.assertEqual(new["env"]["STRATA_ROUTE_TAIL_SKIP"], "6")
+
+    def test_presets_name_real_flags(self):
+        for family, presets in configschema.PRESETS.items():
+            self.assertTrue(presets, family)
+            for preset in presets:
+                self.assertTrue(preset["label"], family)
+                for flag in preset["flags"]:
+                    self.assertIn(flag, configschema.ENGINE_FLAGS, f"{family}/{preset['key']}: {flag}")
+
+    def test_a_preset_applies_through_the_normal_check(self):
+        preset = next(p for p in configschema.PRESETS["inkling"] if p["key"] == "recommended")
+        changes = {f"arg:{flag}": value for flag, value in preset["flags"].items()}
+        new, changed = configschema.apply(self.cfg("strata-inkling.exe", ["--vision"]), changes)
+        self.assertEqual(new["args"][new["args"].index("--kv") + 1], "k8v4")
+        self.assertEqual(len(changed), len(preset["flags"]))
+        self.assertIn("--vision", new["args"])          # a preset does not drop what it does not name
+
+    def test_defaults_are_documented_where_known(self):
+        view = configschema.view(self.cfg(), "a.json")
+        self.assertEqual(key_entry(view, "engine_silence_s")["default"], 300)
+        self.assertIsNone(key_entry(view, "sampling.temperature")["default"])   # the model card's
+        flags = self.flags(view)
+        self.assertEqual(flags["--kv"]["default"], "fp16")
+        self.assertIsNone(flags["--pack"]["default"])                            # the engine decides
+
+    def test_a_sampling_chip_sets_every_sampler_and_stays_in_range(self):
+        """A chip is a whole sampler, and each value must pass the check a hand edit does.
+
+        The chips used to write only the temperature; then one carried top_k 80 against a 1..64 field, so
+        clicking it left the page showing "The largest value here is 64" with Save disabled.  Both faults
+        are cheap to catch here.
+        """
+        self.assertGreaterEqual(len(configschema.SAMPLING_PRESETS), 3)
+        for p in configschema.SAMPLING_PRESETS:
+            with self.subTest(preset=p["key"]):
+                self.assertTrue(p["name"])
+                self.assertTrue(p["note"])
+                self.assertEqual(set(p["values"]), {
+                    "sampling.temperature", "sampling.top_p", "sampling.top_k",
+                    "sampling.min_p", "sampling.repetition_penalty"})
+                for key, value in p["values"].items():
+                    self.assertIn(key, configschema.KEYS)
+                    stored = configschema.check(key, value, {})     # ValueError would fail the test
+                    self.assertIsNotNone(stored)
+
+    def test_sampling_chips_reach_the_page(self):
+        view = configschema.view(self.cfg(), "a.json")
+        self.assertEqual(len(view["sampling_presets"]), len(configschema.SAMPLING_PRESETS))
+        self.assertEqual(view["sampling_presets"][0]["values"]["sampling.top_k"], "20")
 
 
 class EffortSemantics(unittest.TestCase):

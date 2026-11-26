@@ -89,10 +89,13 @@ def check(source, tests):
         return {"passed": False, "detail": str(exc)}
 
 
-def request(base, messages, think, model="qwen3.8-flash-next-iq3_xxs"):
+def request(base, messages, think, model="qwen3.8-flash-next-iq3_xxs", sampling=None):
     payload = {"model": model, "messages": messages,
-               "tools": TOOLS, "temperature": 0, "max_tokens": 1400,
+               "tools": TOOLS, "max_tokens": 1400,
                "reasoning_effort": think}
+    # sampling None keeps the historical arm exactly: greedy, whatever the served config says.
+    # A dict replaces the pinned temperature so a sampler A/B can put the whole set on the wire.
+    payload.update({"temperature": 0} if sampling is None else sampling)
     req = urllib.request.Request(base.rstrip("/") + "/v1/chat/completions",
                                  data=json.dumps(payload).encode(),
                                  headers={"Content-Type": "application/json"})
@@ -102,7 +105,7 @@ def request(base, messages, think, model="qwen3.8-flash-next-iq3_xxs"):
     return result, time.monotonic() - start
 
 
-def session(base, case, run, think, model="qwen3.8-flash-next-iq3_xxs"):
+def session(base, case, run, think, model="qwen3.8-flash-next-iq3_xxs", sampling=None):
     messages = [{"role": "system", "content":
         "You are a coding agent in a bounded Python fixture. Read module.py, fix it with write_file, then run_tests. "
         "Only standalone functions, no imports, no classes, no filesystem or networking code. "
@@ -112,7 +115,7 @@ def session(base, case, run, think, model="qwen3.8-flash-next-iq3_xxs"):
     trace, calls = [], []
     start = time.monotonic()
     for turn in range(9):
-        result, secs = request(base, messages, think, model)
+        result, secs = request(base, messages, think, model, sampling)
         msg = result["choices"][0]["message"]
         trace.append({"turn": turn, "seconds": secs, "response": result})
         messages.append(msg)

@@ -802,9 +802,24 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 .rail-card span { font: 400 11px var(--st-font-mono); color: var(--st-ink-muted); overflow-wrap: anywhere; }
 .rail-card .rail-badge { margin-top: 4px; }
 .cfg-sections { display: flex; flex-direction: column; gap: var(--st-s-4); min-width: 0; }
+/* a card scrolled to sits below the sticky page header rather than under it */
+.cfg-sections > .cfg-card { scroll-margin-top: 72px; }
 .cfg-card { background: var(--st-surface); border: 1px solid var(--st-line); border-radius: var(--st-r-md);
   padding: var(--st-s-4) var(--st-s-5); display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .cfg-card > .set-card__title { display: flex; align-items: center; gap: 8px; margin: 0; }
+/* a card's own Reset sits at the end of its title, so a whole group can go back to the file in one click */
+.cfg-card-reset { margin-left: auto; font-size: var(--st-fs-xs); white-space: nowrap; flex: 0 0 auto; }
+.cfg-card-reset[hidden] { display: none; }
+.cfg-reset-all { align-self: flex-start; margin-top: 4px; }
+/* the advanced reveal: a plain checkbox, styled from the tokens so it needs no new component */
+.cfg-adv-toggle { display: flex; align-items: center; gap: 8px; margin-top: 6px;
+  color: var(--st-ink-soft); font-size: 12px; line-height: 1.5; cursor: pointer; }
+.cfg-adv-toggle input[type="checkbox"] { margin: 0; accent-color: var(--st-accent); flex: none; }
+.cfg-error { color: var(--st-danger-text); font-size: 12px; line-height: 1.5; margin: 0; }
+.cfg-error--list { margin-top: 8px; }
+/* a value the control's own range rejects: the field says so before Save can be pressed */
+.cfg-field[data-invalid="true"] .st-input { border-color: var(--st-danger); }
+.cfg-field[data-invalid="true"] > .cfg-field__head .cfg-name { color: var(--st-danger-text); }
 .cfg-note { color: var(--st-ink-muted); font-size: 12px; line-height: 1.5; }
 .cfg-fields { display: flex; flex-direction: column; gap: 14px; }
 .cfg-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -814,6 +829,54 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 .cfg-field[data-advanced="true"][data-hidden="true"] { display: none; }
 .cfg-field .st-input, .cfg-field .st-toggle { align-self: flex-start; }
 .cfg-field .st-input { max-width: 560px; }
+/* a field's head: plain-language name, the raw key, the tools on the right. It is NOT the settings-page
+   header (that is header.cfg-head above); the old shared name leaked these rules into the header. */
+.cfg-field__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.cfg-field__head > .st-label { flex: 1 1 auto; min-width: 0; justify-content: flex-start; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+/* the live value belongs at the right end of the name row, so the name and its key stay together */
+.cfg-field__head > .st-label > output { margin-left: auto; }
+.cfg-name { color: var(--st-ink); }
+.cfg-tools { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.cfg-pill { padding: 1px 8px; border-radius: var(--st-r-pill); background: var(--st-accent-tint);
+  color: var(--st-accent-text); font-size: var(--st-fs-xs); font-weight: 600; }
+.cfg-pill[hidden] { display: none; }
+.cfg-reset { font-size: var(--st-fs-xs); padding: 2px 6px; color: var(--st-ink-muted);
+  opacity: 0; transition: opacity var(--st-dur) var(--st-ease); }
+.cfg-field:hover > .cfg-field__head .cfg-reset, .cfg-reset:focus-visible,
+.cfg-field[data-changed="true"] > .cfg-field__head .cfg-reset { opacity: 1; }
+@media (hover: none) { .cfg-reset { opacity: 1; } }
+.cfg-reset:hover, .cfg-reset:focus-visible { color: var(--st-accent-text); }
+.cfg-body { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cfg-unit { font-size: var(--st-fs-xs); color: var(--st-ink-muted); }
+.cfg-hint { margin: 0; max-width: 68ch; font-size: var(--st-fs-xs); line-height: var(--st-lh-body);
+  color: var(--st-ink-muted); }
+.cfg-field[data-changed="true"] > .cfg-field__head .cfg-name { color: var(--st-accent-text); }
+/* the heading over a set of flag groups: a name for the block, not a field of its own */
+.cfg-args-head { display: flex; align-items: baseline; gap: 8px; margin: 14px 0 2px; font-size: var(--st-fs-sm);
+  font-weight: 600; color: var(--st-ink); }
+.cfg-args-head code { padding: 1px 5px; border-radius: 5px; background: var(--st-surface-2);
+  font: 400 11px var(--st-font-mono); color: var(--st-ink-muted); }
+/* the "?" tooltip: the default value, and a note when the knob changes the words a model produces */
+.st-tip { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px;
+  height: 16px; border: 1px solid var(--st-line); border-radius: 50%; color: var(--st-ink-muted);
+  font-size: 11px; font-weight: 600; line-height: 1; cursor: help; user-select: none; }
+.st-tip:hover, .st-tip:focus-visible { border-color: var(--st-accent); color: var(--st-accent-text); outline: none; }
+.st-tip::after { content: attr(data-tip); position: absolute; right: 0; bottom: calc(100% + 6px);
+  width: max-content; max-width: min(280px, 62vw); padding: 6px 9px; border-radius: var(--st-r-sm);
+  background: var(--st-ink); color: var(--st-bg); font-size: var(--st-fs-xs); font-weight: 400;
+  line-height: var(--st-lh-body); white-space: normal; text-align: left; opacity: 0; visibility: hidden;
+  transition: opacity var(--st-dur) var(--st-ease), visibility var(--st-dur); z-index: var(--st-z-pop);
+  pointer-events: none; }
+.st-tip:hover::after, .st-tip:focus-visible::after { opacity: 1; visibility: visible; }
+@media (max-width: 560px) {
+  /* the tools keep the first line even when the name is long, so nothing sits alone under the label */
+  .cfg-field__head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 6px; }
+  .cfg-field__head > .st-label { min-width: 0; }
+  /* the number box under the slider already shows the value, so the readout beside the name is noise */
+  .cfg-field__head > .st-label > output { display: none; }
+  .cfg-tools { margin-left: 0; grid-column: 2; }
+  .st-tip::after { right: auto; left: 0; }
+}
 .cfg-slider { display: grid; grid-template-columns: minmax(0, 1fr) 104px; gap: 12px; align-items: center; width: 100%; max-width: 560px; }
 .cfg-slider .st-input { width: 104px; max-width: none; }
 .cfg-path { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; width: 100%; max-width: 560px; }
@@ -856,6 +919,36 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 .list-row { display: grid; grid-template-columns: minmax(0, 1fr) 36px auto; gap: 6px; align-items: center; width: 100%; max-width: 560px; }
 .other-args { font: 400 12px var(--st-font-mono); color: var(--st-ink-muted); overflow-wrap: anywhere; }
 #config-raw { width: 100%; font: 400 12px var(--st-font-mono); height: auto; min-height: 200px; resize: vertical; }
+/* accordions: every card and every flag group folds to its title. The summary IS the old title row, so the
+   fold keeps the card's own look; the chevron sits at the far end and turns when the fold opens. */
+details.cfg-fold { display: flex; flex-direction: column; gap: var(--st-s-3); }
+details.cfg-fold.cfg-card { gap: 12px; }
+.cfg-fold > summary { list-style: none; cursor: pointer; }
+.cfg-fold > summary::-webkit-details-marker { display: none; }
+.cfg-fold > summary .st-chev { margin-left: auto; transition: transform var(--st-dur) var(--st-ease); flex: 0 0 auto; }
+.cfg-fold[open] > summary .st-chev { transform: rotate(180deg); }
+.cfg-fold__head--sm { display: flex; align-items: center; gap: 8px; font-size: 11px; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--st-ink-muted); }
+.cfg-fold__count { font: 500 11px var(--st-font); letter-spacing: 0; text-transform: none; padding: 1px 8px;
+  border-radius: var(--st-r-pill); background: var(--st-surface-2); color: var(--st-ink-muted); flex: 0 0 auto; }
+.cfg-fold__count[hidden] { display: none; }
+.cfg-fold__count--changed { background: var(--st-accent-tint); color: var(--st-accent-text); }
+.flag-group__body { display: flex; flex-direction: column; gap: 12px; }
+/* the search row above the cards: one box to find a setting instead of a scroll to hunt for it */
+.cfg-toolbar { display: flex; align-items: center; gap: 10px; }
+.cfg-search { flex: 0 1 320px; height: 36px; }
+.cfg-search-count { font-size: var(--st-fs-xs); color: var(--st-ink-muted); }
+.cfg-toolbar__spacer { flex: 1; }
+.cfg-toolbar .st-btn--text { white-space: nowrap; }
+/* on a phone the search box takes the whole row and the fold buttons drop beneath it */
+@media (max-width: 560px) {
+  .cfg-toolbar { flex-wrap: wrap; }
+  .cfg-search { flex: 1 1 100%; }
+}
+/* hidden must beat the flex rules above when the search filters rows out, or a card with no match away */
+.cfg-field[hidden], .think-row[hidden], details.cfg-fold[hidden] { display: none; }
+/* the Advanced fold wears the kit's collapse skin and the card skin at once: keep one set of padding */
+#cfg-advanced > summary, #cfg-advanced .st-collapse__body { padding: 0; }
 /* right rail: changes + facts */
 .cfg-side { display: flex; flex-direction: column; gap: var(--st-s-4); position: sticky; top: 0; }
 .side-card { background: var(--st-surface); border: 1px solid var(--st-line); border-radius: var(--st-r-md);
@@ -872,7 +965,7 @@ main { flex: 1; min-height: 0; min-width: 0; display: flex; }
 .facts-grid { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px 12px; font-size: 12px; margin: 0; }
 .facts-grid dt { color: var(--st-ink-muted); white-space: nowrap; }
 .facts-grid dd { margin: 0; font: 400 12px var(--st-font-mono); color: var(--st-ink-soft); overflow-wrap: anywhere; }
-@media (max-width: 1200px) {
+@media (max-width: 1420px) {
   .cfg-panes { grid-template-columns: 220px minmax(0, 1fr); }
   .cfg-side { grid-column: 1 / -1; position: static; flex-direction: row; flex-wrap: wrap; }
   .cfg-side .side-card { flex: 1 1 300px; }

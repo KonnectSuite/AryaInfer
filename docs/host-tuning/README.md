@@ -14,6 +14,8 @@ runs with one), and no model file or log is copied.
 | Config | Engine | Context | KV | Drafting | VRAM reserve | PCIe fraction |
 | --- | --- | --- | --- | --- | --- | --- |
 | `strata-iq3_xxs.json` | `strata.exe` 0.1.56 | 262,144 | int8 | `--spec 4 --draft dflash2`, adaptive draft every 1, 160 swaps, decay 0.97 | 1000 MiB | 0.20 |
+| `strata-iq3_s.json` | `strata.exe` 0.1.67 | 262,144 | int8 | `--spec 4 --draft dflash2 --draft-cap 8 --kv-grow`, adaptive draft every 1, 160 swaps, decay 0.97 | 2048 MiB | 0.20 |
+| `strata-gyro-m.json` | `strata.exe` 0.1.67 | 262,144 | int8 | `--spec 4 --spec-min-p 0.5`, MTP drafter | the engine's default | probed 0.55 |
 | `strata-swift-iq3_xxs.json` | `strata.exe` 0.1.56 | 262,144 | int8 | as above | 1000 MiB | 0.20 |
 | `strata-swift-abliterated-iq3_xxs.json` | `strata.exe` 0.1.56 | 262,144 | int8 | as above | 1000 MiB | 0.00 |
 | `strata-ornith-apex-i-quality.json` | `strata-poly.exe` | 262,144 | q8_0 | - | the engine's default | - |
@@ -36,9 +38,15 @@ the old reserve and its throughput fell 5-6x - from 59.9 to 10.8 tok/s, and 9.5 
 engine was restarted. On a 49,519-token request the 1 GiB reserve measured 1,009 tok/s prefill and 53.6 tok/s decode
 against 1,018 and 55.6 with 512 MiB, so the extra headroom costs nothing measurable.
 
-All of them run on GPU 0 with vision on where the model has a vision encoder, thinking level medium with an 8,000-token
-budget, and `fit_max_tokens` for the native Flash-Next models. The `strata.exe` profiles leave the expert cache and
-prefill at the engine's own `auto`.
+Most of them run on GPU 0 with vision on where the model has a vision encoder, thinking level medium, and
+`fit_max_tokens` for the native Flash-Next models. The two harness profiles `strata-iq3_s.json` and
+`strata-gyro-m.json` default to thinking level **low** instead: measured on Gyro-M here on 2026-11-25
+([the harness record](../ENGINES.md)), low answered every coding and writing fixture correctly with shorter,
+less boilerplate answers (a web page in 49.5 s against 132.0 s at off), while medium and high ran their thinking
+past the short per-request token caps of coding harnesses and returned truncated answers. Both carry the measured
+ladder from `strata-iq3_xxs.json` (4,800 / 9,600 / 12,000 tokens by level) as a ceiling, not a target: real
+thinking on these tasks used 700-2,600 tokens. The `strata.exe` profiles leave the expert cache and prefill at the
+engine's own `auto`.
 
 Every vision profile sets `"min_tokens": 1024` in its `vision` section, which the server passes to the encoder as
 `--min-tokens`. Without it a small picture is encoded into about 320 tokens and the answers drift; the measurements
