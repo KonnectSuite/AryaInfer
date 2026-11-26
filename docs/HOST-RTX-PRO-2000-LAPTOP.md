@@ -557,6 +557,38 @@ The older run config that pointed `strata-inkling` at the IQ1_S GGUF is retired 
 `configs-unused\`: the pack replaces it, and two Inkling native entries in one
 picker is not a choice, it is a coin toss.
 
+## Why the Inkling lane looked dead in AryaCode
+
+With SQ-10 loaded and `/api/models` answering, an AryaCode session still never
+reached the model, and the engine log showed the load with no prompt line after
+it. The cause is in the harness, not here.
+
+AryaCode's local-model plugin (`@aryacode/dsh-local-llm` 0.24.2, at
+`C:\Users\kphung\.aryacode\profiles\desktop\node_modules\@aryacode\dsh-local-llm`)
+decides whether an engine is running by scanning `tasklist` for image names in
+its `ENGINE_IMAGES` set (`lib/index.js:2285`), which shipped as `strata.exe`,
+`strata-poly.exe`, `aryainfer.exe` and `ninfer-engine.exe` — no
+`strata-inkling.exe`. So the scan found nothing while the port answered,
+`phaseOf()` (`lib/index.js:2678-2686`) fell through to `foreign` ("A process is
+serving this port that this Host did not start"), and `ensure()`
+(`lib/index.js:11643-11684`) waited for a `running` phase that could never
+arrive: it polls `/api/aryastrata/status` for 120 s and then throws "The
+selected Strata model is still loading" without sending the request. The same
+path is why every other model worked — those image names are in the set.
+
+Measured on this host: `tasklist` carries
+`"strata-inkling.exe","22224","Console","1","13,475,256 K"`; the shipped set
+matched no process, and `local-data\check-engine-images.mjs` — the same scan and
+the same phase decision, run against the live server — reports
+`found=true loaded=true -> running` once the name is in the set.
+
+Fixed here by adding `"strata-inkling.exe"` to that set (backup
+`lib\index.js.bak-2026-11-25`); it takes effect on the next AryaCode start.
+Two things this host did not change and did not test: the plugin still reads an
+Inkling run config as engine kind `other` (`lib/index.js:337-343`), so the
+tuning panel offers only the flags already in the file; and the name belongs in
+the upstream package, since a plugin update overwrites this edit.
+
 ## What was not measured here
 
 - The Strata-native engine beyond `--version`: with the Coder removed there is no
