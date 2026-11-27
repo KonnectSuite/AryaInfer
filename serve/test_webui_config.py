@@ -355,7 +355,7 @@ class EngineInventory(unittest.TestCase):
                              ("installed", "0.9.9", [89]))
 
     def test_inventory_reports_the_pinned_engines(self):
-        rows = {e["key"]: e for e in engines.inventory()}
+        rows = {e["key"]: e for e in engines.inventory() if not e.get("custom")}
         pinned = {"strata", "inkling", "poly", "arya", "ninfer", "basalt"}
         self.assertTrue(pinned <= set(rows), sorted(rows))   # a run config may add a build of its own (tested below)
         for key in pinned:
@@ -368,10 +368,12 @@ class EngineInventory(unittest.TestCase):
         view = engines.as_view()
         self.assertEqual(view["release"], "engines-2026.11")
         # a stable order the page can rely on: required engines first, then alphabetical, then a person's own builds
-        keys = [e["key"] for e in view["engines"]]
-        self.assertEqual([k for k in keys if not rows[k].get("custom")][:6],
-                         ["arya", "poly", "strata", "basalt", "inkling", "ninfer"])
-        self.assertTrue(all(rows[k].get("custom") for k in keys[6:]))
+        order = [(e["key"], bool(e.get("custom"))) for e in view["engines"]]
+        self.assertEqual([k for k, _ in order[:6]], ["arya", "poly", "strata", "basalt", "inkling", "ninfer"])
+        self.assertTrue(all(custom for _, custom in order[6:]))
+        # a config that runs the same engine out of another folder does not reuse the pinned key: the page keys
+        # its cards and its picker by key, and two cards called `strata` cannot be told apart
+        self.assertEqual(len({key for key, _ in order}), len(order), order)
 
     def test_an_engine_outside_the_manifest_gets_a_card(self):
         # A .basalt model points at basalt.exe, which engines.json does not pin: the page must show it, or it would

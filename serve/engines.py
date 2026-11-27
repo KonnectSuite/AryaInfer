@@ -65,14 +65,16 @@ TRACKED = r"^strata-.+\.json$"
 BACKUP = ".control-center-backup-"
 
 
-def _custom(root: Path, claimed: list[tuple]) -> list[dict]:
-    """Engines a run config points at that engines.json does not pin.
+def _custom(root: Path, claimed: list[tuple], taken: set[str]) -> list[dict]:
+    r"""Engines a run config points at that engines.json does not pin.
 
     A `.basalt` model (or any other binary a person points a run config at) is not in the manifest: nothing installs
     it, no release is pinned, and repair leaves it alone.  Leaving it off this page would describe a checkout that is
     not the one running, so it gets a card of its own - its own build, with what a BUILD.json beside it says, if
     anything.  `claimed` holds the (resolved parent, binary name) of the manifest engines so one binary is not
-    reported twice.
+    reported twice, and `taken` holds their keys so a config that runs the same engine out of another folder (an
+    absolute `C:\...\engines\strata-0.1.67\strata.exe`, say) gets a key of its own instead of a second card the page
+    cannot tell apart.
     """
     import re
     out = []
@@ -100,8 +102,14 @@ def _custom(root: Path, claimed: list[tuple]) -> list[dict]:
             continue
         build = _build_json(parent) or _build_json(parent.parent)
         exists = p.is_file()
+        key = resolved.stem.lower()
+        if key in taken or any(entry["key"] == key for entry in out):
+            # same engine name out of another folder: name the folder, so `strata` stays the pinned card and
+            # `strata-0.1.67` is the build a run config actually starts
+            folder = parent.name.lower()
+            key = folder if folder.startswith(key) and folder != key else f"{key}-{folder}"
         out.append({
-            "key": resolved.stem.lower(),
+            "key": key,
             "title": resolved.stem.replace("-", " ").replace("_", " ").title(),
             "binary": p.name,
             "dir": str(parent),
@@ -169,7 +177,7 @@ def inventory(root: Path = ROOT) -> list[dict]:
             entry["status"] = "outdated" if (minimum and installed < minimum) else "current"
         claimed.append((install_dir.resolve(), binary.lower()))
         out.append(entry)
-    out.extend(_custom(Path(root), claimed))
+    out.extend(_custom(Path(root), claimed, {str(k) for k in engines}))
     # a stable order the page can rely on: required first, then the pinned engines by key, then a person's own builds
     return sorted(out, key=lambda e: (not e["required"], bool(e.get("custom")), e["key"]))
 
