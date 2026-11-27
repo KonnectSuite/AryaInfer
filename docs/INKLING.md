@@ -1,9 +1,19 @@
 # Inkling 2 Mini
 
+> **Model uninstalled on this host (2026-11-26).** The Inkling 2 Mini files and
+> their run configs are gone: they did not work well here, and the user asked to
+> keep the engine and drop the models. 32.67 GiB freed; the tokenizer packs, the
+> `mmproj-F16.gguf` and the install logs were set aside in
+> `C:\AI\Strata-data\_uninstalled\inkling-2-mini`, the last configs in
+> `run-config-backups\*.uninstalled` ([ARYAINFER.md](ARYAINFER.md)). Everything
+> below describes the engine, which is still built here and still works, and the
+> measurements taken before the removal. Reinstalling means fetching the files in
+> the table again and restoring one of those configs.
+
 Inkling 2 Mini is the one model here whose engine is a program of its own: it does
 not run on `strata.exe`, and it does not run on `strata-poly`. It needs
 `strata-inkling.exe`, the Strata *Inkling shape* engine, built from the
-`src/inkling2` tree. The model files are:
+`src/inkling2` tree. The model files it needs are:
 
 | File | Size | What it is |
 | --- | ---: | --- |
@@ -11,8 +21,8 @@ not run on `strata.exe`, and it does not run on `strata-poly`. It needs
 | `C:\AI\Strata-data\models\inkling-2-mini\Inkling-2-Mini-Vision.strata` | 0.59 GB | the vision encoder (`--vision`) |
 | `C:\AI\Strata-data\packs\inkling-2-mini-sq-15\tokenizer` | | the tokenizer the server owns |
 
-`Inkling-2-Mini-SQ-10.strata.part` in the same folder is an incomplete download
-and is not a second model.
+`Inkling-2-Mini-SQ-10.strata.part`, 2.27 GiB, was an incomplete SQ-10 download in
+the same folder, not a second model; it went with the rest.
 
 ## Where the binary comes from
 

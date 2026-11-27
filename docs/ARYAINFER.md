@@ -19,7 +19,7 @@ budget, tools, images, API, web app) is shared:
 | Backend | Binary here | Runs | Context |
 | --- | --- | --- | ---: |
 | Strata (native Qwen engine, upstream 0.1.67) | `engine\strata.exe` | Qwen3.8-Flash-Next IQ3_XXS, Swift 1.5 | 262,144 |
-| Strata Inkling (built here from 0.1.68) | `engine-inkling\strata-inkling.exe` | Inkling 2 Mini | 65,536 |
+| Strata Inkling (built here from 0.1.68) | `engine-inkling\strata-inkling.exe` | Inkling 2 Mini (model uninstalled 2026-11-26, engine kept) | 65,536 |
 | PolyStrata (`strata-poly`, upstream 0.1.66) | `engine-poly\strata-poly.exe` | Qwen3.6-35B-A3B UD-Q4, abliterated, Ornith 1.5, and the GGUF families | 262,144 |
 | AryaInfer build (`aryainfer`, 0.1.45) | `engine-arya\aryainfer.exe` | Qwen3.8-27B AQ3, 27B Turbo IQ3_XXS, Qwen3.5-4B | 131,072 / 65,536 |
 | AryaNInfer (ported core 0.1.0) | `engine-ninfer\arya-ninfer.exe` (pinned `2469b57` + shim) | Qwen3.8-27B GSQ3 `.ninfer` | 131,072; the entry ships 114,688 to fit a 16 GiB card |
@@ -404,3 +404,47 @@ in the archived copies above and its measured settings in [host-tuning/README.md
 8-fixture scores are in [PLC_SAMPLING.md](PLC_SAMPLING.md).  Reinstalling means the abliterated IQ3_XXS shards from
 [UkisAI's Swift 1.5 repository](https://huggingface.co/ukisai/Swift-1.5-Qwen3.8-Flash-Next-GSQ-RCO-GGUF) and a pack
 build; `setup.py` still offers the Swift family (`--family swift`), not the abliterated files.
+
+## Inkling 2 Mini uninstalled (2026-11-26)
+
+The user asked for the Inkling models gone and the engines kept - "they do not work well on this Host.  can can keep
+the engines tho.  just uninstall the models".  Both Inkling profiles came out; the engine this fork builds did not:
+
+| Removed | Size |
+| --- | ---: |
+| `C:\AI\Strata-data\models\inkling-2-mini` - `Inkling-2-Mini-SQ-15.strata` (14,012,028 KiB), `Inkling-2-Mini-Vision.strata` (621,608 KiB), its `tokenizer.json` (25 MB), the unfinished `Inkling-2-Mini-SQ-10.strata.part` (2,377,728 KiB) and the `.done` markers | 16.25 GiB |
+| `C:\AI\PolyStrata-data\models\inkling-UD-Q4_K_XL` - `Inkling-2-Mini-UD-Q4_K_XL.gguf` (17,216,563 KiB) | 16.42 GiB |
+| `strata-inkling-2-mini-sq15-0168.json`, `strata-inkling-2-mini-sq15-0167.json` and `strata-inkling-2-mini-q4-poly.json` beside the server with their `.bak`, `.before-*` and control-center copies, `Start-Inkling-2-Mini.cmd`, and `local-data\inkling-2-mini-sq-15-engine.log` plus `local-data\inkling-ud-q4_k_xl-engine.log` (38.7 + 29.9 KB) | 84 KB (15 KB of run configs and the launcher, 68.6 KB of engine logs) |
+
+32.67 GiB of files removed.  `C:` read 742.9 GiB free before and 774.8 GiB after (`Win32_LogicalDisk`); the difference
+is a little under the file sum because other programs were writing to the disk in the same minutes, so the file sum is
+the number to quote.  Nothing had to be stopped first: no AryaInfer server was listening on `127.0.0.1:8080` (8080 and
+8081 are tailscaled, 8086 is influxd) and no engine process held any of it, so no other profile lost a file.  After the
+removal `serve/models.py` `discover()` lists four profiles - `qwen3.8-flash-next-gyro-m`, `iq3_s`,
+`qwen3.8-27b-aryainfer`, `qwen3.8-27b-ninfer` - and the names `inkling`, `inkling-2-mini`, `inkling-mini`,
+`inkling-q4` and `inkling-2-mini-q4` resolve to nothing.
+
+Not deleted, set aside in `C:\AI\Strata-data\_uninstalled\inkling-2-mini` (24 files, 628.6 MB): both tokenizer packs
+(`inkling-2-mini-sq-15`, `inkling-ud-q4_k_xl`, 9.4 + 9.5 MB, with the tuned `expert-profile.txt`), the 0.60 GiB
+`C:\AI\PolyStrata-data\models\mmproj-F16.gguf` which on this host only the Inkling Q4 config named, the Inkling
+install logs, and the old `strata-inkling-2-mini-sq-15-8082.json`.  The nine run-config versions and the launcher are
+kept as `run-config-backups\strata-inkling-*.json.uninstalled` and
+`run-config-backups\Start-Inkling-2-Mini.cmd.uninstalled`, the same way the Swift entry above is kept.
+
+Left in place because the user asked to keep the engines, and none of it is model data: `engine-inkling\` (the built
+`strata-inkling.exe`, `BUILD.json`, the CUDA DLLs and `build.ps1`), `C:\AI\Strata-data\engines\strata-inkling-0.1.67\`
+and its 400 MB download archive, the upstream shape components under
+`C:\Users\KNPhu\AppData\Local\Strata\components\shapes\inkling2\engine\` (0.1.66, 0.1.67), the Inkling family code in
+`serve\` (`inkling_kind.py`, `inkling_dialect.py`, the `inkling` group in `serve\configschema.py`), the `inkling`
+entry in `engines.json`, and the measured record in
+`bench\results\2026-11-25-host-rtx-4070-ti-super-inkling-2-mini-sq-15\`.  Checked after the removal:
+`engine-inkling\strata-inkling.exe --version` still prints `strata-inkling 0.1.67` - the un-bumped `INKLING_VERSION`
+define [INKLING.md](INKLING.md) records.
+
+Reinstalling is the file side only: fetch `Inkling-2-Mini-SQ-15.strata` and `Inkling-2-Mini-Vision.strata` into
+`C:\AI\Strata-data\models\inkling-2-mini`, move the tokenizer pack back to `C:\AI\Strata-data\packs\inkling-2-mini-sq-15`,
+and restore `run-config-backups\strata-inkling-2-mini-sq15-0168.json.uninstalled` as
+`strata-inkling-2-mini-sq15-0168.json` beside the server.  What made it disappoint here is written up in
+[INKLING.md](INKLING.md) and [ENGINES.md](ENGINES.md): 52.9 tok/s decode at 8K against Gyro-M's 61.6, and at the
+262,144 request only about 8,000 K/V tokens stay on the 16 GB card, so every decoded token waits on the PCIe link.
+

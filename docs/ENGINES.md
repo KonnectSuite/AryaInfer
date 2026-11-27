@@ -24,7 +24,7 @@ in the same roster.
 | Backend | Binary | Source | Models on this host | Context | Vision |
 | --- | --- | --- | --- | ---: | --- |
 | **Strata** (native Qwen engine) | `strata.exe` 0.1.67 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | Qwen3.8-Flash-Next IQ3_S, Gyro-M | 262,144, int8 KV | `strata-vision.exe` + mmproj, GPU |
-| **Strata Inkling** | `engine-inkling\strata-inkling.exe`, built here from 0.1.68 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | Inkling-2-Mini SQ-15 | 65,536, host KV offload | native vision encoder |
+| **Strata Inkling** | `engine-inkling\strata-inkling.exe`, built here from 0.1.68 | [Niko1221/Strata](https://github.com/Niko1221/Strata) | no model on this host since 2026-11-26 (Inkling 2 Mini uninstalled, the engine kept) | 65,536, host KV offload | native vision encoder |
 | **PolyStrata** (`strata-poly`) | `engine-poly\strata-poly.exe` 0.1.66 | `src/poly`, from [VecSzn/PolyStrata](https://github.com/simplexai-labs/PolyStrata) (the 2026-11-24 build is tag `v0.2.20-poly.4-hotfix`, commit `36e654b1b`; `src/poly/inkling2.cpp` gives it Inkling 2) | Qwen3.6-35B-A3B UD-Q4_K_XL and abliterated, Ornith 1.5 APEX, and the GGUF families in [BACKENDS.md](BACKENDS.md) | 262,144, q8_0 KV | `strata-vision.exe` + mmproj, GPU |
 | **AryaInfer** (fork build) | `engine-arya\aryainfer.exe` 0.1.45 | `src/poly` fork target, from [KonnectSuite/AryaInfer](https://github.com/KonnectSuite/AryaInfer); CUDA `sm_89`; AQ3 kernels in `src/poly/prefill_f16.cu` | Qwen3.8-27B AQ3 (GSQ 3-bit), Qwen3.8-27B Turbo IQ3_XXS, Qwen3.5-4B Q4_K_M | 131,072 (27B), 65,536 (4B), q4_0 KV | `strata-vision.exe` + mmproj, CPU |
 | **AryaNInfer** (ported core) | `engine-ninfer\arya-ninfer.exe` 0.1.0 | [roofkid/ninfer-4080](https://github.com/roofkid/ninfer-4080) at `rtx4080-port` commit `2469b57`, plus `engine-ninfer/shim/main.cpp` | Qwen3.8-27B GSQ3 `.ninfer` | 131,072, rk4v4-e8 KV | external `.sve` embeddings from `strata-vision.exe`, CPU |
@@ -92,14 +92,12 @@ The roster is the `strata-*.json` files next to the config you start with
 | --- | --- | ---: | --- |
 | `qwen3.8-flash-next-gyro-m` | Strata 0.1.67 | 262,144 | Gyro-M TQ2_0 (~92 GB); 61.6 tok/s decode, 270 tok/s prompt, 262K vision; tuned for coding harnesses in [this record](../bench/results/2026-11-25-host-rtx-4070-ti-super-harness-tuning/README.md) |
 | `iq3_s` | Strata 0.1.67 | 262,144 | Qwen3.8-Flash-Next IQ3_S (~78 GB) with the DFlash2 drafter and `--kv-grow`; same thinking ladder as Gyro-M |
-| `inkling-2-mini-sq-15` | Strata Inkling 0.1.68 (built here) | 65,536 | Native Inkling 2 Mini SQ-15 (~14.3 GB); 52.9 tok/s decode at 8K, 48.9 at 32K, 2,122 / 1,843 tok/s prefill; native encoder |
 | `qwen3.8-27b-aq3` | AryaInfer | 131,072 | Dense 27B quality at 3-bit codes, 1.2K tok/s prompt reads |
 | `qwen3.8-27b-ninfer` | AryaNInfer | 114,688 | Highest measured prefill on this card (2,039 tok/s at 8K); 131,072 overruns a 16 GiB card with vision |
 | `qwen3.6-35b-a3b-ud-q4_k_xl` | PolyStrata | 262,144 | Best validated 35B MoE for agent work |
 | `qwen3.6-35b-a3b-abliterated` | PolyStrata | 262,144 | Unrestricted 35B variant |
 | `ornith-1.5-35b-a3b-apex-i-quality` | PolyStrata | 262,144 | 18/18 bounded coding with low reasoning |
 | `qwen3.8-27b-turbo-iq3xxs` | AryaInfer | 131,072 | Daily-driver 27B with MTP |
-| `inkling-2-mini-ud-q4_k_xl` | PolyStrata 0.1.66 | 262,144 | Unsloth UD-Q4_K_XL text fallback; 262K, vision via `mmproj-F16.gguf` |
 | `qwen3.5-4b` | AryaInfer | 65,536 | Small, fast, vision-capable |
 | `qwen3.8-flash-next-coder-iq1_m` | Strata 0.1.63 | 172,032 | The GSQ-RCO Coder at IQ1_M (58 GB on disk), KV k8v4; 22.4 tok/s end to end at 131K, 9.8 at 262K fp16-KV because the KV cache takes VRAM from the expert tier. Uninstalled from that host 2026-11-26 |
 | `qwen3.8-flash-next-gyro-s` | Strata 0.1.63 | 172,032 | Gyro-S, trellis TQK6/TQK7 experts with the PLE table on SSD, KV k8v4; its pack must carry the v5 Hadamard table; 26.3 tok/s at 262K in the app. Uninstalled from that host 2026-11-26 |
@@ -112,6 +110,15 @@ The Engines page lists the six engines of `engines.json` and then any engine a r
 does not pin — a row for the row above, marked *your build*, with the binary's real path and `not pinned` where a pinned
 version would go. That is how a lane keeps its own binary visible, and how an opt-in install stays honest about what
 `setup.py` did or did not fetch.
+
+Inkling 2 Mini left this roster on 2026-11-26: `inkling-2-mini-sq-15` and
+`inkling-2-mini-ud-q4_k_xl`, their 32.67 GiB of weights, their tokenizer packs
+and their run configs were uninstalled at the user's request
+([ARYAINFER.md](ARYAINFER.md)), so the names `inkling`, `inkling-2-mini` and
+`inkling-mini` no longer resolve to a model. What stays is the engine:
+`engine-inkling\strata-inkling.exe`, still built from the vendored 0.1.68
+sources and still answering the same protocol, and the measured Inkling numbers
+below stay as their record. [INKLING.md](INKLING.md) is the reinstall path.
 
 ## Measured on this host
 

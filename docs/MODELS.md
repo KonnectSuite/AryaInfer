@@ -29,7 +29,12 @@ Per-profile numbers and the five-backend comparison: [ENGINES.md](ENGINES.md).
 Swift 1.5 Abliterated IQ3_XXS is no longer one of them: its shards, expert pack,
 MTP layer and run config were uninstalled on November 25, 2026 (72.8 GiB freed);
 its measured settings stay in [host-tuning](host-tuning/README.md) and
-[PLC_SAMPLING.md](PLC_SAMPLING.md).
+[PLC_SAMPLING.md](PLC_SAMPLING.md). Inkling 2 Mini is gone from this host as of
+November 26, 2026 - neither the SQ-15 file on the Strata Inkling engine nor the
+UD-Q4_K_XL file on PolyStrata has weights or a run config here (32.67 GiB
+removed) - while the Inkling engine stays built in `engine-inkling/`;
+[INKLING.md](INKLING.md) is the reinstall path and [ARYAINFER.md](ARYAINFER.md)
+records what was taken out.
 
 **Where the files come from.** The base Qwen3.8 models are the
 [Qwen team's](https://huggingface.co/Qwen/Qwen3.8-27B); the Flash-Next quants are
